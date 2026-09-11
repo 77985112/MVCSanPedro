@@ -176,7 +176,22 @@ if (isset($_GET['CodIns'])) {
     }
 
 
+    $tmpFile = tempnam(sys_get_temp_dir(), 'cert_baut_');
+    $pdf->Output('F', $tmpFile);
+
+    try {
+        require_once __DIR__ . '/../Controlador/controladorGoogleDrive.php';
+        $drive = new ControladorGoogleDrive();
+        if ($drive->estaConectado()) {
+            $pdfContent = file_get_contents($tmpFile);
+            $drive->respaldarPDF($pdfContent, 'Bautizo', $certificadoData['NombreBautizado']);
+        }
+    } catch (Exception $e) {
+    }
+
+    @unlink($tmpFile);
     $pdf->Output('I', $certificadoData['NombreBautizado'] . '-Certificado-Bautizo.pdf');
+
 } else {
     echo "No se recibieron datos.";
 }

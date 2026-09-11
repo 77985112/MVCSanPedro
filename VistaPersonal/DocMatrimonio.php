@@ -177,6 +177,20 @@ if (isset($_GET['CodIns'])) {
     }
 
 
+    $tmpFile = tempnam(sys_get_temp_dir(), 'cert_mat_');
+    $pdf->Output('F', $tmpFile);
+
+    try {
+        require_once __DIR__ . '/../Controlador/controladorGoogleDrive.php';
+        $drive = new ControladorGoogleDrive();
+        if ($drive->estaConectado()) {
+            $pdfContent = file_get_contents($tmpFile);
+            $drive->respaldarPDF($pdfContent, 'Matrimonio', 'Certificado_Matrimonio');
+        }
+    } catch (Exception $e) {
+    }
+
+    @unlink($tmpFile);
     $pdf->Output('I', 'Certificado-Matrimonio.pdf');
 } else {
     echo "No se recibieron datos.";

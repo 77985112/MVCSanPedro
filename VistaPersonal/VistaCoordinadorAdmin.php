@@ -462,6 +462,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['asignarCoordinador'])
                         <th>Sacramento</th>
                         <th>Grupo</th>
                         <th>Estado</th>
+                        <th>Credenciales</th>
                         <th>Acciones</th>
                       </tr>
                     </thead>
@@ -478,6 +479,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['asignarCoordinador'])
                             <?php else: ?>
                               <span class="badge bg-danger">Inactivo</span>
                             <?php endif; ?>
+                          </td>
+                          <td>
+                            <span class="credential-hidden" id="cred-<?php echo $coor['CiCat']; ?>">
+                              <span class="text-muted">••••••••</span>
+                            </span>
+                            <span class="credential-visible d-none" id="cred-show-<?php echo $coor['CiCat']; ?>">
+                              <small><strong>U:</strong> <?php echo $coor['UsuarioCat']; ?> <strong>Cl:</strong> <?php echo $coor['ClaveCat']; ?></small>
+                            </span>
+                            <button type="button" class="btn btn-sm btn-outline-secondary ms-1" onclick="toggleCred('<?php echo $coor['CiCat']; ?>')" title="Ver credenciales">
+                              <i class="bi bi-eye" id="eye-<?php echo $coor['CiCat']; ?>"></i>
+                            </button>
                           </td>
                           <td>
                             <?php if ($coor['EstadoCat'] == 'Activo'): ?>
@@ -621,6 +633,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['asignarCoordinador'])
         selectGrupo.innerHTML = '<option value="">Seleccionar...</option>';
       }
     });
+
+    function toggleCred(ci) {
+      const hidden = document.getElementById('cred-' + ci);
+      const visible = document.getElementById('cred-show-' + ci);
+      const eye = document.getElementById('eye-' + ci);
+      if (visible.classList.contains('d-none')) {
+        hidden.classList.add('d-none');
+        visible.classList.remove('d-none');
+        eye.classList.replace('bi-eye', 'bi-eye-slash');
+      } else {
+        visible.classList.add('d-none');
+        hidden.classList.remove('d-none');
+        eye.classList.replace('bi-eye-slash', 'bi-eye');
+      }
+    }
   </script>
 </body>
 

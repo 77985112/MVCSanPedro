@@ -11,7 +11,7 @@ class ModeloCoordinadorAdmin {
 
     public function obtenerCoordinadores() {
         $stmt = $this->conn->prepare("
-            SELECT c.CiCat, c.Sacramento, c.EstadoCat, c.UsuarioCat,
+            SELECT c.CiCat, c.Sacramento, c.EstadoCat, c.UsuarioCat, c.ClaveCat,
                    p.Nombre, p.ApPaterno, p.ApMaterno,
                    a.RolCat, a.IdGrupo, a.FechaIniCat, a.FechaFinCat,
                    g.NombreGrupo

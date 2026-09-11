@@ -1,73 +1,111 @@
 # MVCSanPedro
 
 Sistema de gestión de la Parroquia San Pedro de Sacaba, desarrollado en PHP con
-MySQLi y MariaDB. Incluye personas, catequesis, reservas de bautizo, matrimonio
-y misa, certificados y avisos por correo.
+MySQLi y MariaDB. Incluye personas, catequesis, reservas, certificados, avisos
+por correo con Brevo y una integración de Google Drive para respaldar PDF.
 
-## Entorno local
+## Instalación local
 
-El proyecto se trabaja con XAMPP en Windows, PHP 8.2 y MariaDB 10.4.
+Entorno utilizado: XAMPP en Windows, PHP 8.2 y MariaDB 10.4.
 
 1. Colocar el proyecto en `C:\xampp\htdocs\MVCSanPedro`.
 2. Copiar `Conexion/Conexion.example.php` como `Conexion/Conexion.php` y ajustar
-   la conexión a la base de datos local.
-3. Crear una base de datos vacía llamada `bdsanpedro` e importar
-   `docs/bdsanpedro_estructura.sql` desde phpMyAdmin.
-4. Preparar en la instalación local los catálogos y las cuentas necesarias para
-   ingresar. El esquema publicado no incluye usuarios, contraseñas ni registros.
-5. Iniciar Apache y MySQL y abrir `http://localhost/MVCSanPedro/`.
+   la conexión local.
+3. En una instalación nueva, crear una base vacía `bdsanpedro` e importar el
+   [esquema de la versión inicial](https://github.com/77985112/MVCSanPedro/blob/a8228bb62227e4d3c67081eee8b8dddcc08eb0eb/docs/bdsanpedro_estructura.sql).
+   Preparar los catálogos y las cuentas de acceso: el esquema no contiene
+   usuarios, contraseñas ni registros personales.
+4. Desde la carpeta del proyecto, ejecutar `composer install --no-dev`.
+   Se utilizan las versiones de `composer.lock`; `vendor/` no se publica en Git.
+5. Configurar las credenciales privadas de las APIs como se indica abajo.
+6. Iniciar Apache y MySQL y abrir `http://localhost/MVCSanPedro/`.
 
-Para una instalación existente, conservar su base de datos. El archivo de
-estructura se utiliza sobre una base vacía; no es una actualización de datos.
-Las migraciones específicas y sus instrucciones se encuentran en `docs/`.
+Para una instalación existente, conservar su base de datos y su configuración
+privada. El esquema inicial sirve para una base vacía; no reemplaza una migración
+ni un respaldo de la instalación actual.
 
-La configuración de correo con Brevo se describe en `docs/correo_brevo.md`.
-Las claves se guardan localmente y quedan excluidas del repositorio.
+Hay referencias con diferencias de mayúsculas y minúsculas. Antes de instalar
+en Linux deben revisarse las rutas afectadas.
+
+## Brevo: correos de reservas
+
+Los formularios de bautizo, matrimonio y misa guardan el correo en
+`reserva.CorreoSolicitante`. La confirmación inicial se solicita marcando
+“Enviar confirmación por correo”. Una cancelación confirmada solicita el aviso
+si la reserva tiene correo. El fallo del correo no revierte la operación guardada.
+
+`Conexion/configCorreo.php` lee `BREVO_API_KEY`, `BREVO_SENDER_EMAIL` y
+`BREVO_SENDER_NAME` del entorno, o la configuración privada de
+`Conexion/correo.local.php`. La clave y el remitente se configuran en cada equipo;
+no se incluyen en GitHub.
+
+El envío se realiza mediante HTTPS con cURL. La aceptación de Brevo no confirma
+la entrega en la bandeja del destinatario. La
+[documentación previa del módulo](https://github.com/77985112/MVCSanPedro/blob/a8228bb62227e4d3c67081eee8b8dddcc08eb0eb/docs/correo_brevo.md)
+permanece disponible en el historial.
+
+## Google Drive: certificados
+
+Proyecto de Google Cloud: **SanPedroRespaldoCertificados**.
+Se utiliza Google Drive API, OAuth 2.0 y el permiso
+`https://www.googleapis.com/auth/drive.file`.
+
+En cada instalación se necesitan los archivos privados:
+- `Config/credentials.json`: credenciales del cliente OAuth de aplicación web.
+- `Config/google_token.json`: token creado al autorizar la cuenta desde el sistema.
+
+Ambos están excluidos de Git. `Config/.htaccess` bloquea el acceso HTTP a JSON
+cuando Apache permite estas reglas. En otros servidores debe configurarse la
+protección equivalente o mover los secretos fuera de la carpeta pública y
+actualizar sus rutas.
+
+URI de redireccionamiento configurada en PHP:
+`http://localhost/MVCSanPedro/Controlador/googleDriveCallback.php`.
+Debe coincidir con la del cliente OAuth. Cambiar ambas al usar otro dominio o puerto.
+
+El panel incluye un enlace a `VistaPersonal/VistaGoogleDrive.php`. Los archivos
+`DocBautizo.php`, `DocConfirmacion.php` y `DocMatrimonio.php` incorporan la
+llamada de respaldo antes de mostrar el PDF.
+
+### Estado de esta versión
+
+Esta publicación guarda la implementación actual. La revisión del código detectó
+pendientes: asignar la carpeta al PDF al subirlo, guardar el ID y estado del respaldo
+en la base de datos, evitar duplicados y completar los controles OAuth/CSRF y el
+manejo de errores. La existencia del código o del token no demuestra que una
+subida real haya terminado correctamente.
 
 ## Organización
 
 - `Controlador/`: coordinación de los módulos.
-- `Modelo/`: consultas y procedimientos almacenados.
-- `Conexion/`: configuración de la base de datos y el correo.
-- `VistaPersonal/`, `VistaCatequista/`, `VistaCelebrante/`, `VistaCoordinador/`:
-  pantallas por rol. La carpeta `VistaCelebrante/` conserva su nombre interno;
-  el rol se muestra como Catequisando en la interfaz.
-- `src/` y `assets/`: páginas públicas y recursos de la interfaz.
-- `docs/`: documentación y SQL.
-- `tests/`: pruebas del proyecto.
+- `Modelo/`: acceso a datos y operaciones con las APIs.
+- `Conexion/`: configuración de base de datos y correo.
+- `Config/`: configuración del cliente de Google.
+- `VistaPersonal/`, `VistaCatequista/`, `VistaCelebrante/`,
+  `VistaCoordinador/`: pantallas por rol. El nombre interno VistaCelebrante se
+  conserva; el rol se muestra como Catequisando.
+- `src/` y `assets/`: páginas públicas y recursos de interfaz.
+- `fpdf/` y `FPDI-master/`: generación de certificados y reportes.
 
-Hay referencias con diferencias de mayúsculas y minúsculas. La instalación
-actual está preparada para Windows/XAMPP; antes de usar Linux deben revisarse
-esas rutas.
+Las carpetas `docs/` y `tests/`, y los scripts de mantenimiento de la raíz,
+se movieron fuera de esta carpeta de trabajo. Esta versión refleja esa decisión.
+Los archivos anteriormente publicados permanecen en el historial de Git; los
+archivos externos que nunca se publicaron no forman parte de este repositorio.
 
-## Datos locales y Git
+## Datos privados y comprobaciones
 
-`.gitignore` excluye la conexión local, las claves del correo, los respaldos SQL
-con datos, las fotografías de perfiles, algunas imágenes cargadas y las pruebas
-antiguas que contienen datos reales. Estos archivos permanecen en el equipo.
-Los PDF de `assets/Documentos/` son recursos del sistema; los certificados
-emitidos se generan desde la aplicación.
+El repositorio excluye credenciales, tokens, la conexión local, respaldos SQL con
+datos personales, fotografías cargadas y dependencias descargadas. GitHub respalda
+el código publicado; no sustituye un respaldo privado de la base de datos, los
+archivos cargados o las carpetas trasladadas fuera del proyecto.
 
-La estructura SQL incluida exporta tablas y procedimientos sin copiar sus filas.
-El repositorio no sustituye un respaldo privado de la base de datos.
-
-## Comprobaciones
-
-Para revisar un archivo PHP:
+Para comprobar la sintaxis de un archivo PHP sin ejecutarlo:
 
 ```powershell
-C:\xampp\php\php.exe -l VistaPersonal/VistaReservas.php
+C:\xampp\php\php.exe -l VistaPersonal/DocBautizo.php
 ```
 
-Las pruebas de reservas y personas usan tablas temporales o datos simulados.
-Revisar sus requisitos antes de ejecutarlas:
-
-```powershell
-C:\xampp\php\php.exe tests/unit/personas_reserva_test.php
-C:\xampp\php\php.exe tests/unit/reservas_horarios_test.php
-C:\xampp\php\php.exe tests/unit/correo_reservas_test.php
-C:\xampp\php\php.exe tests/unit/cancelacion_reservas_test.php
-node tests/unit/reservas_personas_browser_test.js
-```
-
-La prueba del navegador requiere Node.js 22 y Google Chrome en Windows.
+Las pruebas anteriores pueden consultarse en el historial. Si se recuperan para
+ejecutarlas desde otra ubicación, revisar primero sus rutas y sus efectos sobre
+la base de datos. Esta publicación no constituye una prueba real de correo ni
+de subida a Google Drive.

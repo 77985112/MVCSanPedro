@@ -1,0 +1,17 @@
+{
+    "name": "sanpedro/mvc",
+    "authors": [
+        {
+            "name": "Elvis Herbas",
+            "email": "e00herbass@gmail.com"
+        }
+    ],
+    "require": {
+        "google/apiclient": "*"
+    },
+    "config": {
+        "audit": {
+            "block-insecure": false
+        }
+    }
+}

@@ -165,6 +165,9 @@ $actividadesTodas = $controller->obtenerActividades();
                       <li class="nav-item">
                         <a class="nav-link" href="VistaEmitidos.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/Emitido.png" alt=""><span>Certificado Emitido </span></a>
                       </li>
+                      <li class="nav-item">
+                        <a class="nav-link" href="VistaGoogleDrive.php"> <i class="me-2 h-20px fa-fw bi bi-cloud-arrow-up"></i><span>Google Drive </span></a>
+                      </li>
 
                     </ul>
                   </div>
