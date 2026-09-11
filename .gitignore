@@ -1,0 +1,42 @@
+# Credenciales locales de correo y posibles copias del archivo.
+/Conexion/correo.local.php*
+
+# Configuración propia de cada instalación.
+/Conexion/Conexion.php
+*.local.php
+.env
+.env.*
+!.env.example
+
+# Respaldos con usuarios, contraseñas y registros personales.
+/*.sql
+!/fix_bautizo_ins_proc.sql
+*.bak
+*.backup
+*.log
+
+# Imágenes cargadas por usuarios; conservar los recursos predeterminados.
+/assets/images/avatar/*
+!/assets/images/avatar/Ninguno.png
+/assets/images/fondo/*
+!/assets/images/fondo/Ninguno.jpg
+/assets/images/events/ACT*
+
+# Pruebas e informes antiguos que contienen datos de la instalación local.
+/tests/unit/TestLogin.php
+/tests/unit/TestCoordinador.php
+/tests/functional/TestE2E.php
+/tests/run_tests.php
+/tests/reports/
+/tests/.tmp-*/
+/tests/vendor/
+/tests/.phpunit.result.cache
+
+# Archivos locales del editor, Windows y herramientas.
+/.vscode/
+/Microsoft/
+/.codex/
+/.agents/
+Thumbs.db
+Desktop.ini
+.DS_Store

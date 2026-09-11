@@ -1,0 +1,4 @@
+# El archivo privado solo se carga desde PHP, no por una petición web directa.
+<FilesMatch "(?i)^correo\.local\.php.*$">
+    Require all denied
+</FilesMatch>
