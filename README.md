@@ -92,6 +92,12 @@ se movieron fuera de esta carpeta de trabajo. Esta versión refleja esa decisió
 Los archivos anteriormente publicados permanecen en el historial de Git; los
 archivos externos que nunca se publicaron no forman parte de este repositorio.
 
+
+La copia de GitHub omite las instrucciones locales del asistente y los manuales,
+ejemplos y herramientas de generación de fuentes de FPDF. Se conservan en este
+equipo, junto con los archivos privados excluidos. La biblioteca FPDF, sus fuentes
+utilizadas y la licencia siguen incluidos para generar los certificados.
+
 ## Datos privados y comprobaciones
 
 El repositorio excluye credenciales, tokens, la conexión local, respaldos SQL con

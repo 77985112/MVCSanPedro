@@ -70,7 +70,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['eliminar'])) {
                 <a class="navbar-brand" href="VistaPersonal.php">
                     <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png" alt="logo">
                 </a>
-                <button class="btn text-secondary py-0 me-3 sidebar-start-toggle"><i class="bi bi-justify-left fs-3 lh-0"></i></button>
                 <ul class="nav flex-nowrap align-items-center ms-sm-3 list-unstyled">
                     <li class="nav-item ms-2">
                         <a class="nav-link bg-light icon-md btn btn-light p-0" href="VistaPersonal.php">

@@ -65,14 +65,77 @@ class ModeloCoordinadorAdmin {
     }
 
     public function registrarCoordinador($ci, $sacramento, $idGrupo, $usuario, $clave) {
-        $stmt = $this->conn->prepare("CALL RegistrarCatequista(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->bind_param("sssssssssssssss",
-            $ci, $sacramento, $usuario, $clave,
-            'Activo', 'Ninguno', 'Ninguno', 'Coordinador',
-            'La catequesis es como la lluvia que empapa el suelo y hace crecer las semillas.',
-            date('Y-m-d'), $idGrupo, date('Y-m-d'), date('Y-m-d'), null, 'Coordinador'
-        );
-        return $stmt->execute();
+        $estado = 'Activo';
+        $imagen = 'Ninguno';
+        $fondo = 'Ninguno';
+        $poder = 'Coordinador';
+        $frase = 'La catequesis es como la lluvia que empapa el suelo y hace crecer las semillas.';
+        $fecha = date('Y-m-d');
+        $fechaFin = null;
+        $rol = 'Coordinador';
+
+        try {
+            $this->conn->begin_transaction();
+
+            $stmt = $this->conn->prepare("SELECT CiCat FROM catequista WHERE CiCat = ? FOR UPDATE");
+            $stmt->bind_param("s", $ci);
+            $stmt->execute();
+            $yaEsCatequista = $stmt->get_result()->num_rows > 0;
+            $stmt->close();
+
+            if ($yaEsCatequista) {
+                // Conservar la ficha y el perfil del catequista ya registrado.
+                $stmt = $this->conn->prepare("
+                    UPDATE catequista
+                    SET Sacramento = ?, UsuarioCat = ?, ClaveCat = ?, EstadoCat = ?
+                    WHERE CiCat = ?
+                ");
+                $stmt->bind_param("sssss", $sacramento, $usuario, $clave, $estado, $ci);
+                try {
+                    if (!$stmt->execute()) {
+                        throw new RuntimeException('No se pudo actualizar el catequista.');
+                    }
+                } finally {
+                    $stmt->close();
+                }
+
+                $stmt = $this->conn->prepare("
+                    INSERT INTO asignacion (Gestion, CiCat, IdGrupo, FechaAsigCat, FechaIniCat, FechaFinCat, RolCat)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                ");
+                $stmt->bind_param("ssissss", $fecha, $ci, $idGrupo, $fecha, $fecha, $fechaFin, $rol);
+            } else {
+                $stmt = $this->conn->prepare("CALL RegistrarCatequista(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                $stmt->bind_param("ssssssssssissss",
+                    $ci, $sacramento, $usuario, $clave,
+                    $estado, $imagen, $fondo, $poder, $frase,
+                    $fecha, $idGrupo, $fecha, $fecha, $fechaFin, $rol
+                );
+            }
+
+            try {
+                if (!$stmt->execute()) {
+                    throw new RuntimeException('No se pudo registrar la asignacion.');
+                }
+            } finally {
+                $stmt->close();
+                // CALL deja resultados pendientes antes de consultar de nuevo.
+                while ($this->conn->more_results()) {
+                    $this->conn->next_result();
+                    $resultado = $this->conn->store_result();
+                    if ($resultado) {
+                        $resultado->free();
+                    }
+                }
+            }
+
+            $this->conn->commit();
+            return true;
+        } catch (mysqli_sql_exception | RuntimeException $e) {
+            $this->conn->rollback();
+            error_log('Error al asignar coordinador. Codigo: ' . $e->getCode());
+            return false;
+        }
     }
 
     public function buscarTodosLosGrupos() {

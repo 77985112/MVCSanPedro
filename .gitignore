@@ -48,3 +48,13 @@ Desktop.ini
 client_secret*.json*
 google-drive-client*.json*
 google-drive-token*.json*
+
+# Material auxiliar conservado solo en este equipo.
+/AGENTS.md
+/fpdf/doc/
+/fpdf/tutorial/
+/fpdf/makefont/
+/fpdf/FAQ.htm
+/fpdf/changelog.htm
+/fpdf/install.txt
+/fpdf/fpdf.css

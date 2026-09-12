@@ -20,18 +20,9 @@ $grupos = $controller->obtenerTodosLosGrupos();
 $mensaje = '';
 $mensaje1 = '';
 $personaEncontrada = null;
-$coordinadorEncontrado = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['buscarPersona'])) {
   $buscarNombre = $_POST['buscarNombre'] ?? '';
-}
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['buscarCoordinador'])) {
-  $ci = $_POST['ciCoordinador'];
-  $coordinadorEncontrado = $controller->buscarCoordinador($ci);
-  if (!$coordinadorEncontrado) {
-    $mensaje1 = "No se encontró coordinador con CI: {$ci}";
-  }
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bloquearCoordinador'])) {
@@ -83,22 +74,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['asignarCoordinador'])
   $ci = $_POST['CiPersona'];
   $sacramento = $_POST['Sacramento'];
   $idGrupo = $_POST['IdGrupo'];
-  $usuario = $_POST['UsuarioCat'];
+  $usuarioCat = $_POST['UsuarioCat'];
   $clave = $_POST['ClaveCat'];
 
   $existente = $controller->verificarCoordinadorExistente($sacramento);
   if ($existente) {
     $mensaje1 = "<strong>Error:</strong> Ya existe un Coordinador para {$sacramento}.";
   } else {
-    if ($controller->registrarCoordinador($ci, $sacramento, $idGrupo, $usuario, $clave)) {
+    if ($controller->registrarCoordinador($ci, $sacramento, $idGrupo, $usuarioCat, $clave)) {
       $persona = $controller->buscarPersona($ci);
       $_SESSION['registroCatequista'] = [
         'Nombre' => $persona['Nombre'] . ' ' . $persona['ApPaterno'],
-        'UsuarioCat' => $usuario,
+        'UsuarioCat' => $usuarioCat,
         'ClaveCat' => $clave
       ];
-      $mensaje = "<strong>Coordinador asignado con éxito.</strong> Nombre: {$persona['Nombre']} {$persona['ApPaterno']}, Usuario: {$usuario}, Clave: {$clave}";
+      $mensaje = "<strong>Coordinador asignado con éxito.</strong> Nombre: {$persona['Nombre']} {$persona['ApPaterno']}, Usuario: {$usuarioCat}, Clave: {$clave}";
       $personaEncontrada = null;
+      $coordinadores = $controller->obtenerCoordinadores();
     } else {
       $mensaje1 = "Error al asignar al coordinador.";
     }
@@ -403,50 +395,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['asignarCoordinador'])
                     </div>
                   </div>
                 </form>
-              <?php endif; ?>
-
-              <hr>
-
-              <h5 class="mb-3">Buscar Coordinador por CI</h5>
-              <form method="POST" class="row g-3 mb-3">
-                <div class="col-md-4">
-                  <label class="form-label">CI del Coordinador</label>
-                  <input type="text" class="form-control" name="ciCoordinador" placeholder="Ingrese CI" required>
-                </div>
-                <div class="col-md-2 d-flex align-items-end">
-                  <button type="submit" name="buscarCoordinador" class="btn btn-warning w-100">Buscar</button>
-                </div>
-              </form>
-
-              <?php if ($coordinadorEncontrado): ?>
-                <div class="card border-warning mb-3">
-                  <div class="card-body">
-                    <h6 class="card-title">Coordinador Encontrado</h6>
-                    <div class="row g-2">
-                      <div class="col-md-2"><strong>CI:</strong> <?php echo $coordinadorEncontrado['CiCat']; ?></div>
-                      <div class="col-md-3"><strong>Nombre:</strong> <?php echo $coordinadorEncontrado['Nombre'] . ' ' . $coordinadorEncontrado['ApPaterno']; ?></div>
-                      <div class="col-md-2"><strong>Sacramento:</strong> <?php echo $coordinadorEncontrado['Sacramento']; ?></div>
-                      <div class="col-md-2"><strong>Grupo:</strong> <?php echo $coordinadorEncontrado['NombreGrupo']; ?></div>
-                      <div class="col-md-3 text-end">
-                        <?php if ($coordinadorEncontrado['EstadoCat'] == 'Activo'): ?>
-                          <form method="POST" class="d-inline">
-                            <input type="hidden" name="ciBloquear" value="<?php echo $coordinadorEncontrado['CiCat']; ?>">
-                            <button type="submit" name="bloquearCoordinador" class="btn btn-danger btn-sm" onclick="return confirm('¿Está seguro de bloquear a este coordinador?')">
-                              <i class="bi bi-lock-fill"></i> Bloquear
-                            </button>
-                          </form>
-                        <?php else: ?>
-                          <form method="POST" class="d-inline">
-                            <input type="hidden" name="ciActivar" value="<?php echo $coordinadorEncontrado['CiCat']; ?>">
-                            <button type="submit" name="activarCoordinador" class="btn btn-success btn-sm" onclick="return confirm('¿Está seguro de activar a este coordinador?')">
-                              <i class="bi bi-unlock-fill"></i> Activar
-                            </button>
-                          </form>
-                        <?php endif; ?>
-                      </div>
-                    </div>
-                  </div>
-                </div>
               <?php endif; ?>
 
               <hr>
