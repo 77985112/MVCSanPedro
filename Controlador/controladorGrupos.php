@@ -59,7 +59,7 @@ class GrupoController
     public function actualizarGrupo($idGrupo, $nombre, $color, $santo, $imagen, $frase)
     {
 
-        $target_dir = $_SERVER['DOCUMENT_ROOT'] . "/MVCSanPedro/assets/images/Santo/";
+        $target_dir = __DIR__ . '/../assets/images/Santo/';
 
         $grupo = $this->grupoModel->obtenerGrupoPorId($idGrupo);
         $imagenAnterior = $grupo['Imagen_Grupo'];
