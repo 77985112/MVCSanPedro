@@ -551,6 +551,12 @@ $ultimasActividades = array_slice($controladorActividades->obtenerActividades(nu
                                 <div class="row g-4 align-items-center position-relative z-index-1">
                                     <div class="col-md-6">
                                         <div class="me-4">
+                                            <?php
+                                            // El video del templo pesa mas de lo que acepta el hosting gratuito,
+                                            // por eso puede no estar en el servidor. Si falta, no se muestra el boton.
+                                            $hayVideoTemplo = is_file(__DIR__ . '/assets/images/videos/Templo_San Pedro.mp4');
+                                            ?>
+                                            <?php if ($hayVideoTemplo): ?>
                                             <button id="showVideoButton"
                                                 class="btn btn-primary icon-md rounded-circle playerbtn"><i
                                                     class="bi bi-play-fill"></i></button>
@@ -564,6 +570,7 @@ $ultimasActividades = array_slice($controladorActividades->obtenerActividades(nu
                                                         type="video/mp4">
                                                 </video>
                                             </div>
+                                            <?php endif; ?>
                                         </div>
                                     </div>
                                 </div>
@@ -1092,17 +1099,19 @@ $ultimasActividades = array_slice($controladorActividades->obtenerActividades(nu
         const closeVideoButton = document.getElementById('closeVideoButton');
         const videoPlayer = document.getElementById('videoPlayer');
 
-        showVideoButton.addEventListener('click', function() {
-            videoContainer.style.display = 'block';
-            showVideoButton.style.display = 'none';
-            videoPlayer.play();
-        });
+        if (showVideoButton && closeVideoButton && videoPlayer) {
+            showVideoButton.addEventListener('click', function() {
+                videoContainer.style.display = 'block';
+                showVideoButton.style.display = 'none';
+                videoPlayer.play();
+            });
 
-        closeVideoButton.addEventListener('click', function() {
-            videoContainer.style.display = 'none';
-            showVideoButton.style.display = 'block';
-            videoPlayer.pause();
-        });
+            closeVideoButton.addEventListener('click', function() {
+                videoContainer.style.display = 'none';
+                showVideoButton.style.display = 'block';
+                videoPlayer.pause();
+            });
+        }
 
 
         document.addEventListener('DOMContentLoaded', function() {
