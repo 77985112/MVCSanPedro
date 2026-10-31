@@ -1,0 +1,235 @@
+.sacramento-contenido,
+.sacramento-contenido h1,
+.sacramento-contenido h2,
+.sacramento-contenido h3,
+.sacramento-contenido h4,
+.sacramento-contenido h5,
+.sacramento-contenido h6,
+.sacramento-contenido p,
+.sacramento-contenido li,
+.sacramento-contenido strong,
+.sacramento-contenido span {
+    color: #000000;
+}
+
+.sacramento-contenido {
+    padding: 2.5rem;
+    background: #f5f7fa;
+    border-radius: 18px;
+}
+
+.sacramento-presentacion {
+    display: grid;
+    grid-template-columns: minmax(240px, 340px) 1fr;
+    gap: 2.5rem;
+    align-items: center;
+    padding: 1.5rem;
+    margin-bottom: 2.5rem;
+    background: #ffffff;
+    border: 1px solid #e2e7ee;
+    border-radius: 16px;
+    box-shadow: 0 8px 24px rgba(15, 45, 82, .08);
+}
+
+.sacramento-imagen {
+    width: 100%;
+    max-width: 320px;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+    border: 5px solid #ffffff;
+    border-radius: 50%;
+    box-shadow: 0 8px 22px rgba(15, 45, 82, .18);
+    justify-self: center;
+}
+
+.sacramento-presentacion h2 {
+    margin-bottom: 1rem;
+    font-size: clamp(1.75rem, 3vw, 2.35rem);
+    font-weight: 700;
+}
+
+.sacramento-presentacion p {
+    margin: 0 0 .9rem;
+    font-size: 1rem;
+    line-height: 1.7;
+}
+
+.sacramento-presentacion p:last-child {
+    margin-bottom: 0;
+}
+
+.sacramento-encabezado {
+    margin-bottom: 1.75rem;
+    text-align: center;
+}
+
+.sacramento-encabezado h2 {
+    margin-bottom: .4rem;
+    font-size: clamp(1.8rem, 3vw, 2.4rem);
+    font-weight: 750;
+}
+
+.sacramento-encabezado p {
+    margin: 0;
+    font-size: 1rem;
+}
+
+.sacramento-requisitos {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.25rem;
+}
+
+.sacramento-tarjeta {
+    padding: 1.5rem;
+    background: #ffffff;
+    border: 1px solid #dfe5ec;
+    border-top: 4px solid #12345b;
+    border-radius: 14px;
+    box-shadow: 0 6px 18px rgba(15, 45, 82, .07);
+}
+
+.sacramento-tarjeta-ancha {
+    grid-column: 1 / -1;
+}
+
+.sacramento-tarjeta h3 {
+    display: flex;
+    gap: .7rem;
+    align-items: center;
+    margin-bottom: 1rem;
+    font-size: 1.08rem;
+    font-weight: 700;
+}
+
+.sacramento-tarjeta h3 > i {
+    display: inline-grid;
+    width: 2.25rem;
+    height: 2.25rem;
+    flex: 0 0 2.25rem;
+    place-items: center;
+    color: #ffffff;
+    background: #12345b;
+    border-radius: 50%;
+}
+
+.sacramento-lista {
+    padding: 0;
+    margin: 0;
+    list-style: none;
+}
+
+.sacramento-lista li {
+    position: relative;
+    padding-left: 1.4rem;
+    margin-bottom: .75rem;
+    font-size: .98rem;
+    line-height: 1.55;
+}
+
+.sacramento-lista li:last-child {
+    margin-bottom: 0;
+}
+
+.sacramento-lista li::before {
+    position: absolute;
+    top: .1rem;
+    left: 0;
+    color: #bd8700;
+    content: "\25B8";
+    font-weight: 700;
+}
+
+.sacramento-aviso {
+    padding: .9rem 1rem;
+    margin: 1rem 0 0;
+    line-height: 1.5;
+    background: #fff7df;
+    border-left: 4px solid #d9a20b;
+    border-radius: 8px;
+}
+
+.sacramento-agenda {
+    border-top-color: #d9a20b;
+}
+
+.sacramento-eventos {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.sacramento-evento {
+    padding: 1.1rem;
+    background: #f5f8fc;
+    border: 1px solid #d8e2ee;
+    border-radius: 11px;
+}
+
+.sacramento-evento h4 {
+    display: flex;
+    gap: .55rem;
+    align-items: center;
+    margin-bottom: .8rem;
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.sacramento-evento h4 i {
+    color: #12345b;
+}
+
+.sacramento-evento p {
+    display: flex;
+    gap: .5rem;
+    align-items: flex-start;
+    margin-bottom: .55rem;
+    line-height: 1.45;
+}
+
+.sacramento-evento p i {
+    color: #bd8700;
+}
+
+.sacramento-evento .sacramento-estado {
+    display: block;
+    padding: .55rem .7rem;
+    margin: .8rem 0 0;
+    text-align: center;
+    background: #ffffff;
+    border: 1px solid #dfe5ec;
+    border-radius: 8px;
+    font-weight: 600;
+}
+
+@media (max-width: 991.98px) {
+    .sacramento-contenido {
+        padding: 1.5rem;
+    }
+
+    .sacramento-presentacion {
+        grid-template-columns: 1fr;
+        text-align: center;
+    }
+}
+
+@media (max-width: 767.98px) {
+    .sacramento-contenido {
+        padding: 1rem;
+    }
+
+    .sacramento-presentacion,
+    .sacramento-requisitos,
+    .sacramento-eventos {
+        grid-template-columns: 1fr;
+    }
+
+    .sacramento-presentacion {
+        gap: 1.5rem;
+        padding: 1rem;
+    }
+
+    .sacramento-tarjeta-ancha {
+        grid-column: auto;
+    }
+}

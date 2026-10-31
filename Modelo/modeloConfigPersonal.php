@@ -10,7 +10,7 @@ class UsuarioModel {
     }
 
     public function actualizarImagen($ciPersonal, $campoImagen, $nombreArchivo) {
-        $sql = "UPDATE personal SET $campoImagen = ? WHERE CiPersonal = ?";
+        $sql = "UPDATE `personal` SET $campoImagen = ? WHERE CiPersonal = ?";
         $stmt = $this->conn->prepare($sql);
         if (!$stmt) {
             echo "Error en la preparación: " . $this->conn->error;
@@ -21,35 +21,35 @@ class UsuarioModel {
     }
 
     public function actualizarFrase($ciPersonal, $frase) {
-        $sql = "UPDATE personal SET FrasePer = ? WHERE CiPersonal = ?";
+        $sql = "UPDATE `personal` SET FrasePer = ? WHERE CiPersonal = ?";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param("ss", $frase, $ciPersonal);
         return $stmt->execute();
     }
 
     public function actualizarContacto($ciPersonal, $contacto) {
-        $sql = "UPDATE personal SET ContactoPer = ? WHERE CiPersonal = ?";
+        $sql = "UPDATE `personal` SET ContactoPer = ? WHERE CiPersonal = ?";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param("ss", $contacto, $ciPersonal);
         return $stmt->execute();
     }
 
     public function actualizarContrasena($ciPersonal, $nuevaContrasena) {
-        $sql = "UPDATE personal SET ClavePer = ? WHERE CiPersonal = ?";
+        $sql = "UPDATE `personal` SET ClavePer = ? WHERE CiPersonal = ?";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param("ss", $nuevaContrasena, $ciPersonal);
         return $stmt->execute();
     }
 
     public function eliminarCuenta($ciPersonal) {
-        $sql = "UPDATE personal SET Estado = 'Inactivo' WHERE CiPersonal = ?";
+        $sql = "UPDATE `personal` SET Estado = 'Inactivo' WHERE CiPersonal = ?";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param("s", $ciPersonal);
         return $stmt->execute();
     }
 
     public function obtenerUsuarioPorCI($ciPersonal) {
-        $sql = "SELECT * FROM personal WHERE CiPersonal = ?";
+        $sql = "SELECT * FROM `personal` WHERE CiPersonal = ?";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param("s", $ciPersonal);
         $stmt->execute();

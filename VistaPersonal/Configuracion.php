@@ -54,7 +54,8 @@ if (isset($_POST['EliminarCount'])) {
   <link rel="shortcut icon" href="../assets/images/Icono.png">
   <link rel="stylesheet" type="text/css" href="../assets/vendor/font-awesome/css/all.min.css">
   <link rel="stylesheet" type="text/css" href="../assets/vendor/bootstrap-icons/bootstrap-icons.css">
-  <link rel="stylesheet" type="text/css" href="../assets/css/style.css">
+  <link rel="stylesheet" type="text/css" href="../assets/css/style.css?v=<?php echo filemtime(__DIR__ . '/../assets/css/style.css'); ?>">
+  <link rel="stylesheet" type="text/css" href="../assets/css/logo-cabecera.css?v=<?= filemtime(__DIR__ . '/../assets/css/logo-cabecera.css') ?>">
   <script src="../assets/js/jquery-3.6.4.min.js"></script>
   <style>
         .disabled-link {
@@ -70,8 +71,8 @@ if (isset($_POST['EliminarCount'])) {
     <nav class="navbar navbar-expand-lg">
       <div class="container">
         <a class="navbar-brand" href="VistaPersonal.php">
-          <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png" alt="logo">
-          <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png" alt="logo">
+          <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo.png') ?>" alt="logo">
+          <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo-light.png') ?>" alt="logo">
         </a>
 
         <ul class="nav flex-nowrap align-items-center ms-sm-3 list-unstyled">
@@ -83,13 +84,13 @@ if (isset($_POST['EliminarCount'])) {
 
           <li class="nav-item ms-2 dropdown">
             <a class="nav-link btn icon-md p-0" href="#" id="profileDropdown" role="button" data-bs-auto-close="outside" data-bs-display="static" data-bs-toggle="dropdown" aria-expanded="false">
-              <img class="avatar-img rounded border border-white border-3" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}"; ?>" alt="">
+              <img class="avatar-img rounded border border-white border-3" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}?v=" . time(); ?>" alt="">
             </a>
             <ul class="dropdown-menu dropdown-animation dropdown-menu-end pt-3 small me-md-n3" aria-labelledby="profileDropdown">
               <li class="px-3">
                 <div class="d-flex align-items-center position-relative">
                   <div class="avatar me-3">
-                    <img class="avatar-img rounded-circle" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}"; ?>" alt="avatar">
+                    <img class="avatar-img rounded-circle" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}?v=" . time(); ?>" alt="avatar">
                   </div>
                   <div>
                     <a class="h6 stretched-link" href="#"><?php echo $usuario['Nombre'] . " " . $usuario['Paterno'] . " " . $usuario['Materno']; ?></a>
@@ -139,7 +140,7 @@ if (isset($_POST['EliminarCount'])) {
 
 
     <main>
-        <div class="container">
+        <div class="container personal-dashboard-container">
             <div class="row">
                 <div class="col-lg-3">
                     <div class="d-flex align-items-center mb-4 d-lg-none">
@@ -209,12 +210,12 @@ if (isset($_POST['EliminarCount'])) {
                                             <li class="list-group-item d-md-flex justify-content-between align-items-center">
                                                 <div class="me-md-3">
                                                     <h6 class="mb-0">Imagen de Perfil</h6>
-                                                    <img id="imagenPreviewPerfil" class="avatar-img rounded-circle border border-white border-3" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}"; ?>" alt="" style="width: 200px; height: 200px;">
+                                                    <img id="imagenPreviewPerfil" class="avatar-img rounded-circle border border-white border-3" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}?v=" . time(); ?>" alt="" style="width: 200px; height: 200px;">
                                                     <p class="small mb-0" id="imagenTextoPerfil"><?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? 'Fondo Genérico' : 'Perfil Actual'; ?></p>
                                                 </div>
                                                 <div class="me-md-3">
                                                     <h6 class="mb-0">Imagen de Fondo</h6>
-                                                    <img id="imagenPreviewFondo" class="h-200px rounded" src="<?php echo ($usuario['FondoPer'] == 'Ninguno' || empty($usuario['FondoPer'])) ? '../assets/images/fondo/Ninguno.jpg' : "../assets/images/fondo/{$usuario['FondoPer']}"; ?>" alt="" style="background-size: cover; background-repeat: no-repeat; width: 450px; height: 200px;">
+                                                    <img id="imagenPreviewFondo" class="h-200px rounded" src="<?php echo ($usuario['FondoPer'] == 'Ninguno' || empty($usuario['FondoPer'])) ? '../assets/images/fondo/Ninguno.jpg' : "../assets/images/fondo/{$usuario['FondoPer']}?v=" . time(); ?>" alt="" style="background-size: cover; background-repeat: no-repeat; width: 450px; height: 200px;">
                                                     <p class="small mb-0" id="imagenTextoFondo"><?php echo ($usuario['FondoPer'] == 'Ninguno' || empty($usuario['FondoPer'])) ? 'Fondo Genérico' : 'Fondo Actual'; ?></p>
                                                 </div>
                                             </li>

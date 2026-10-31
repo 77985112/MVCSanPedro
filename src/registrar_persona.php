@@ -1,33 +1,20 @@
 <?php
-include '../Conexion/Conexion.php';
+header('Content-Type: application/json; charset=utf-8');
+require_once '../Controlador/ControladorPersona.php';
 
-$response = ['success' => false, 'message' => ''];
-
+$respuesta = ['success' => false, 'message' => 'Solicitud no válida.'];
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $conexion = (new Conexion())->getConnection();
-
-    $ciPersona = $_POST['ciPersona'];
-    $nombre = $_POST['nombre'];
-    $apPaterno = $_POST['apPaterno'];
-    $apMaterno = $_POST['apMaterno'];
-    $sexo = $_POST['sexo'];
-    $fechaNac = $_POST['fechaNac'];
-    $direccion = $_POST['direccion'];
-    $contacto = $_POST['contacto'];
-    $estadoPer = $_POST['estadoPer'];
-
-    $stmt = $conexion->prepare("CALL RegistrarPersona(?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    $stmt->bind_param("sssssssss", $ciPersona, $nombre, $apPaterno, $apMaterno, $sexo, $fechaNac, $direccion, $contacto, $estadoPer);
-
-    if ($stmt->execute()) {
-        $response['success'] = true;
+    $controlador = new ControladorPersona();
+    if ($controlador->crearPersona($_POST)) {
+        $respuesta = [
+            'success' => true,
+            'ciPersona' => $controlador->obtenerCiPersonaRegistrada(),
+            'message' => 'Persona registrada correctamente.'
+        ];
     } else {
-        $response['message'] = "Error: " . $stmt->error;
+        http_response_code(422);
+        $respuesta['message'] = $controlador->obtenerError() ?: 'No se pudo registrar la persona.';
     }
-
-    $stmt->close();
-    $conexion->close();
 }
-
-echo json_encode($response);
+echo json_encode($respuesta, JSON_UNESCAPED_UNICODE);
 ?>

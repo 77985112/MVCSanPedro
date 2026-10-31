@@ -659,4 +659,38 @@ var e = {
   // END: Fake Password
  
 };
+
+// Evita que el navegador muestre sugerencias guardadas (direcciones,
+// contactos y correos) en los formularios de datos personales.
+(function () {
+	function desactivarAutocompletadoPersonal() {
+		var campos = document.querySelectorAll(
+			'input[name="Direccion"], input[name="direccion"], ' +
+			'input[name="Contacto"], input[name="contacto"], ' +
+			'input[name="ContactoPer"], input[name="Contactodato"], ' +
+			'input[name="Correo"], input[name="CorreoPer"], ' +
+			'input[name="CorreoSolicitante"], input[name="CiPersonal"], ' +
+			'input[name="CiPersona"], input[name="ciPersona"], ' +
+			'input[name="Nombre"], input[name="Paterno"], ' +
+			'input[name="Materno"], input[name="ApPaterno"], ' +
+			'input[name="ApMaterno"], input[name="Quien"], ' +
+			'input[name="Telefono"], input[name="Celular"], ' +
+			'input[type="email"], input[type="tel"]'
+		);
+		campos.forEach(function (campo) {
+			campo.setAttribute('autocomplete', 'new-password');
+			var formulario = campo.closest('form');
+			if (formulario) {
+				formulario.setAttribute('autocomplete', 'off');
+			}
+		});
+	}
+
+	if (document.readyState === 'loading') {
+		document.addEventListener('DOMContentLoaded', desactivarAutocompletadoPersonal);
+	} else {
+		desactivarAutocompletadoPersonal();
+	}
+})();
+
 e.init();

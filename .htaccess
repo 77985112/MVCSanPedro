@@ -1,0 +1,9 @@
+# Limites para los formularios de actividades en XAMPP (PHP como modulo de Apache).
+# Hasta 7 imagenes de 5 MB y un video de 100 MB, mas los campos del formulario.
+<IfModule php_module>
+    <FilesMatch "^(VistaPersonal|ActividadVista|DetalleActividad)[.]php$">
+        php_value upload_max_filesize 100M
+        php_value post_max_size 140M
+        php_value max_input_time 600
+    </FilesMatch>
+</IfModule>

@@ -13,10 +13,10 @@ class ReporteAsistenciaModelo {
         
         $sql = "SELECT p.CiPersona, p.Nombre, p.ApPaterno, p.ApMaterno, c.Sacramento, 
                 a.IdGrupo, g.NombreGrupo, a.RolCat
-                FROM persona p
+                FROM `persona` p
                 INNER JOIN catequista c ON p.CiPersona = c.CiCat
-                INNER JOIN asignacion a ON c.CiCat = a.CiCat
-                INNER JOIN grupo g ON a.IdGrupo = g.IdGrupo
+                INNER JOIN `asignacion` a ON c.CiCat = a.CiCat
+                INNER JOIN `grupo` g ON a.IdGrupo = g.IdGrupo
                 WHERE c.Sacramento = ? AND c.EstadoCat = 'Activo'
                 ORDER BY p.ApPaterno, p.ApMaterno, p.Nombre";
         

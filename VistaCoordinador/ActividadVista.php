@@ -1,5 +1,5 @@
 <?php
-require_once '../controlador/ControladorActividad.php';
+require_once '../Controlador/controladorActividad.php';
 
 session_start();
 if (!isset($_SESSION['CiPersona'])) {
@@ -7,17 +7,80 @@ if (!isset($_SESSION['CiPersona'])) {
     exit();
 }
 $Catequista = $_SESSION['CiPersona'];
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($_POST) && empty($_FILES)
+    && (int) ($_SERVER['CONTENT_LENGTH'] ?? 0) > 0) {
+    http_response_code(413);
+    exit('El archivo supera el límite de carga. Use una imagen de hasta 5 MB o un video de hasta 100 MB.');
+}
+
 
 $controlador = new ControladorActividad();
+$fechaMinimaActividad = ControladorActividad::fechaMinimaActividad();
+
+// Coordinador de sacramento (Primera Comunión / Confirmación): puede editar y eliminar
+// las actividades de SU sacramento mientras estén activas (la eliminación no requiere estado).
+$sesionCoordinador = $_SESSION['CiPersona'] ?? null;
+$esCoordinador = is_array($sesionCoordinador) && ($sesionCoordinador['RolCat'] ?? '') === 'Coordinador';
+$sacramentoCoordinador = $esCoordinador ? (string) ($sesionCoordinador['Sacramento'] ?? '') : '';
+if (empty($_SESSION['csrf_actividad_eliminar'])) {
+    $_SESSION['csrf_actividad_eliminar'] = bin2hex(random_bytes(32));
+}
+$actividadEliminada = !empty($_SESSION['actividad_eliminada']);
+unset($_SESSION['actividad_eliminada']);
+$errorEliminarActividad = isset($_SESSION['actividad_eliminada_error'])
+    ? (string) $_SESSION['actividad_eliminada_error'] : '';
+unset($_SESSION['actividad_eliminada_error']);
+
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['Nueva_Actividad'])) {
     try {
         $controlador->registrarActividad($_POST);
         header("Location: ActividadVista.php");
         exit;
-    } catch (Exception $e) {
-        echo "Error: " . $e->getMessage();
+    } catch (InvalidArgumentException $e) {
+        http_response_code(400);
+        echo htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8');
+    } catch (Throwable $e) {
+        error_log('Registrar archivo de actividad: ' . $e->getMessage());
+        http_response_code(500);
+        echo 'No se pudo publicar la actividad. Intente nuevamente.';
     }
     exit;
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['accion'] ?? '') === 'eliminar_actividad') {
+    if (!$esCoordinador) {
+        http_response_code(403);
+        exit('Solo los coordinadores pueden eliminar actividades.');
+    }
+    $errorEliminacion = '';
+    if (!is_string($_POST['csrf_actividad_eliminar'] ?? null)
+        || !hash_equals($_SESSION['csrf_actividad_eliminar'], $_POST['csrf_actividad_eliminar'])) {
+        $errorEliminacion = 'La sesión del formulario venció. Recargue la página e intente de nuevo.';
+    } else {
+        $idEliminar = filter_var($_POST['idActividad'] ?? null, FILTER_VALIDATE_INT,
+            ['options' => ['min_range' => 1]]);
+        $actividadEliminar = $idEliminar ? $controlador->obtenerActividadPorId($idEliminar) : null;
+        if (!$actividadEliminar) {
+            $errorEliminacion = 'No se encontró la actividad.';
+        } elseif ($actividadEliminar['TipoActividad'] !== $sacramentoCoordinador) {
+            $errorEliminacion = 'Solo puede eliminar actividades de ' . $sacramentoCoordinador . '.';
+        } else {
+            try {
+                $controlador->eliminarActividad($idEliminar);
+                $_SESSION['actividad_eliminada'] = true;
+            } catch (InvalidArgumentException $e) {
+                $errorEliminacion = $e->getMessage();
+            } catch (Throwable $e) {
+                error_log('Eliminar actividad (coordinador): ' . $e->getMessage());
+                $errorEliminacion = 'No se pudo eliminar la actividad. Intente nuevamente.';
+            }
+        }
+    }
+    if ($errorEliminacion !== '') {
+        $_SESSION['actividad_eliminada_error'] = $errorEliminacion;
+    }
+    header('Location: ActividadVista.php', true, 303);
+    exit();
 }
 
 $actividadesParroquia = $controlador->obtenerActividades('Parroquia');
@@ -43,7 +106,7 @@ function getActiveNotifications($conn)
     $sql = "SELECT n.idNotificacion, n.TituloNot, n.DetalleNot, n.FechaNotFin, CONCAT(p.Nombre, ' ', p.ApPaterno) AS datoscat 
             FROM notificaciones n 
             INNER JOIN catequista c ON n.CiNotificador = c.CiCat 
-            INNER JOIN persona p ON c.CiCat = p.CiPersona 
+            INNER JOIN `persona` p ON c.CiCat = p.CiPersona 
             WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ?
             ORDER BY n.FechaNotFin ASC";
 
@@ -75,16 +138,24 @@ $activeNotifications = getActiveNotifications($conn);
     <link rel="stylesheet" type="text/css" href="../assets/vendor/font-awesome/css/all.min.css">
     <link rel="stylesheet" type="text/css" href="../assets/vendor/bootstrap-icons/bootstrap-icons.css">
     <link rel="stylesheet" type="text/css" href="../assets/css/style.css">
+    <link rel="stylesheet" type="text/css" href="../assets/css/logo-cabecera.css?v=<?= filemtime(__DIR__ . '/../assets/css/logo-cabecera.css') ?>">
     <script src="../assets/js/jquery-3.6.4.min.js"></script>
 </head>
 
+<body class="sidebar-start-enabled">
+    <script>
+        if (window.innerWidth < 992) {
+            document.body.classList.remove('sidebar-start-enabled');
+        }
+    </script>
+
 <header class="navbar-light fixed-top header-static bg-mode">
     <nav class="navbar navbar-expand-lg">
-        <button class="btn text-secondary py-0 me-3 sidebar-start-toggle"><i class="bi bi-justify-left fs-3 lh-0"></i></button>
+        <button class="btn text-secondary py-0 me-3 sidebar-start-toggle d-none d-lg-flex align-items-center"><i class="bi bi-justify-left fs-3 lh-0"></i></button>
         <div class="container">
             <a class="navbar-brand" href="VistaCoordinador.php">
-                <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png" alt="logo">
-                <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png" alt="logo">
+                <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo.png') ?>" alt="logo">
+                <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo-light.png') ?>" alt="logo">
             </a>
 
             <ul class="nav flex-nowrap align-items-center ms-sm-3 list-unstyled">
@@ -129,17 +200,17 @@ $activeNotifications = getActiveNotifications($conn);
 
                 <li class="nav-item ms-2 dropdown">
                     <a class="nav-link btn icon-md p-0" href="#" id="profileDropdown" role="button" data-bs-auto-close="outside" data-bs-display="static" data-bs-toggle="dropdown" aria-expanded="false">
-                        <img class="avatar-img rounded border border-white border-3" src="<?php echo ($Catequista['ImagenCat'] == 'Ninguno' || empty($Catequista['ImagenCat'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$Catequista['ImagenCat']}"; ?>" alt="">
+                        <img class="avatar-img rounded border border-white border-3" src="<?php echo ($Catequista['ImagenCat'] == 'Ninguno' || empty($Catequista['ImagenCat'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$Catequista['ImagenCat']}?v=" . time(); ?>" alt="">
                     </a>
                     <ul class="dropdown-menu dropdown-animation dropdown-menu-end pt-3 small me-md-n3" aria-labelledby="profileDropdown">
                         <li class="px-3">
                             <div class="d-flex align-items-center position-relative">
                                 <div class="avatar me-3">
-                                    <img class="avatar-img rounded-circle" src="<?php echo ($Catequista['ImagenCat'] == 'Ninguno' || empty($Catequista['ImagenCat'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$Catequista['ImagenCat']}"; ?>" alt="avatar">
+                                    <img class="avatar-img rounded-circle" src="<?php echo ($Catequista['ImagenCat'] == 'Ninguno' || empty($Catequista['ImagenCat'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$Catequista['ImagenCat']}?v=" . time(); ?>" alt="avatar">
                                 </div>
                                 <div>
                                     <a class="h6 stretched-link" href="#"><?php echo $Catequista['Nombre'] . " " . $Catequista['ApPaterno'] . " " . $Catequista['ApMaterno']; ?></a>
-                                    <p class="small m-0"><?php echo $Catequista['RolCat']; ?> <i class="bi bi-patch-check-fill text-success small"></i></p>
+                                    <p class="small m-0"><?php echo $Catequista['RolCat'] === 'Coordinador' ? 'Coordinadores' : $Catequista['RolCat']; ?> <i class="bi bi-patch-check-fill text-success small"></i></p>
                                 </div>
                             </div>
                             <a class="dropdown-item btn btn-primary-soft btn-sm my-2 text-center" href="PerfilCatequista.php">Ver mi Perfil</a>
@@ -195,10 +266,19 @@ $activeNotifications = getActiveNotifications($conn);
 
 <main>
     <div class="container-fluid">
+        <div class="d-flex align-items-center d-lg-none mb-2">
+            <button class="border-0 bg-transparent p-0 d-flex align-items-center sidebar-start-toggle-mobile" type="button" aria-label="Otras opciones">
+                <span class="btn btn-primary"><i class="fa-solid fa-sliders-h"></i></span>
+                <span class="h6 mb-0 fw-bold ms-2 text-nowrap">Otras Opciones</span>
+            </button>
+        </div>
         <div class="row justify-content-between g-0">
 
             <div class="col-md-2 col-lg-3 col-xxl-4 mt-n4">
                 <div class="nav-sidenav p-4 bg-mode h-100 custom-scrollbar">
+                    <div class="d-flex justify-content-end d-lg-none mb-2">
+                        <button class="btn btn-light btn-sm sidebar-start-close" type="button" aria-label="Cerrar menú"><i class="bi bi-x-lg"></i></button>
+                    </div>
                     <ul class="nav nav-link-secondary flex-column fw-bold gap-2">
                         <h6 class="nav-text badge bg-primary text-white mt-2 me-2 border border-white border-3 rounded"><i class="bi bi-caret-down-fill"></i>&nbsp;&nbsp; General</h6>
                         <li class="nav-item">
@@ -227,7 +307,6 @@ $activeNotifications = getActiveNotifications($conn);
                         <li class="nav-item">
                             <a class="nav-link" href="VistaPersona.php"> <i class="<bi bi-person-vcard nav-icon"></i> <span class="nav-text">Persona </span></a>
                         </li>
-                        <h6 class="nav-text badge bg-primary text-white mt-2 me-2 border border-white border-3 rounded"><i class="bi bi-caret-down-fill"></i>&nbsp;&nbsp; Personal</h6>
                         <li class="nav-item">
                             <a class="nav-link" href="Configuracion.php"> <i class="bi bi-gear-wide-connected nav-icon"></i> <span class="nav-text">Configuración </span></a>
                         </li>
@@ -264,6 +343,12 @@ $activeNotifications = getActiveNotifications($conn);
                                 <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-3"> Primera Comunión </a></li>
                                 <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-4"> Confirmación </a></li>
                             </ul>
+                            <?php if ($actividadEliminada): ?>
+                                <div class="alert alert-success" role="alert"><i class="bi bi-check-circle me-1"></i>Actividad eliminada correctamente.</div>
+                            <?php endif; ?>
+                            <?php if ($errorEliminarActividad !== ''): ?>
+                                <div class="alert alert-danger" role="alert"><i class="bi bi-exclamation-triangle me-1"></i><?php echo htmlspecialchars($errorEliminarActividad, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></div>
+                            <?php endif; ?>
                             <div class="tab-content mb-0 pb-0">
 
                                 <div class="tab-pane fade show active" id="tab-1">
@@ -278,14 +363,24 @@ $activeNotifications = getActiveNotifications($conn);
                                                 <div class="col-sm-6 col-xl-4">
                                                     <div class="card h-100">
                                                         <div class="position-relative">
-                                                            <img class="img-fluid rounded-top fixed-height" src="../assets/images/events/<?php echo $actividad['ImagenActividad'] !== 'Ninguno' ? $actividad['ImagenActividad'] : 'Generico.png'; ?>" alt="" style="width: 100%; height:150px;">
+                    <?php echo ControladorActividad::mediaActividad($actividad, '150px'); ?>
                                                             <div class="badge bg-<?php echo $actividad['EstActividad'] == 'Activo' ? 'success' : 'danger'; ?> text-white mt-2 me-2 position-absolute top-0 end-0"><?php echo $actividad['EstActividad']; ?></div>
                                                         </div>
                                                         <div class="card-body position-relative pt-0">
                                                             <input type="hidden" value="<?php echo $actividad['idActividad']; ?>">
-                                                            <h6 class="mt-3"><a href="DetalleActividad.php?idActividad=<?php echo $actividad['idActividad']; ?>"><?php echo $actividad['TituloActividad']; ?></a></h6>
+                                                            <h6 class="mt-3"><a href="DetalleActividad.php?idActividad=<?php echo $actividad['idActividad']; ?>"><?php echo htmlspecialchars($actividad['TituloActividad'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></a></h6>
                                                             <p class="mb-0 small"><i class="bi bi-calendar-check pe-1"></i><?php echo $actividad['FechaActividad']; ?> a <?php echo $actividad['HoraAct']; ?></p>
-                                                            <p class="small"><i class="bi bi-geo-alt pe-1"></i><?php echo $actividad['LugarAct']; ?></p>
+                                                            <p class="small"><i class="bi bi-geo-alt pe-1"></i><?php echo htmlspecialchars($actividad['LugarAct'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></p>
+                                                            <?php if ($esCoordinador && $actividad['TipoActividad'] === $sacramentoCoordinador && ControladorActividad::esActividadEditable($actividad)): ?>
+                                                                <a class="btn btn-primary-soft btn-sm w-100 mt-3" href="DetalleActividad.php?idActividad=<?php echo (int) $actividad['idActividad']; ?>&amp;editar=1#updateForm">
+                                                                    <i class="bi bi-pencil-square me-1"></i>Editar
+                                                                </a>
+                                                            <?php endif; ?>
+                                                            <?php if ($esCoordinador && $actividad['TipoActividad'] === $sacramentoCoordinador): ?>
+                                                                <button type="button" class="btn btn-outline-danger btn-sm w-100 mt-3" data-bs-toggle="modal" data-bs-target="#modalEliminarActividad" data-id="<?php echo $actividad['idActividad']; ?>" data-titulo="<?php echo htmlspecialchars($actividad['TituloActividad'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>">
+                                                                    <i class="bi bi-trash3 me-1"></i>Eliminar
+                                                                </button>
+                                                            <?php endif; ?>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -306,14 +401,24 @@ $activeNotifications = getActiveNotifications($conn);
                                                 <div class="col-sm-6 col-xl-4">
                                                     <div class="card h-100">
                                                         <div class="position-relative">
-                                                            <img class="img-fluid rounded-top fixed-height" src="../assets/images/events/<?php echo $actividad['ImagenActividad'] !== 'Ninguno' ? $actividad['ImagenActividad'] : 'Generico.png'; ?>" alt="" style="width: 100%; height:150px;">
+                    <?php echo ControladorActividad::mediaActividad($actividad, '150px'); ?>
                                                             <div class="badge bg-<?php echo $actividad['EstActividad'] == 'Activo' ? 'success' : 'danger'; ?> text-white mt-2 me-2 position-absolute top-0 end-0"><?php echo $actividad['EstActividad']; ?></div>
                                                         </div>
                                                         <div class="card-body position-relative pt-0">
                                                             <input type="hidden" value="<?php echo $actividad['idActividad']; ?>">
-                                                            <h6 class="mt-3"><a href="DetalleActividad.php?idActividad=<?php echo $actividad['idActividad']; ?>"><?php echo $actividad['TituloActividad']; ?></a></h6>
+                                                            <h6 class="mt-3"><a href="DetalleActividad.php?idActividad=<?php echo $actividad['idActividad']; ?>"><?php echo htmlspecialchars($actividad['TituloActividad'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></a></h6>
                                                             <p class="mb-0 small"><i class="bi bi-calendar-check pe-1"></i><?php echo $actividad['FechaActividad']; ?> a <?php echo $actividad['HoraAct']; ?></p>
-                                                            <p class="small"><i class="bi bi-geo-alt pe-1"></i><?php echo $actividad['LugarAct']; ?></p>
+                                                            <p class="small"><i class="bi bi-geo-alt pe-1"></i><?php echo htmlspecialchars($actividad['LugarAct'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></p>
+                                                            <?php if ($esCoordinador && $actividad['TipoActividad'] === $sacramentoCoordinador && ControladorActividad::esActividadEditable($actividad)): ?>
+                                                                <a class="btn btn-primary-soft btn-sm w-100 mt-3" href="DetalleActividad.php?idActividad=<?php echo (int) $actividad['idActividad']; ?>&amp;editar=1#updateForm">
+                                                                    <i class="bi bi-pencil-square me-1"></i>Editar
+                                                                </a>
+                                                            <?php endif; ?>
+                                                            <?php if ($esCoordinador && $actividad['TipoActividad'] === $sacramentoCoordinador): ?>
+                                                                <button type="button" class="btn btn-outline-danger btn-sm w-100 mt-3" data-bs-toggle="modal" data-bs-target="#modalEliminarActividad" data-id="<?php echo $actividad['idActividad']; ?>" data-titulo="<?php echo htmlspecialchars($actividad['TituloActividad'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>">
+                                                                    <i class="bi bi-trash3 me-1"></i>Eliminar
+                                                                </button>
+                                                            <?php endif; ?>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -334,14 +439,24 @@ $activeNotifications = getActiveNotifications($conn);
                                                 <div class="col-sm-6 col-xl-4">
                                                     <div class="card h-100">
                                                         <div class="position-relative">
-                                                            <img class="img-fluid rounded-top fixed-height" src="../assets/images/events/<?php echo $actividad['ImagenActividad'] !== 'Ninguno' ? $actividad['ImagenActividad'] : 'Generico.png'; ?>" alt="" style="width: 100%; height:150px;">
+                    <?php echo ControladorActividad::mediaActividad($actividad, '150px'); ?>
                                                             <div class="badge bg-<?php echo $actividad['EstActividad'] == 'Activo' ? 'success' : 'danger'; ?> text-white mt-2 me-2 position-absolute top-0 end-0"><?php echo $actividad['EstActividad']; ?></div>
                                                         </div>
                                                         <div class="card-body position-relative pt-0">
                                                             <input type="hidden" value="<?php echo $actividad['idActividad']; ?>">
-                                                            <h6 class="mt-3"><a href="DetalleActividad.php?idActividad=<?php echo $actividad['idActividad']; ?>"><?php echo $actividad['TituloActividad']; ?></a></h6>
+                                                            <h6 class="mt-3"><a href="DetalleActividad.php?idActividad=<?php echo $actividad['idActividad']; ?>"><?php echo htmlspecialchars($actividad['TituloActividad'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></a></h6>
                                                             <p class="mb-0 small"><i class="bi bi-calendar-check pe-1"></i><?php echo $actividad['FechaActividad']; ?> a <?php echo $actividad['HoraAct']; ?></p>
-                                                            <p class="small"><i class="bi bi-geo-alt pe-1"></i><?php echo $actividad['LugarAct']; ?></p>
+                                                            <p class="small"><i class="bi bi-geo-alt pe-1"></i><?php echo htmlspecialchars($actividad['LugarAct'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></p>
+                                                            <?php if ($esCoordinador && $actividad['TipoActividad'] === $sacramentoCoordinador && ControladorActividad::esActividadEditable($actividad)): ?>
+                                                                <a class="btn btn-primary-soft btn-sm w-100 mt-3" href="DetalleActividad.php?idActividad=<?php echo (int) $actividad['idActividad']; ?>&amp;editar=1#updateForm">
+                                                                    <i class="bi bi-pencil-square me-1"></i>Editar
+                                                                </a>
+                                                            <?php endif; ?>
+                                                            <?php if ($esCoordinador && $actividad['TipoActividad'] === $sacramentoCoordinador): ?>
+                                                                <button type="button" class="btn btn-outline-danger btn-sm w-100 mt-3" data-bs-toggle="modal" data-bs-target="#modalEliminarActividad" data-id="<?php echo $actividad['idActividad']; ?>" data-titulo="<?php echo htmlspecialchars($actividad['TituloActividad'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>">
+                                                                    <i class="bi bi-trash3 me-1"></i>Eliminar
+                                                                </button>
+                                                            <?php endif; ?>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -362,14 +477,24 @@ $activeNotifications = getActiveNotifications($conn);
                                                 <div class="col-sm-6 col-xl-4">
                                                     <div class="card h-100">
                                                         <div class="position-relative">
-                                                            <img class="img-fluid rounded-top fixed-height" src="../assets/images/events/<?php echo $actividad['ImagenActividad'] !== 'Ninguno' ? $actividad['ImagenActividad'] : 'Generico.png'; ?>" alt="" style="width: 100%; height:150px;">
+                    <?php echo ControladorActividad::mediaActividad($actividad, '150px'); ?>
                                                             <div class="badge bg-<?php echo $actividad['EstActividad'] == 'Activo' ? 'success' : 'danger'; ?> text-white mt-2 me-2 position-absolute top-0 end-0"><?php echo $actividad['EstActividad']; ?></div>
                                                         </div>
                                                         <div class="card-body position-relative pt-0">
                                                             <input type="hidden" value="<?php echo $actividad['idActividad']; ?>">
-                                                            <h6 class="mt-3"><a href="DetalleActividad.php?idActividad=<?php echo $actividad['idActividad']; ?>"><?php echo $actividad['TituloActividad']; ?></a></h6>
+                                                            <h6 class="mt-3"><a href="DetalleActividad.php?idActividad=<?php echo $actividad['idActividad']; ?>"><?php echo htmlspecialchars($actividad['TituloActividad'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></a></h6>
                                                             <p class="mb-0 small"><i class="bi bi-calendar-check pe-1"></i><?php echo $actividad['FechaActividad']; ?> a <?php echo $actividad['HoraAct']; ?></p>
-                                                            <p class="small"><i class="bi bi-geo-alt pe-1"></i><?php echo $actividad['LugarAct']; ?></p>
+                                                            <p class="small"><i class="bi bi-geo-alt pe-1"></i><?php echo htmlspecialchars($actividad['LugarAct'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></p>
+                                                            <?php if ($esCoordinador && $actividad['TipoActividad'] === $sacramentoCoordinador && ControladorActividad::esActividadEditable($actividad)): ?>
+                                                                <a class="btn btn-primary-soft btn-sm w-100 mt-3" href="DetalleActividad.php?idActividad=<?php echo (int) $actividad['idActividad']; ?>&amp;editar=1#updateForm">
+                                                                    <i class="bi bi-pencil-square me-1"></i>Editar
+                                                                </a>
+                                                            <?php endif; ?>
+                                                            <?php if ($esCoordinador && $actividad['TipoActividad'] === $sacramentoCoordinador): ?>
+                                                                <button type="button" class="btn btn-outline-danger btn-sm w-100 mt-3" data-bs-toggle="modal" data-bs-target="#modalEliminarActividad" data-id="<?php echo $actividad['idActividad']; ?>" data-titulo="<?php echo htmlspecialchars($actividad['TituloActividad'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>">
+                                                                    <i class="bi bi-trash3 me-1"></i>Eliminar
+                                                                </button>
+                                                            <?php endif; ?>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -402,7 +527,7 @@ $activeNotifications = getActiveNotifications($conn);
                                     <li class="mt-2 hstack gap-3 align-items-center position-relative">
                                         <input type="hidden" value="<?php echo htmlspecialchars($catequistaCoor['CiCat']); ?>">
                                         <div class="avatar avatar-xs">
-                                            <img class="avatar-img rounded-circle" src="<?php echo ($catequistaCoor['ImagenCat'] == 'Ninguno' || empty($catequistaCoor['ImagenCat'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$catequistaCoor['ImagenCat']}"; ?>" alt="">
+                                            <img class="avatar-img rounded-circle" src="<?php echo ($catequistaCoor['ImagenCat'] == 'Ninguno' || empty($catequistaCoor['ImagenCat'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$catequistaCoor['ImagenCat']}?v=" . time(); ?>" alt="">
                                         </div>
                                         <div class="overflow-hidden contact-name">
                                             <p class="h6 mb-0"><?php echo htmlspecialchars($catequistaCoor['NombreCompleto']); ?></p>
@@ -428,7 +553,7 @@ $activeNotifications = getActiveNotifications($conn);
                                         <?php if (!empty($catsacramento)): ?>
                                             <?php foreach ($catsacramento as $catSac): ?>
                                                 <li class="avatar avatar-xxs">
-                                                    <img class="avatar-img rounded-circle" src="<?php echo ($catSac['ImagenCat'] == 'Ninguno' || empty($catSac['ImagenCat'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$catSac['ImagenCat']}"; ?>" alt="avatar">
+                                                    <img class="avatar-img rounded-circle" src="<?php echo ($catSac['ImagenCat'] == 'Ninguno' || empty($catSac['ImagenCat'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$catSac['ImagenCat']}?v=" . time(); ?>" alt="avatar">
                                                 </li>
                                             <?php endforeach; ?>
                                         <?php else: ?>
@@ -474,20 +599,22 @@ $activeNotifications = getActiveNotifications($conn);
             <form method="POST" class="row g-3 p-3" enctype="multipart/form-data">
                 <div class="d-flex mb-3">
                     <div class="avatar avatar-xs me-2">
-                        <img class="avatar-img rounded-circle" src="<?php echo ($Catequista['ImagenCat'] == 'Ninguno' || empty($Catequista['ImagenCat'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$Catequista['ImagenCat']}"; ?>" alt="">
+                        <img class="avatar-img rounded-circle" src="<?php echo ($Catequista['ImagenCat'] == 'Ninguno' || empty($Catequista['ImagenCat'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$Catequista['ImagenCat']}?v=" . time(); ?>" alt="">
                     </div>
                     <div class="w-100">
                         <input type="text" class="form-control" name="TituloActividad" placeholder="Título de la Actividad" required>
                     </div>
                 </div>
                 <div class="w-100">
-                    <textarea class="form-control pe-4 fs-3 lh-1 border-0" name="DetalleActividad" rows="2" placeholder="Detalle de la Actividad..." required></textarea>
+                    <textarea class="form-control pe-4 fs-3 lh-1 border-0" name="DetalleActividad" rows="4" maxlength="<?php echo ControladorActividad::LIMITE_DESCRIPCION; ?>" aria-describedby="ayudaDescripcionActividad" placeholder="Detalle de la Actividad..." required></textarea>
+                    <div id="ayudaDescripcionActividad" class="form-text">Hasta 5.000 caracteres.</div>
                 </div>
                 <hr>
 
                 <div class="col-sm-6 col-lg-4 form-group">
                     <label for="FechaActividad">Fecha:</label>
-                    <input type="date" class="form-control" name="FechaActividad" id="FechaActividad" required>
+                    <input type="date" class="form-control" name="FechaActividad" id="FechaActividad" min="<?php echo $fechaMinimaActividad; ?>" required>
+                    <div class="form-text">Solo puede registrar fechas desde hoy en adelante; al pasar la fecha la actividad quedará concluida automáticamente.</div>
                 </div>
                 <div class="col-sm-6 col-lg-4 form-group">
                     <label for="HoraAct">Hora:</label>
@@ -496,26 +623,32 @@ $activeNotifications = getActiveNotifications($conn);
 
                 <input type="hidden" name="ImagenActividad" id="ImagenActividad">
 
-                <div class="col-sm-6 col-lg-4 form-group">
-                    <label for="TipoActividad">Quien Organiza:</label>
-                    <select name="TipoActividad" class="form-control" required>
-                        <option value="Parroquia">Parroquia</option>
-                        <option value="<?php echo $Catequista['Sacramento'] ?>"><?php echo $Catequista['Sacramento'] ?></option>
-                    </select>
-                </div>
+                <input type="hidden" name="TipoActividad" id="tipoActividadFormulario" value="Parroquia">
 
                 <div class="col-sm-6 col-lg-8 form-group">
                     <label for="LugarAct">Lugar de Actividad:</label>
-                    <input type="text" class="form-control" name="LugarAct" required>
+                    <input type="text" class="form-control" name="LugarAct" maxlength="<?php echo ControladorActividad::LIMITE_LUGAR; ?>" aria-describedby="ayudaLugarActividad" required>
+                    <div id="ayudaLugarActividad" class="form-text">Hasta 255 caracteres; puede incluir la dirección y referencias.</div>
                 </div>
 
                 <input type="hidden" name="CiCat" value="<?php echo $Catequista['CiCat'] ?>" required>
                 <br>
                 <div>
-                    <label class="form-label">Agregue una imagen de Actividad</label>
-                    <input type="file" class="form-control py-2" id="NuevaImagenActividad" name="NuevaImagenActividad" accept=".jpg, .png" required>
-                    <div class="dropzone dropzone-default card shadow-none p-3" data-dropzone='{"maxFiles":2}'>
-                        <img id="previewImagen" alt="Previsualización de la imagen" style="width: 100%; margin-top: 10px; display: none;">
+                    <label class="form-label">Agregue una imagen o un video de la actividad</label>
+                    <div class="card shadow-none p-3">
+                        <div class="row g-3">
+                            <div class="col-sm-6">
+                                <label class="form-label small mb-1" for="NuevaImagenActividad">Imágenes (JPG/PNG, hasta 5 MB c/u, máximo 7)</label>
+                                <input type="file" class="form-control py-2" id="NuevaImagenActividad" name="NuevaImagenActividad[]" multiple accept=".jpg,.jpeg,.png,image/jpeg,image/png" data-actividad-imagen="previewImagen" data-actividad-grupo="actividadCoordinador" data-actividad-requerido="true" data-actividad-maximas="<?php echo ControladorActividad::MAXIMO_IMAGENES; ?>">
+                            </div>
+                            <div class="col-sm-6">
+                                <label class="form-label small mb-1" for="NuevaVideoActividad">Video (MP4/WebM, hasta 100 MB)</label>
+                                <input type="file" class="form-control py-2" id="NuevaVideoActividad" name="NuevaVideoActividad" accept=".mp4,.webm,video/mp4,video/webm" data-actividad-video="previewVideo" data-actividad-grupo="actividadCoordinador" data-actividad-requerido="true">
+                                <video id="previewVideo" class="w-100 rounded mt-3 d-none actividad-video" controls playsinline preload="metadata" style="max-height:300px;"></video>
+                            </div>
+                        </div>
+                        <div id="previewImagen" class="d-flex flex-wrap gap-2 mt-3"></div>
+                        <div class="form-text mt-2">Puede adjuntar hasta 7 imágenes (JPG/PNG, hasta 5 MB c/u) y/o un video; al menos uno es obligatorio. La primera imagen será la principal.</div>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -528,6 +661,57 @@ $activeNotifications = getActiveNotifications($conn);
         </div>
     </div>
 </div>
+
+<div class="modal fade" id="modalEliminarActividad" tabindex="-1" aria-labelledby="tituloEliminarActividad" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="post" id="formEliminarActividad">
+                <input type="hidden" name="accion" value="eliminar_actividad">
+                <input type="hidden" name="idActividad" id="eliminarActividadId" value="">
+                <input type="hidden" name="csrf_actividad_eliminar" value="<?php echo htmlspecialchars($_SESSION['csrf_actividad_eliminar'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="tituloEliminarActividad">Eliminar actividad</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-2">¿Seguro que desea eliminar la actividad <strong id="eliminarActividadTitulo"></strong>?</p>
+                    <p class="small mb-0 text-danger"><i class="bi bi-exclamation-triangle me-1"></i>Se eliminará también su imagen o video, y la actividad dejará de mostrarse en la página web. Esta acción no se puede deshacer.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-danger-soft" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-danger"><i class="bi bi-trash3 me-1"></i>Eliminar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function () {
+        // El tipo de actividad se toma de la pestaña desde la que se abre el formulario
+        // (Todos/Parroquia -> Parroquia, Primera Comunión -> Primera Comunión, Confirmación -> Confirmación).
+        var tiposPorPestana = { 'tab-1': 'Parroquia', 'tab-2': 'Parroquia', 'tab-3': 'Primera Comunión', 'tab-4': 'Confirmación' };
+        var modalNueva = document.getElementById('feedActionActividad');
+        if (modalNueva) {
+            modalNueva.addEventListener('show.bs.modal', function () {
+                var activa = document.querySelector('.nav-tabs .nav-link.active');
+                var pestana = activa ? (activa.getAttribute('href') || '').replace('#', '') : '';
+                var campo = document.getElementById('tipoActividadFormulario');
+                if (campo) campo.value = tiposPorPestana[pestana] || 'Parroquia';
+            });
+        }
+        // Modal de eliminar: carga el id y el título de la tarjeta elegida.
+        var modalEliminar = document.getElementById('modalEliminarActividad');
+        if (modalEliminar && window.bootstrap) {
+            modalEliminar.addEventListener('show.bs.modal', function (event) {
+                var boton = event.relatedTarget;
+                if (!boton) return;
+                document.getElementById('eliminarActividadId').value = boton.getAttribute('data-id') || '';
+                document.getElementById('eliminarActividadTitulo').textContent = boton.getAttribute('data-titulo') || '';
+            });
+        }
+    })();
+</script>
 <script>
     const todays = new Date();
     const horaInput = document.getElementById('HoraAct');
@@ -542,22 +726,6 @@ $activeNotifications = getActiveNotifications($conn);
 </script>
 
 <script>
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const minDate = tomorrow.toISOString().split('T')[0];
-    document.getElementById("FechaActividad").setAttribute("min", minDate);
-    document.getElementById('NuevaImagenActividad').addEventListener('change', function(event) {
-        const file = event.target.files[0];
-        if (file) {
-            const preview = document.getElementById('previewImagen');
-            preview.src = URL.createObjectURL(file);
-            preview.style.display = 'block';
-            const randomString = Math.random().toString(36).substring(2, 7).toUpperCase();
-            const fileName = 'ACT' + randomString;
-            document.getElementById('ImagenActividad').value = fileName;
-        }
-    });
-
     $(document).ready(function() {
         function obtenerEstado() {
             $.ajax({
@@ -592,6 +760,23 @@ $activeNotifications = getActiveNotifications($conn);
 <script src="../assets/vendor/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
 <script src="../assets/js/functions.js"></script>
 <script src="../assets/js/tema.js"></script>
+  <script src="../assets/js/actividad-multimedia.js?v=<?php echo filemtime(__DIR__ . '/../assets/js/actividad-multimedia.js'); ?>"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        var abrir = document.querySelector('.sidebar-start-toggle-mobile');
+        var cerrar = document.querySelector('.sidebar-start-close');
+        if (abrir) {
+            abrir.addEventListener('click', function() {
+                document.body.classList.add('sidebar-start-enabled');
+            });
+        }
+        if (cerrar) {
+            cerrar.addEventListener('click', function() {
+                document.body.classList.remove('sidebar-start-enabled');
+            });
+        }
+    });
+</script>
 </body>
 
 </html>

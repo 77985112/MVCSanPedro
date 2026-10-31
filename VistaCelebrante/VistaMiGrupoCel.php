@@ -29,7 +29,7 @@ function getActiveNotifications($conn)
     $sql = "SELECT n.idNotificacion, n.TituloNot, n.DetalleNot, n.FechaNotFin, CONCAT(p.Nombre, ' ', p.ApPaterno) AS datoscat 
             FROM notificaciones n 
             INNER JOIN catequista c ON n.CiNotificador = c.CiCat 
-            INNER JOIN persona p ON c.CiCat = p.CiPersona 
+            INNER JOIN `persona` p ON c.CiCat = p.CiPersona 
             WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ?
             ORDER BY n.FechaNotFin ASC";
 
@@ -63,6 +63,7 @@ $activeNotifications = getActiveNotifications($conn);
         <link rel="stylesheet" type="text/css" href="../assets/vendor/font-awesome/css/all.min.css">
         <link rel="stylesheet" type="text/css" href="../assets/vendor/bootstrap-icons/bootstrap-icons.css">
         <link rel="stylesheet" type="text/css" href="../assets/css/style.css">
+        <link rel="stylesheet" type="text/css" href="../assets/css/logo-cabecera.css?v=<?= filemtime(__DIR__ . '/../assets/css/logo-cabecera.css') ?>">
         <script src="../assets/js/jquery-3.6.4.min.js"></script>
 
         <style>
@@ -96,8 +97,8 @@ $activeNotifications = getActiveNotifications($conn);
         <nav class="navbar navbar-expand-lg">
             <div class="container">
                 <a class="navbar-brand" href="VistaCelebrante.php">
-                    <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png" alt="logo">
-                    <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png" alt="logo">
+                    <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo.png') ?>" alt="logo">
+                    <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo-light.png') ?>" alt="logo">
                 </a>
 
                 <ul class="nav flex-nowrap align-items-center ms-sm-3 list-unstyled">
@@ -135,13 +136,13 @@ $activeNotifications = getActiveNotifications($conn);
                     </li>
                     <li class="nav-item ms-2 dropdown">
                         <a class="nav-link btn icon-md p-0" href="#" id="profileDropdown" role="button" data-bs-auto-close="outside" data-bs-display="static" data-bs-toggle="dropdown" aria-expanded="false">
-                            <img class="avatar-img border border-white border-3 rounded" src="<?php echo ($Celebrante['PerfilCel'] == 'Ninguno' || empty($Celebrante['PerfilCel'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$Celebrante['PerfilCel']}"; ?>" alt="">
+                            <img class="avatar-img border border-white border-3 rounded" src="<?php echo ($Celebrante['PerfilCel'] == 'Ninguno' || empty($Celebrante['PerfilCel'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$Celebrante['PerfilCel']}?v=" . time(); ?>" alt="">
                         </a>
                         <ul class="dropdown-menu dropdown-animation dropdown-menu-end pt-3 small me-md-n3" aria-labelledby="profileDropdown">
                             <li class="px-3">
                                 <div class="d-flex align-items-center position-relative">
                                     <div class="avatar me-3">
-                                        <img class="avatar-img rounded-circle" src="<?php echo ($Celebrante['PerfilCel'] == 'Ninguno' || empty($Celebrante['PerfilCel'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$Celebrante['PerfilCel']}"; ?>" alt="avatar">
+                                        <img class="avatar-img rounded-circle" src="<?php echo ($Celebrante['PerfilCel'] == 'Ninguno' || empty($Celebrante['PerfilCel'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$Celebrante['PerfilCel']}?v=" . time(); ?>" alt="avatar">
                                     </div>
                                     <div>
                                         <a class="h6 stretched-link" href="PerfilCelebrante.php"><?php echo $Celebrante['Nombre'] . " " . $Celebrante['ApPaterno'] . " " . $Celebrante['ApMaterno']; ?></a>
@@ -260,7 +261,7 @@ $activeNotifications = getActiveNotifications($conn);
                                                     <div class="card shadow-none text-center h-100">
                                                         <div class="card-body p-2 pb-0">
                                                             <div class="avatar avatar-xl">
-                                                                <img class="avatar-img rounded-circle" src="<?php echo ($cates['ImagenCat'] == 'Ninguno' || empty($cates['ImagenCat'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$cates['ImagenCat']}"; ?>" alt="">
+                                                                <img class="avatar-img rounded-circle" src="<?php echo ($cates['ImagenCat'] == 'Ninguno' || empty($cates['ImagenCat'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$cates['ImagenCat']}?v=" . time(); ?>" alt="">
                                                             </div>
                                                             <h6 class="card-title mb-1 mt-3"><a href="PerfilAjenoCat.php?IpCS=<?= htmlspecialchars($cates['CiCat']) ?>"><?php echo htmlspecialchars($cates['NombreCompleto']); ?></a></h6>
                                                             <p class="mb-0 small lh-sm"><?php echo htmlspecialchars($cates['RolCat']); ?></p>
@@ -293,7 +294,7 @@ $activeNotifications = getActiveNotifications($conn);
                                                     <tr>
                                                         <td>
                                                             <div class="avatar align-middle">
-                                                                <img class="avatar-img rounded-3" src="<?php echo ($celebranteO['PerfilCel'] == 'Ninguno' || empty($celebranteO['PerfilCel'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$celebranteO['PerfilCel']}"; ?>" alt="avatar">
+                                                                <img class="avatar-img rounded-3" src="<?php echo ($celebranteO['PerfilCel'] == 'Ninguno' || empty($celebranteO['PerfilCel'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$celebranteO['PerfilCel']}?v=" . time(); ?>" alt="avatar">
                                                             </div>
                                                         </td>
                                                         <td><strong><?= htmlspecialchars($celebranteO['NombreCompleto']) ?></strong><br><?= htmlspecialchars($celebranteO['DescripItem']) ?></td>

@@ -23,7 +23,7 @@ class Celebrante {
     }
 
     public function updateContact($contact) {
-        $query = "UPDATE Persona SET Contacto = ? WHERE CiPersona = ?";
+        $query = "UPDATE `persona` SET Contacto = ? WHERE CiPersona = ?";
         $stmt = $this->conn->prepare($query);
         $stmt->bind_param("ss", $contact, $this->CiCel);
         return $stmt->execute();

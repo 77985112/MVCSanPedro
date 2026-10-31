@@ -8,6 +8,13 @@ if (!isset($_SESSION['usuario'])) {
     exit();
 }
 $usuario = $_SESSION['usuario'];
+require_once __DIR__ . '/../Controlador/controladorAcceso.php';
+ControladorAcceso::exigir('celebracion');
+
+// Sacristán (6), Diácono (7) y los cargos personalizados «Otro»
+// (CodCar >= 10) solo consultan la Vista General; el resto conserva
+// las pestañas de reserva.
+$puedeReservar = in_array((int) ($usuario['CodCar'] ?? 0), [1, 3, 4, 5], true);
 
 $controller = new ControladorPersona();
 
@@ -31,6 +38,8 @@ $meses = array("Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "
 
 
 $controller = new ControladorReserva();
+$celebrantesSacerdotes = $controller->obtenerCelebrantesActivos(false);
+$celebrantesMisa = $controller->obtenerCelebrantesActivos(true);
 $reservasMatrimonio = [];
 $reservasBautizo = [];
 $reservasMisa = [];
@@ -48,6 +57,14 @@ $accionesReserva = [
     'reservar_matrimonio' => 'reservarMatrimonio',
 ];
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    if (!$puedeReservar) {
+        foreach ($accionesReserva as $accion => $metodo) {
+            if (isset($_POST[$accion])) {
+                http_response_code(403);
+                exit('No tiene permiso para registrar reservas sacramentales.');
+            }
+        }
+    }
     foreach ($accionesReserva as $accion => $metodo) {
         if (!isset($_POST[$accion])) {
             continue;
@@ -92,7 +109,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     <link rel="shortcut icon" href="../assets/images/Icono.png">
     <link rel="stylesheet" type="text/css" href="../assets/vendor/font-awesome/css/all.min.css">
     <link rel="stylesheet" type="text/css" href="../assets/vendor/bootstrap-icons/bootstrap-icons.css">
-    <link rel="stylesheet" type="text/css" href="../assets/css/style.css">
+    <link rel="stylesheet" type="text/css" href="../assets/vendor/flatpickr/dist/flatpickr.min.css">
+    <link rel="stylesheet" type="text/css" href="../assets/css/style.css?v=<?php echo filemtime(__DIR__ . '/../assets/css/style.css'); ?>">
+    <link rel="stylesheet" type="text/css" href="../assets/css/logo-cabecera.css?v=<?= filemtime(__DIR__ . '/../assets/css/logo-cabecera.css') ?>">
 
     <style>
         .containerRes {
@@ -298,10 +317,57 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         #monthDisplay {
             font-weight: bold;
         }
+
+        .selector-hora-reserva {
+            display: grid;
+            grid-template-columns: minmax(64px, 1fr) auto minmax(72px, 1fr) auto;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .selector-hora-reserva .form-select {
+            min-width: 0;
+            padding-right: 1.8rem;
+        }
+
+        .separador-hora {
+            font-weight: 700;
+            color: #667085;
+        }
+
+        .periodo-hora {
+            min-width: 38px;
+            color: #667085;
+            font-size: 0.875rem;
+            white-space: nowrap;
+        }
+
+        /* Bautizo comunitario: los jueves y domingos seleccionables se marcan en negro. */
+        .flatpickr-calendar.calendario-comunitario-bautizo .flatpickr-day {
+            color: #000;
+        }
+
+        .flatpickr-calendar.calendario-comunitario-bautizo .flatpickr-day.flatpickr-disabled,
+        .flatpickr-calendar.calendario-comunitario-bautizo .flatpickr-day.prevMonthDay,
+        .flatpickr-calendar.calendario-comunitario-bautizo .flatpickr-day.nextMonthDay {
+            color: var(--bs-gray-400);
+        }
+
+        .flatpickr-calendar.calendario-comunitario-bautizo .flatpickr-day.today {
+            color: var(--bs-primary);
+        }
+
+        .flatpickr-calendar.calendario-comunitario-bautizo .flatpickr-day.selected,
+        .flatpickr-calendar.calendario-comunitario-bautizo .flatpickr-day.selected:hover,
+        .flatpickr-calendar.calendario-comunitario-bautizo .flatpickr-day.selected.prevMonthDay,
+        .flatpickr-calendar.calendario-comunitario-bautizo .flatpickr-day.selected.nextMonthDay {
+            color: #fff;
+        }
     </style>
 
 
     <script src="../assets/js/jquery-3.6.4.min.js"></script>
+    <script src="../assets/vendor/flatpickr/dist/flatpickr.min.js"></script>
     <script>
         function generarReporte(tipo) {
             const fechaSeleccionada = document.getElementById("fecha").value;
@@ -356,8 +422,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         <nav class="navbar navbar-expand-lg">
             <div class="container">
                 <a class="navbar-brand" href="VistaPersonal.php">
-                    <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png" alt="logo">
-                    <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png" alt="logo">
+                    <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo.png') ?>" alt="logo">
+                    <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo-light.png') ?>" alt="logo">
                 </a>
 
                 <ul class="nav flex-nowrap align-items-center ms-sm-3 list-unstyled">
@@ -369,13 +435,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
                     <li class="nav-item ms-2 dropdown">
                         <a class="nav-link btn icon-md p-0" href="#" id="profileDropdown" role="button" data-bs-auto-close="outside" data-bs-display="static" data-bs-toggle="dropdown" aria-expanded="false">
-                            <img class="avatar-img rounded border border-white border-3" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}"; ?>" alt="">
+                            <img class="avatar-img rounded border border-white border-3" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}?v=" . time(); ?>" alt="">
                         </a>
                         <ul class="dropdown-menu dropdown-animation dropdown-menu-end pt-3 small me-md-n3" aria-labelledby="profileDropdown">
                             <li class="px-3">
                                 <div class="d-flex align-items-center position-relative">
                                     <div class="avatar me-3">
-                                        <img class="avatar-img rounded-circle" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}"; ?>" alt="avatar">
+                                        <img class="avatar-img rounded-circle" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}?v=" . time(); ?>" alt="avatar">
                                     </div>
                                     <div>
                                         <a class="h6 stretched-link" href="#"><?php echo $usuario['Nombre'] . " " . $usuario['Paterno'] . " " . $usuario['Materno']; ?></a>
@@ -425,7 +491,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
 
     <main>
-        <div class="container">
+        <div class="container personal-dashboard-container">
             <div class="row g-4">
                 <div class="col-lg-3">
                     <div class="d-flex align-items-center d-lg-none">
@@ -439,20 +505,20 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         <div class="offcanvas offcanvas-start" tabindex="-1" id="offcanvasSideNavbar">
                             <div class="offcanvas-header">
                                 <a class="navbar-brand" href="#">
-                                    <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png" alt="logo">
-                                    <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png" alt="logo">
+                                    <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo.png') ?>" alt="logo">
+                                    <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo-light.png') ?>" alt="logo">
                                 </a>
                                 <button type="button" class="btn-close text-reset ms-auto" data-bs-dismiss="offcanvas" aria-label="Close"></button>
                             </div>
 
                             <div class="offcanvas-body d-block px-2 px-lg-0">
                                 <div class="card overflow-hidden">
-                                    <div class="h-50px" style="background-image:url(<?php echo ($usuario['FondoPer'] == 'Ninguno' || empty($usuario['FondoPer'])) ? '../assets/images/fondo/Ninguno.jpg' : "../assets/images/fondo/{$usuario['FondoPer']}"; ?>); background-position: center; background-size: cover; background-repeat: no-repeat;">
+                                    <div class="h-50px" style="background-image:url(<?php echo ($usuario['FondoPer'] == 'Ninguno' || empty($usuario['FondoPer'])) ? '../assets/images/fondo/Ninguno.jpg' : "../assets/images/fondo/{$usuario['FondoPer']}?v=" . time(); ?>); background-position: center; background-size: cover; background-repeat: no-repeat;">
                                     </div>
                                     <div class="card-body pt-0">
                                         <div class="text-center">
                                             <div class="avatar avatar-lg mt-n5 mb-3">
-                                                <img class="avatar-img rounded border border-white border-3" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}"; ?>" alt="">
+                                                <img class="avatar-img rounded border border-white border-3" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}?v=" . time(); ?>" alt="">
                                             </div>
                                             <h5 class="mb-0"> <a href="PerfilAdmin.php"><?php echo $usuario['Nombre'] . " " . $usuario['Paterno'] . " " . $usuario['Materno']; ?></a> </h5>
                                             <small><?php echo $usuario['DescripCar']; ?></small>
@@ -461,34 +527,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
                                         <hr>
 
-                                        <ul class="nav nav-link-secondary flex-column fw-bold gap-2">
-                                            <li class="nav-item">
-                                                <a class="nav-link" href="VistaPersonal.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/mensaje.png" alt=""><span>Inicio </span></a>
-                                            </li>
-                                            <li class="nav-item">
-                                                <a class="nav-link" href="VistaPersona.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/nuevo.png" alt=""><span>Persona </span></a>
-                                            </li>
-                                            <li class="nav-item">
-                                                <a class="nav-link active" href="VistaReservas.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/instrucciones.png" alt=""><span>Celebración </span></a>
-                                            </li>
-                                            <?php if ($usuario['DescripCar'] == 'Párroco') { ?>
-                                                <li class="nav-item">
-                                                    <a class="nav-link" href="VistaGesPersonal.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/seguro.png" alt=""><span>Personal</span></a>
-                                                </li>
-                                                <li class="nav-item">
-                                                    <a class="nav-link" href="VistaCoordinadorAdmin.php"> <span>🔥 ⚪ Coordinador</span></a>
-                                                </li>
-                                            <?php } ?>
-                                            <li class="nav-item">
-                                                <a class="nav-link" href="VistaSolicitante.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/contrato.png" alt=""><span>Certificado </span></a>
-                                            </li>
-                                            <?php if ($usuario['DescripCar'] != "Personal") { ?>
-                                                <li class="nav-item">
-                                                    <a class="nav-link" href="VistaEmitidos.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/Emitido.png" alt=""><span>Certificado Emitido </span></a>
-                                                </li>
-                                            <?php } ?>
-
-                                        </ul>
+                                        <?php require_once __DIR__ . '/../Controlador/controladorAcceso.php'; ControladorAcceso::renderMenu(); ?>
                                     </div>
                                     <div class="card-footer text-center py-2">
                                         <a class="btn btn-link btn-sm" href="PerfilAdmin.php">Ver mi Perfil</a>
@@ -514,9 +553,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                             <?php endif; ?>
                             <ul class="nav nav-tabs nav-bottom-line justify-content-center justify-content-md-start">
                                 <li class="nav-item"> <a class="nav-link active" data-bs-toggle="tab" href="#tab-1">Vista General</a></li>
+                                <?php if ($puedeReservar): ?>
                                 <li class="nav-item"> <a class="nav-link" data-bs-toggle="tab" href="#tab-2">Reservar Bautizo</a></li>
                                 <li class="nav-item"> <a class="nav-link" data-bs-toggle="tab" href="#tab-3">Reservar Matrimonio</a></li>
                                 <li class="nav-item"> <a class="nav-link" data-bs-toggle="tab" href="#tab-4">Reservar Misa</a></li>
+                                <?php endif; ?>
                             </ul>
                             <div class="tab-content mb-0 pb-0">
 
@@ -564,6 +605,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                 </div>
 
 
+                                <?php if ($puedeReservar): ?>
                                 <div class="tab-pane fade" id="tab-2">
                                     <div id="formReservaBautizo">
                                         <h5>Registrar Nueva Reserva de Bautizo</h5>
@@ -571,34 +613,68 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                             <br>
                                             <input type="hidden" name="CodPer" placeholder="Código Personal" value="<?php echo $usuario['CodPer']; ?>" required>
 
+                                            <div class="col-sm-6 col-lg-3">
+                                                <label class="form-label">CI del reservante</label>
+                                                <input type="text" class="form-control" name="CiReservante" placeholder="CI o documento" required minlength="3" maxlength="30">
+                                                <a class="reservanteB btn btn-sm btn-dashed rounded mt-0"><i class="bi bi-plus-circle-dotted me-1" data-bs-toggle="modal" data-bs-target="#MostrarModalDemas"></i>registrar nuevo</a>
+                                            </div>
                                             <div class="col-sm-6 col-lg-4">
-                                                <label class="form-label">Quien Realiza la reserva</label>
-                                                <input type="text" class="form-control" name="Quien" placeholder="Quien Realiza la Reserva" required>
+                                                <label class="form-label">Nombre completo del reservante</label>
+                                                <input type="text" class="form-control" name="Quien" placeholder="Se completará al buscar el CI" readonly required>
                                             </div>
 
                                             <div class="col-sm-5 col-lg-3">
                                                 <label class="form-label">Fecha a celebrar</label>
-                                                <input type="date" class="form-control" name="FechaReal" id="FechaReal1" required>
+                                                <input type="text" class="form-control" name="FechaReal" id="FechaReal1" placeholder="dd/mm/aaaa" autocomplete="off" required>
+                                                <small class="text-muted" id="AyudaFechaComunitariaBautizo"></small>
                                             </div>
 
                                             <div class="col-sm-5 col-lg-2">
                                                 <label class="form-label">Hora a celebrar</label>
-                                                <input type="time" class="form-control" name="HoraReal" id="HoraReal1" step="1800" required>
+                                                <input type="hidden" name="HoraReal" id="HoraReal1">
+                                                <div class="selector-hora-reserva" data-time-target="HoraReal1">
+                                                    <select class="form-select selector-hora" name="HoraSeleccionada" aria-label="Hora" required>
+                                                        <option value="">Hora</option>
+                                                        <?php for ($horaOpcion = 0; $horaOpcion <= 23; $horaOpcion++): ?>
+                                                            <option value="<?php echo str_pad((string) $horaOpcion, 2, '0', STR_PAD_LEFT); ?>" <?php echo ($horaOpcion < 5 || $horaOpcion > 21) ? 'disabled' : ''; ?>>
+                                                                <?php echo str_pad((string) $horaOpcion, 2, '0', STR_PAD_LEFT); ?>
+                                                            </option>
+                                                        <?php endfor; ?>
+                                                    </select>
+                                                    <span class="separador-hora">:</span>
+                                                    <select class="form-select selector-minuto" name="MinutoSeleccionado" aria-label="Minuto" required>
+                                                        <option value="">Minuto</option>
+                                                        <?php for ($minutoOpcion = 0; $minutoOpcion <= 59; $minutoOpcion++): ?>
+                                                            <option value="<?php echo str_pad((string) $minutoOpcion, 2, '0', STR_PAD_LEFT); ?>">
+                                                                <?php echo str_pad((string) $minutoOpcion, 2, '0', STR_PAD_LEFT); ?>
+                                                            </option>
+                                                        <?php endfor; ?>
+                                                    </select>
+                                                    <span class="periodo-hora" id="HoraReal1Periodo">a. m.</span>
+                                                </div>
+                                                <small class="text-muted">Horas 05–21 · Minutos 00–59<span id="HoraReal1Formato"></span></small>
+                                            </div>
+
+                                            <div class="col-sm-6 col-lg-4">
+                                                <label class="form-label" for="CelebranteBautizo">Ministro del sacramento *</label>
+                                                <select class="form-select" name="CodPerCelebrante" id="CelebranteBautizo" required>
+                                                    <option value="">Seleccionar párroco o sacerdote...</option>
+                                                    <?php foreach ($celebrantesSacerdotes as $celebrante): ?>
+                                                        <option value="<?php echo (int) $celebrante['CodPer']; ?>">
+                                                            <?php echo htmlspecialchars(trim($celebrante['Nombre'] . ' ' . $celebrante['Paterno'] . ' ' . ($celebrante['Materno'] ?? '')) . ' — ' . $celebrante['DescripCar'], ENT_QUOTES, 'UTF-8'); ?>
+                                                        </option>
+                                                    <?php endforeach; ?>
+                                                </select>
+                                                <small class="text-muted">Solo párroco y sacerdote activo.</small>
                                             </div>
 
                                             <div class="col-sm-6 col-lg-5">
                                                 <label class="form-label">Tipo de Reserva</label>
-                                                <div class=" d-sm-flex align-items-center text-center justify-content-sm-betwee">
+                                                <div class=" d-sm-flex flex-sm-wrap align-items-center text-center justify-content-sm-betwee">
                                                     <div class="form-check me-2">
-                                                        <input class="form-check-input" type="radio" name="Realizacion" id="bautizo-privado" value="Privado" required>
-                                                        <label class="form-check-label form-label" for="bautizo-privado">
-                                                            Privado
-                                                        </label>
-                                                    </div>
-                                                    <div class="form-check me-2">
-                                                        <input class="form-check-input" type="radio" name="Realizacion" id="bautizo-comunitario" value="Comunitario">
+                                                        <input class="form-check-input" type="radio" name="Realizacion" id="bautizo-comunitario" value="Comunitario" required>
                                                         <label class="form-check-label form-label" for="bautizo-comunitario">
-                                                            Comunitario
+                                                            Comunitario en el templo
                                                         </label>
                                                     </div>
                                                     <div class="form-check me-2">
@@ -613,6 +689,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                                     <input type="text" class="form-control" id="realizacion-otro-bautizo" name="RealizacionOtro" maxlength="30" placeholder="Ej.: En una capilla familiar" disabled>
                                                     <small class="text-muted">Descripción breve, máximo 30 caracteres.</small>
                                                 </div>
+                                                <small class="text-primary d-block mt-2" id="HorarioComunitarioBautizo" hidden>
+                                                    Bautizo comunitario: jueves 14:30 o domingo 12:30.
+                                                </small>
                                             </div>
 
                                             <div class="col-sm-6 col-lg-4">
@@ -646,7 +725,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                             <input type="hidden" name="TokenReserva" value="<?php echo htmlspecialchars($_SESSION['token_reserva'], ENT_QUOTES, 'UTF-8'); ?>">
                                             <div class="col-12">
                                                 <label class="form-label" for="correo-bautizo">Correo del solicitante (opcional)</label>
-                                                <input type="email" class="form-control" id="correo-bautizo" name="CorreoSolicitante" maxlength="254" placeholder="ejemplo@correo.com" autocomplete="email">
+                                                <input type="email" class="form-control" id="correo-bautizo" name="CorreoSolicitante" maxlength="254" placeholder="ejemplo@correo.com" autocomplete="new-password">
                                                 <div class="form-check mt-2">
                                                     <input class="form-check-input confirmacion-correo" type="checkbox" id="enviar-bautizo" name="EnviarConfirmacion" value="1" data-correo="correo-bautizo">
                                                     <label class="form-check-label" for="enviar-bautizo">Enviar confirmación por correo</label>
@@ -669,9 +748,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                             <br>
                                             <input type="hidden" name="CodPer" placeholder="Código Personal" value="<?php echo $usuario['CodPer']; ?>" required>
 
-                                            <div class="col-sm-6 col-lg-5">
-                                                <label class="form-label">Quien Realiza la reserva</label>
-                                                <input type="text" class="form-control" name="Quien" placeholder="Quien Realiza la Reserva" required>
+                                            <div class="col-sm-6 col-lg-3">
+                                                <label class="form-label">CI del reservante</label>
+                                                <input type="text" class="form-control" name="CiReservante" placeholder="CI o documento" required minlength="3" maxlength="30">
+                                                <a class="reservanteM btn btn-sm btn-dashed rounded mt-0"><i class="bi bi-plus-circle-dotted me-1" data-bs-toggle="modal" data-bs-target="#MostrarModalDemas"></i>registrar nuevo</a>
+                                            </div>
+                                            <div class="col-sm-6 col-lg-4">
+                                                <label class="form-label">Nombre completo del reservante</label>
+                                                <input type="text" class="form-control" name="Quien" placeholder="Se completará al buscar el CI" readonly required>
                                             </div>
 
                                             <div class="col-sm-5 col-lg-3">
@@ -681,23 +765,57 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
                                             <div class="col-sm-5 col-lg-2">
                                                 <label class="form-label">Hora a celebrar</label>
-                                                <input type="time" class="form-control" name="HoraReal" id="HoraReal2" step="1800" required>
+                                                <input type="hidden" name="HoraReal" id="HoraReal2">
+                                                <div class="selector-hora-reserva" data-time-target="HoraReal2">
+                                                    <select class="form-select selector-hora" name="HoraSeleccionada" aria-label="Hora" required>
+                                                        <option value="">Hora</option>
+                                                        <?php for ($horaOpcion = 0; $horaOpcion <= 23; $horaOpcion++): ?>
+                                                            <option value="<?php echo str_pad((string) $horaOpcion, 2, '0', STR_PAD_LEFT); ?>" <?php echo ($horaOpcion < 5 || $horaOpcion > 21) ? 'disabled' : ''; ?>>
+                                                                <?php echo str_pad((string) $horaOpcion, 2, '0', STR_PAD_LEFT); ?>
+                                                            </option>
+                                                        <?php endfor; ?>
+                                                    </select>
+                                                    <span class="separador-hora">:</span>
+                                                    <select class="form-select selector-minuto" name="MinutoSeleccionado" aria-label="Minuto" required>
+                                                        <option value="">Minuto</option>
+                                                        <?php for ($minutoOpcion = 0; $minutoOpcion <= 59; $minutoOpcion++): ?>
+                                                            <option value="<?php echo str_pad((string) $minutoOpcion, 2, '0', STR_PAD_LEFT); ?>">
+                                                                <?php echo str_pad((string) $minutoOpcion, 2, '0', STR_PAD_LEFT); ?>
+                                                            </option>
+                                                        <?php endfor; ?>
+                                                    </select>
+                                                    <span class="periodo-hora" id="HoraReal2Periodo">a. m.</span>
+                                                </div>
+                                                <small class="text-muted">Horas 05–21 · Minutos 00–59<span id="HoraReal2Formato"></span></small>
+                                            </div>
+
+                                            <div class="col-sm-6 col-lg-4">
+                                                <label class="form-label" for="CelebranteMatrimonio">Ministro del sacramento *</label>
+                                                <select class="form-select" name="CodPerCelebrante" id="CelebranteMatrimonio" required>
+                                                    <option value="">Seleccionar párroco o sacerdote...</option>
+                                                    <?php foreach ($celebrantesSacerdotes as $celebrante): ?>
+                                                        <option value="<?php echo (int) $celebrante['CodPer']; ?>">
+                                                            <?php echo htmlspecialchars(trim($celebrante['Nombre'] . ' ' . $celebrante['Paterno'] . ' ' . ($celebrante['Materno'] ?? '')) . ' — ' . $celebrante['DescripCar'], ENT_QUOTES, 'UTF-8'); ?>
+                                                        </option>
+                                                    <?php endforeach; ?>
+                                                </select>
+                                                <small class="text-muted">Solo párroco y sacerdote activo.</small>
                                             </div>
 
 
                                             <div class="col-sm-6 col-lg-5">
                                                 <label class="form-label">Tipo de Reserva</label>
-                                                <div class=" d-sm-flex align-items-center text-center justify-content-sm-betwee">
+                                                <div class=" d-sm-flex flex-sm-wrap align-items-center text-center justify-content-sm-betwee">
                                                     <div class="form-check me-2">
                                                         <input class="form-check-input" type="radio" name="Realizacion" id="matrimonio-privado" value="Privado" required>
                                                         <label class="form-check-label form-label" for="matrimonio-privado">
-                                                            Privado
+                                                            Privado en el templo
                                                         </label>
                                                     </div>
                                                     <div class="form-check me-2">
                                                         <input class="form-check-input" type="radio" name="Realizacion" id="matrimonio-comunitario" value="Comunitario">
                                                         <label class="form-check-label form-label" for="matrimonio-comunitario">
-                                                            Comunitario
+                                                            Comunitario en el templo
                                                         </label>
                                                     </div>
                                                     <div class="form-check me-2">
@@ -780,7 +898,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                             <input type="hidden" name="TokenReserva" value="<?php echo htmlspecialchars($_SESSION['token_reserva'], ENT_QUOTES, 'UTF-8'); ?>">
                                             <div class="col-12">
                                                 <label class="form-label" for="correo-matrimonio">Correo del solicitante (opcional)</label>
-                                                <input type="email" class="form-control" id="correo-matrimonio" name="CorreoSolicitante" maxlength="254" placeholder="ejemplo@correo.com" autocomplete="email">
+                                                <input type="email" class="form-control" id="correo-matrimonio" name="CorreoSolicitante" maxlength="254" placeholder="ejemplo@correo.com" autocomplete="new-password">
                                                 <div class="form-check mt-2">
                                                     <input class="form-check-input confirmacion-correo" type="checkbox" id="enviar-matrimonio" name="EnviarConfirmacion" value="1" data-correo="correo-matrimonio">
                                                     <label class="form-check-label" for="enviar-matrimonio">Enviar confirmación por correo</label>
@@ -801,9 +919,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                             <input type="hidden" name="CodPer" value="<?php echo $usuario['CodPer']; ?>" required>
 
                                             <div class="col-sm-4 col-lg-3">
-                                                <label class="form-label">Quien Realiza la reserva</label>
-                                                <input type="text" class="form-control" name="CiPersonademas" placeholder="Ci del Reservante" required minlength="4" maxlength="12">
+                                                <label class="form-label">CI del reservante</label>
+                                                <input type="text" class="form-control" name="CiPersonademas" placeholder="CI o documento" required minlength="3" maxlength="30">
                                                 <a class="demas btn btn-sm btn-dashed rounded mt-0"><i class="bi bi-plus-circle-dotted me-1" data-bs-toggle="modal" data-bs-target="#MostrarModalDemas"></i>registrar nuevo</a>
+                                            </div>
+
+                                            <div class="col-sm-4 col-lg-3">
+                                                <label class="form-label">Nombre completo del reservante</label>
+                                                <input type="text" class="form-control" name="NombreReservante" placeholder="Se completará al buscar el CI" readonly required>
                                             </div>
 
                                             <div class="col-sm-4 col-lg-3">
@@ -812,49 +935,83 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                             </div>
 
                                             <div class="col-sm-4 col-lg-3">
-                                                <label class="form-label">Hora a realizar</label>
-                                                <input type="time" class="form-control" name="HoraReal" id="HoraReal3" step="1800" required>
+                                                <label class="form-label">Hora a celebrar</label>
+                                                <input type="hidden" name="HoraReal" id="HoraReal3">
+                                                <div class="selector-hora-reserva" data-time-target="HoraReal3">
+                                                    <select class="form-select selector-hora" name="HoraSeleccionada" aria-label="Hora" required>
+                                                        <option value="">Hora</option>
+                                                        <?php for ($horaOpcion = 0; $horaOpcion <= 23; $horaOpcion++): ?>
+                                                            <option value="<?php echo str_pad((string) $horaOpcion, 2, '0', STR_PAD_LEFT); ?>" <?php echo ($horaOpcion < 5 || $horaOpcion > 21) ? 'disabled' : ''; ?>>
+                                                                <?php echo str_pad((string) $horaOpcion, 2, '0', STR_PAD_LEFT); ?>
+                                                            </option>
+                                                        <?php endfor; ?>
+                                                    </select>
+                                                    <span class="separador-hora">:</span>
+                                                    <select class="form-select selector-minuto" name="MinutoSeleccionado" aria-label="Minuto" required>
+                                                        <option value="">Minuto</option>
+                                                        <?php for ($minutoOpcion = 0; $minutoOpcion <= 59; $minutoOpcion++): ?>
+                                                            <option value="<?php echo str_pad((string) $minutoOpcion, 2, '0', STR_PAD_LEFT); ?>">
+                                                                <?php echo str_pad((string) $minutoOpcion, 2, '0', STR_PAD_LEFT); ?>
+                                                            </option>
+                                                        <?php endfor; ?>
+                                                    </select>
+                                                    <span class="periodo-hora" id="HoraReal3Periodo">a. m.</span>
+                                                </div>
+                                                <small class="text-muted">Horas 05–21 · Minutos 00–59<span id="HoraReal3Formato"></span></small>
                                             </div>
                                             <input type="hidden" name="TipoCel" value="Misa">
 
+                                            <div class="col-sm-6 col-lg-4">
+                                                <label class="form-label" for="CelebranteMisa">Ministro del sacramento *</label>
+                                                <select class="form-select" name="CodPerCelebrante" id="CelebranteMisa" required>
+                                                    <option value="">Seleccionar ministro...</option>
+                                                    <?php foreach ($celebrantesMisa as $celebrante): ?>
+                                                        <option value="<?php echo (int) $celebrante['CodPer']; ?>" data-diacono="<?php echo (int) $celebrante['CodCar'] === 7 ? '1' : '0'; ?>">
+                                                            <?php echo htmlspecialchars(trim($celebrante['Nombre'] . ' ' . $celebrante['Paterno'] . ' ' . ($celebrante['Materno'] ?? '')) . ' — ' . $celebrante['DescripCar'], ENT_QUOTES, 'UTF-8'); ?>
+                                                        </option>
+                                                    <?php endforeach; ?>
+                                                </select>
+                                                <small class="text-muted" id="AyudaCelebranteMisa">Solo párroco y sacerdote activo.</small>
+                                            </div>
+
                                             <div class="col-sm-6 col-lg-5">
                                                 <label class="form-label">Tipo de Reserva</label>
-                                                <div class=" d-sm-flex align-items-center text-center justify-content-sm-betwee">
+                                                <div class=" d-sm-flex flex-sm-wrap align-items-center text-center justify-content-sm-betwee">
                                                     <div class="form-check me-2">
                                                         <input class="form-check-input" type="radio" name="Realizacion" id="misa-privado" value="Privado" required>
                                                         <label class="form-check-label form-label" for="misa-privado">
-                                                            Privado
+                                                            Privado en el templo
                                                         </label>
                                                     </div>
                                                     <div class="form-check me-2">
                                                         <input class="form-check-input" type="radio" name="Realizacion" id="misa-comunitario" value="Comunitario">
                                                         <label class="form-check-label form-label" for="misa-comunitario">
-                                                            Comunitario
+                                                            Comunitario en el templo
                                                         </label>
                                                     </div>
                                                     <div class="form-check me-2">
                                                         <input class="form-check-input" type="radio" name="Realizacion" id="misa-otro" value="Otro">
                                                         <label class="form-check-label form-label" for="misa-otro">
-                                                            Otro
+                                                            Otros
                                                         </label>
                                                     </div>
                                                 </div>
                                                 <div class="mt-2" id="detalle-otro-misa" hidden>
                                                     <label class="form-label" for="realizacion-otro-misa">Especifica el tipo de misa</label>
-                                                    <input type="text" class="form-control" id="realizacion-otro-misa" name="RealizacionOtro" maxlength="30" placeholder="Ej.: Acción de gracias" disabled>
+                                                    <input type="text" class="form-control" id="realizacion-otro-misa" name="RealizacionOtro" maxlength="30" placeholder="Ej.: Acción de gracias, santito o defunción" disabled>
                                                     <small class="text-muted">Descripción breve, máximo 30 caracteres.</small>
                                                 </div>
                                             </div>
 
                                             <div class="col-sm-6 col-lg-4">
-                                                <label class="form-label">Para Quien</label>
-                                                <textarea name="Quien" rows="5" class="form-control" cols="50" placeholder="Para Quien" required maxlength="255"></textarea>
+                                                <label class="form-label">Intención / Para quién</label>
+                                                <textarea name="Quien" rows="5" class="form-control" cols="50" placeholder="Persona o intención de la misa" required maxlength="255"></textarea>
                                             </div>
 
                                             <input type="hidden" name="TokenReserva" value="<?php echo htmlspecialchars($_SESSION['token_reserva'], ENT_QUOTES, 'UTF-8'); ?>">
                                             <div class="col-12">
                                                 <label class="form-label" for="correo-misa">Correo del solicitante (opcional)</label>
-                                                <input type="email" class="form-control" id="correo-misa" name="CorreoSolicitante" maxlength="254" placeholder="ejemplo@correo.com" autocomplete="email">
+                                                <input type="email" class="form-control" id="correo-misa" name="CorreoSolicitante" maxlength="254" placeholder="ejemplo@correo.com" autocomplete="new-password">
                                                 <div class="form-check mt-2">
                                                     <input class="form-check-input confirmacion-correo" type="checkbox" id="enviar-misa" name="EnviarConfirmacion" value="1" data-correo="correo-misa">
                                                     <label class="form-check-label" for="enviar-misa">Enviar confirmación por correo</label>
@@ -866,6 +1023,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                         </form>
                                     </div>
                                 </div>
+                                <?php endif; ?>
 
                             </div>
                         </div>
@@ -919,11 +1077,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         </div>
                         <div class="form-group col-lg-4">
                             <label for="Direccion">Dirección:</label>
-                            <input type="text" class="form-control" name="Direccion" placeholder="Dirección">
+                            <input type="text" class="form-control" name="Direccion" placeholder="Dirección" autocomplete="new-password">
                         </div>
                         <div class="form-group col-lg-3">
                             <label for="Contacto">Contacto:</label>
-                            <input type="text" class="form-control" name="Contacto" placeholder="Número de contacto">
+                            <input type="text" class="form-control" name="Contacto" placeholder="Número de contacto" autocomplete="new-password">
+                        </div>
+                        <div class="form-group col-lg-4">
+                          <label for="Correo">Correo electrónico:</label>
+                          <input type="email" class="form-control" name="Correo" placeholder="Correo electrónico (opcional)" autocomplete="new-password">
                         </div>
                         <div class="form-group col-lg-3">
                             <label for="Estado_per">Estado Civil:</label>
@@ -1007,11 +1169,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         </div>
                         <div class="form-group col-lg-4">
                             <label for="Direccion">Dirección:</label>
-                            <input type="text" class="form-control" name="Direccion" placeholder="Dirección">
+                            <input type="text" class="form-control" name="Direccion" placeholder="Dirección" autocomplete="new-password">
                         </div>
                         <div class="form-group col-lg-3">
                             <label for="Contacto">Contacto:</label>
-                            <input type="text" class="form-control" name="Contacto" placeholder="Número de contacto">
+                            <input type="text" class="form-control" name="Contacto" placeholder="Número de contacto" autocomplete="new-password">
+                        </div>
+                        <div class="form-group col-lg-4">
+                          <label for="Correo">Correo electrónico:</label>
+                          <input type="email" class="form-control" name="Correo" placeholder="Correo electrónico (opcional)" autocomplete="new-password">
                         </div><br>
                         <button type="submit" name="crear" class="btn btn-success-soft">Registrar</button>
                     </form>
@@ -1036,21 +1202,25 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             }
 
             var camposBautizoMisa = [
+                ['#tab-2', 'CiReservante', '.reservanteB', '#MostrarModalDemas', 3, 'Quien'],
                 ['#tab-2', 'CiPersonaCelebranteB', '.celebranteB', '#MostrarModalBautizo', 3],
                 ['#tab-2', 'CiPapa', '.papacelebrante'],
                 ['#tab-2', 'CiMama', '.mamacelebrante'],
                 ['#tab-2', 'CiPadrino', '.padrinocelebrante'],
                 ['#tab-2', 'CiMadrina', '.madrinacelebrante'],
-                ['#tab-4', 'CiPersonademas', '.demas']
+                ['#tab-3', 'CiReservante', '.reservanteM', '#MostrarModalDemas', 3, 'Quien'],
+                ['#tab-4', 'CiPersonademas', '.demas', '#MostrarModalDemas', 3, 'NombreReservante']
             ];
             camposBautizoMisa.forEach(function(config) {
                 var campo = $(config[0] + ' input[name="' + config[1] + '"]');
+                if (!campo.length) return;
                 var resultado = $(config[0] + ' ' + config[2]);
                 var minimo = config[4] || 4;
                 var temporizador, solicitud;
                 var version = 0;
                 resultado.attr('aria-live', 'polite');
                 function mostrarRegistro(texto) {
+                    if (config[5]) campo.closest('form').find('input[name="' + config[5] + '"]').val('');
                     resultado.html('<i class="bi bi-plus-circle-dotted me-1" data-bs-toggle="modal" data-bs-target="' + (config[3] || '#MostrarModalDemas') + '"></i>' + texto);
                 }
                 function buscarPersonaReserva() {
@@ -1073,12 +1243,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                     mostrarRegistro('registrar nuevo');
                                     return;
                                 }
+                                campo.val(persona.CiPersona);
                                 var estado = (persona.Estado_per || '').trim();
                                 if (config[1] === 'CiPersonaCelebranteB' && (estado === 'Casado' || estado === 'Casada')) {
                                     resultado.text('La persona no se registrará.');
                                     return;
                                 }
-                                resultado.text([persona.Nombre, persona.ApPaterno, persona.ApMaterno].filter(Boolean).join(' '));
+                                var nombreCompleto = [persona.Nombre, persona.ApPaterno, persona.ApMaterno].filter(Boolean).join(' ');
+                                if (config[5]) campo.closest('form').find('input[name="' + config[5] + '"]').val(nombreCompleto);
+                                var seguimiento = persona.ProcesosPastorales
+                                    ? persona.ProcesosPastorales.estadoActual : 'Registrado';
+                                resultado.text(nombreCompleto + ' · ' + seguimiento);
                             },
                             error: function(xhr, estado) {
                                 if (actual !== version || estado === 'abort') return;
@@ -1092,10 +1267,31 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 campo.closest('form').on('reset', function() { setTimeout(buscarPersonaReserva, 0); });
                 buscarPersonaReserva();
             });
+            var reservanteInicial = urlParams.get('reservante');
+            if (reservanteInicial) {
+                $('#tab-2 input[name="CiReservante"], #tab-3 input[name="CiReservante"], #tab-4 input[name="CiPersonademas"]')
+                    .val(reservanteInicial)
+                    .trigger('input');
+            }
             function actualizarTipoMisa() {
-                var esOtro = $('#tab-4 input[name="Realizacion"]:checked').val() === 'Otro';
+                var tipo = $('#tab-4 input[name="Realizacion"]:checked').val() || '';
+                var esOtro = tipo === 'Otro';
+                var permiteDiacono = tipo === 'Otro';
                 $('#detalle-otro-misa').prop('hidden', !esOtro);
                 $('#realizacion-otro-misa').prop('disabled', !esOtro).prop('required', esOtro);
+                var selectCelebrante = document.getElementById('CelebranteMisa');
+                if (selectCelebrante) {
+                    Array.from(selectCelebrante.options).forEach(function(opcion) {
+                        if (opcion.dataset.diacono === '1') {
+                            opcion.disabled = !permiteDiacono;
+                            opcion.hidden = !permiteDiacono;
+                            if (!permiteDiacono && opcion.selected) selectCelebrante.value = '';
+                        }
+                    });
+                }
+                $('#AyudaCelebranteMisa').text(permiteDiacono
+                    ? 'En Otros también se muestra diácono activo.'
+                    : 'Solo párroco y sacerdote activo.');
             }
             $('#tab-4 input[name="Realizacion"]').on('change', actualizarTipoMisa);
             $('#realizacion-otro-misa').on('input', function() {
@@ -1110,18 +1306,161 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $(window).on('pageshow', actualizarTipoMisa);
             actualizarTipoMisa();
 
+            function aplicarHorarioComunitarioBautizo() {
+                var esComunitario = $('#tab-2 input[name="Realizacion"]:checked').val() === 'Comunitario';
+                var fecha = document.getElementById('FechaReal1');
+                var contenedorHora = document.querySelector('[data-time-target="HoraReal1"]');
+                var ayudaFecha = document.getElementById('AyudaFechaComunitariaBautizo');
+                var avisoHorario = document.getElementById('HorarioComunitarioBautizo');
+                if (!fecha || !contenedorHora) return;
+
+                var selectorHora = contenedorHora.querySelector('.selector-hora');
+                var selectorMinuto = contenedorHora.querySelector('.selector-minuto');
+                avisoHorario.hidden = !esComunitario;
+
+                if (calendarioBautizo) {
+                    calendarioBautizo.set('disable', esComunitario ? [function (fechaDia) {
+                        return !esFechaComunitariaDisponibleBautizo(fechaDia);
+                    }] : []);
+                    if (calendarioBautizo.calendarContainer) {
+                        calendarioBautizo.calendarContainer.classList.toggle('calendario-comunitario-bautizo', esComunitario);
+                    }
+                    if (esComunitario && fecha.value && !esFechaComunitariaDisponibleBautizo(fecha.value)) {
+                        calendarioBautizo.clear();
+                    }
+                }
+
+                function limpiarHora() {
+                    selectorHora.value = '';
+                    selectorMinuto.value = '';
+                    selectorHora.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+
+                if (!esComunitario) {
+                    if (contenedorHora.dataset.bautizoComunitario === '1') limpiarHora();
+                    contenedorHora.dataset.bautizoComunitario = '0';
+                    selectorHora.disabled = false;
+                    selectorMinuto.disabled = false;
+                    fecha.setCustomValidity('');
+                    ayudaFecha.textContent = '';
+                    ayudaFecha.className = 'text-muted';
+                    return;
+                }
+
+                contenedorHora.dataset.bautizoComunitario = '1';
+                selectorHora.disabled = true;
+                selectorMinuto.disabled = true;
+
+                if (!fecha.value) {
+                    limpiarHora();
+                    fecha.setCustomValidity('');
+                    ayudaFecha.textContent = 'Selecciona un jueves o domingo.';
+                    ayudaFecha.className = 'text-primary';
+                    return;
+                }
+
+                var partes = fecha.value.split('-').map(Number);
+                var diaSemana = new Date(Date.UTC(partes[0], partes[1] - 1, partes[2])).getUTCDay();
+                if (!esFechaComunitariaDisponibleBautizo(fecha.value)) {
+                    if (calendarioBautizo) {
+                        calendarioBautizo.clear();
+                    } else {
+                        fecha.value = '';
+                    }
+                    fecha.setCustomValidity('');
+                    limpiarHora();
+                    ayudaFecha.textContent = 'Fecha no permitida. Elige un jueves o domingo cuyo horario aún no haya pasado.';
+                    ayudaFecha.className = 'text-danger';
+                    return;
+                }
+
+                fecha.setCustomValidity('');
+                selectorHora.value = diaSemana === 4 ? '14' : '12';
+                selectorMinuto.value = '30';
+                selectorHora.dispatchEvent(new Event('change', { bubbles: true }));
+                ayudaFecha.textContent = diaSemana === 4
+                    ? 'Jueves seleccionado: horario automático 2:30 p. m.'
+                    : 'Domingo seleccionado: horario automático 12:30 p. m.';
+                ayudaFecha.className = 'text-success';
+            }
+
+            var calendarioBautizo = null;
+
+            function esFechaComunitariaDisponibleBautizo(valor) {
+                var fechaDia;
+                if (valor instanceof Date) {
+                    fechaDia = new Date(valor.getFullYear(), valor.getMonth(), valor.getDate());
+                } else {
+                    if (!valor) return false;
+                    var partes = valor.split('-').map(Number);
+                    if (partes.length !== 3 || partes.some(isNaN)) return false;
+                    fechaDia = new Date(partes[0], partes[1] - 1, partes[2]);
+                }
+
+                var dia = fechaDia.getDay();
+                if (dia !== 0 && dia !== 4) return false;
+                var hora = dia === 4 ? 14 : 12;
+                var momentoCelebracion = new Date(
+                    fechaDia.getFullYear(), fechaDia.getMonth(), fechaDia.getDate(), hora, 30, 0, 0
+                );
+                return momentoCelebracion > new Date();
+            }
+
+            if (window.flatpickr && document.getElementById('FechaReal1')) {
+                calendarioBautizo = window.flatpickr('#FechaReal1', {
+                    dateFormat: 'Y-m-d',
+                    minDate: 'today',
+                    altInput: true,
+                    altFormat: 'd/m/Y',
+                    altInputClass: 'form-control',
+                    allowInput: false,
+                    locale: {
+                        weekdays: {
+                            shorthand: ['Do', 'Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sá'],
+                            longhand: ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
+                        },
+                        months: {
+                            shorthand: ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'],
+                            longhand: ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+                        },
+                        firstDayOfWeek: 1,
+                        weekAbbreviation: 'Sem',
+                        scrollTitle: 'Desplázate para cambiar el año',
+                        toggleTitle: 'Haz clic para cambiar el calendario',
+                        yearAriaLabel: 'Año',
+                        monthAriaLabel: 'Mes',
+                        hourAriaLabel: 'Hora',
+                        minuteAriaLabel: 'Minuto',
+                        time_24hr: true
+                    },
+                    onReady: function (_, __, instancia) {
+                        if (instancia.altInput) {
+                            instancia.altInput.required = true;
+                        }
+                    },
+                    onChange: function () {
+                        aplicarHorarioComunitarioBautizo();
+                    }
+                });
+            }
+
             function actualizarTipoBautizo() {
                 var esOtro = $('#tab-2 input[name="Realizacion"]:checked').val() === 'Otro';
                 $('#detalle-otro-bautizo').prop('hidden', !esOtro);
                 $('#realizacion-otro-bautizo').prop('disabled', !esOtro).prop('required', esOtro);
+                aplicarHorarioComunitarioBautizo();
             }
             $('#tab-2 input[name="Realizacion"]').on('change', actualizarTipoBautizo);
+            $('#FechaReal1').on('change', aplicarHorarioComunitarioBautizo);
             $('#realizacion-otro-bautizo').on('input', function() {
                 this.setCustomValidity(this.value.trim() ? '' : 'Describe cómo será el bautizo.');
             });
             $('#tab-2 form').on('reset', function() {
                 setTimeout(function() {
                     $('#realizacion-otro-bautizo')[0].setCustomValidity('');
+                    if (calendarioBautizo) {
+                        calendarioBautizo.clear();
+                    }
                     actualizarTipoBautizo();
                 }, 0);
             });
@@ -1163,6 +1502,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
             $.each(camposMatrimonio, function(nombre, selector) {
                 var campo = $('#tab-3 input[name="' + nombre + '"]');
+                if (!campo.length) return;
                 var resultado = $('#tab-3 ' + selector);
                 var temporizador;
                 var solicitud;
@@ -1197,6 +1537,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                     mostrarRegistro('registrar nuevo');
                                     return;
                                 }
+                                campo.val(persona.CiPersona);
                                 var sexo = (persona.Sexo || '').trim();
                                 var estado = (persona.Estado_per || '').trim();
                                 var esNovio = nombre === 'CiPersonaNovio';
@@ -1216,7 +1557,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                         return;
                                     }
                                 }
-                                resultado.text([persona.Nombre, persona.ApPaterno, persona.ApMaterno].filter(Boolean).join(' '));
+                                var nombreCompleto = [persona.Nombre, persona.ApPaterno, persona.ApMaterno].filter(Boolean).join(' ');
+                                var seguimiento = persona.ProcesosPastorales
+                                    ? persona.ProcesosPastorales.estadoActual : 'Registrado';
+                                var matrimonioAnterior = (persona.AntecedentesSacramentales || []).some(function(a) {
+                                    return a.Sacramento === 'Matrimonio anterior';
+                                });
+                                resultado.text(nombreCompleto + ' · ' + seguimiento + (matrimonioAnterior ? ' · Requiere revisión del párroco por matrimonio anterior.' : ''));
                             },
                             error: function(xhr, estado) {
                                 if (actual !== version || estado === 'abort') return;
@@ -1240,21 +1587,41 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         });
     </script>
     <script>
-        function setTime(inputId) {
+        function inicializarSelectorHora(inputId) {
             const inputTime = document.getElementById(inputId);
-            const timeValue = inputTime.value;
-            if (!timeValue) return;
+            const contenedor = document.querySelector('[data-time-target="' + inputId + '"]');
+            const formato = document.getElementById(inputId + 'Formato');
+            const periodoVisible = document.getElementById(inputId + 'Periodo');
+            if (!inputTime || !contenedor) return;
 
-            let [hours, minutes] = timeValue.split(':').map(Number);
+            const selectorHora = contenedor.querySelector('.selector-hora');
+            const selectorMinuto = contenedor.querySelector('.selector-minuto');
 
-            if (minutes >= 0 && minutes < 30) {
-                minutes = 0;
-            } else {
-                minutes = 30;
+            function sincronizarHora() {
+                const hora = selectorHora.value;
+                const minuto = selectorMinuto.value;
+                if (!hora || !minuto) {
+                    inputTime.value = '';
+                    if (formato) formato.textContent = '';
+                    if (periodoVisible) periodoVisible.textContent = '—';
+                    return;
+                }
+
+                inputTime.value = hora + ':' + minuto;
+                const horaNumero = Number(hora);
+                const hora12 = horaNumero % 12 || 12;
+                const periodo = horaNumero < 12 ? 'a. m.' : 'p. m.';
+                if (periodoVisible) periodoVisible.textContent = periodo;
+                if (formato) formato.textContent = ` · ${hora12}:${minuto} ${periodo}`;
             }
 
-            const formattedTime = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
-            inputTime.value = formattedTime;
+            selectorHora.addEventListener('change', sincronizarHora);
+            selectorMinuto.addEventListener('change', sincronizarHora);
+            const formulario = inputTime.closest('form');
+            if (formulario) formulario.addEventListener('reset', function() {
+                setTimeout(sincronizarHora, 0);
+            });
+            sincronizarHora();
         }
 
         function setMinDate() {
@@ -1267,23 +1634,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
             const minDate = `${yyyy}-${mm}-${dd}`;
 
-            document.getElementById('FechaReal1').setAttribute('min', minDate);
-            document.getElementById('FechaReal2').setAttribute('min', minDate);
-            document.getElementById('FechaReal3').setAttribute('min', minDate);
+            ['FechaReal1', 'FechaReal2', 'FechaReal3'].forEach(function(id) {
+                var campo = document.getElementById(id);
+                if (campo) campo.setAttribute('min', minDate);
+            });
         }
 
-        window.onload = function() {
+        document.addEventListener('DOMContentLoaded', function() {
             setMinDate();
-            document.getElementById('HoraReal1').addEventListener('input', function() {
-                setTime('HoraReal1');
+            ['HoraReal1', 'HoraReal2', 'HoraReal3'].forEach(function(id) {
+                inicializarSelectorHora(id);
             });
-            document.getElementById('HoraReal2').addEventListener('input', function() {
-                setTime('HoraReal2');
-            });
-            document.getElementById('HoraReal3').addEventListener('input', function() {
-                setTime('HoraReal3');
-            });
-        };
+        });
     </script>
 
     <script>
@@ -1389,6 +1751,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             var formularios = Array.from(document.querySelectorAll('#tab-2 form, #tab-3 form, #tab-4 form'));
+            if (!formularios.length) return;
             var token = formularios[0].elements.TokenReserva.value;
             var clave = 'reservaBorrador:' + location.pathname + ':' + formularios[0].elements.CodPer.value;
             var restaurando = true;

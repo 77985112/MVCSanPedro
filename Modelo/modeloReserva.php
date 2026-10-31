@@ -1,5 +1,5 @@
 <?php
-require_once '../conexion/Conexion.php';
+require_once '../Conexion/Conexion.php';
 
 class Reserva
 {
@@ -14,7 +14,7 @@ class Reserva
     {
         $stmt = $this->conn->prepare("
             SELECT COUNT(*) AS total 
-            FROM Reserva 
+            FROM `reserva` 
             WHERE FechaReal = ? AND HoraReal = ? AND (EstadoRes IS NULL OR EstadoRes <> 'Cancelado')
                 AND CodRes <> ? AND (? <> 'Comunitario' OR Realizacion <> 'Comunitario')
         ");
@@ -23,6 +23,52 @@ class Reserva
         $result = $stmt->get_result()->fetch_assoc();
         $stmt->close();
         return $result['total'] > 0;
+    }
+
+    public function buscarPersonaPorIdentificacion($identificacion)
+    {
+        $stmt = $this->conn->prepare(
+            'SELECT CiPersona, Nombre, ApPaterno, ApMaterno FROM `persona` WHERE CiPersona = ? OR NumeroDocumento = ? LIMIT 1'
+        );
+        $stmt->bind_param('ss', $identificacion, $identificacion);
+        $stmt->execute();
+        $persona = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        return $persona ?: null;
+    }
+
+    public function obtenerCelebrantesActivos($incluirDiaconos = false)
+    {
+        $cargos = $incluirDiaconos ? '3, 5, 7' : '3, 5';
+        $resultado = $this->conn->query("
+            SELECT p.CodPer, p.Nombre, p.Paterno, p.Materno, c.DescripCar, p.CodCar
+            FROM `personal` p
+            INNER JOIN `cargo` c ON c.CodCar = p.CodCar
+            WHERE p.Estado = 'Activo'
+              AND (p.FechaFinGestion IS NULL OR p.FechaFinGestion >= CURRENT_DATE)
+              AND p.CodCar IN ($cargos)
+            ORDER BY FIELD(p.CodCar, 3, 5, 7), p.Nombre, p.Paterno
+        ");
+        return $resultado ? $resultado->fetch_all(MYSQLI_ASSOC) : [];
+    }
+
+    public function esCelebranteActivo($codPer, $incluirDiacono = false)
+    {
+        $cargos = $incluirDiacono ? '3, 5, 7' : '3, 5';
+        $stmt = $this->conn->prepare("
+            SELECT 1
+            FROM `personal`
+            WHERE CodPer = ?
+              AND Estado = 'Activo'
+              AND (FechaFinGestion IS NULL OR FechaFinGestion >= CURRENT_DATE)
+              AND CodCar IN ($cargos)
+            LIMIT 1
+        ");
+        $stmt->bind_param('i', $codPer);
+        $stmt->execute();
+        $valido = (bool) $stmt->get_result()->fetch_row();
+        $stmt->close();
+        return $valido;
     }
 
     public function modificarReservaBautizo($data)
@@ -144,9 +190,51 @@ class Reserva
     private function guardarCorreoReserva($codRes, $correo)
     {
         $correo = is_string($correo) && trim($correo) !== '' ? trim($correo) : null;
-        $stmt = $this->conn->prepare('UPDATE reserva SET CorreoSolicitante = ? WHERE CodRes = ?');
+        $stmt = $this->conn->prepare('UPDATE `reserva` SET CorreoSolicitante = ? WHERE CodRes = ?');
         $stmt->bind_param('si', $correo, $codRes);
         if (!$stmt->execute()) throw new RuntimeException('No se pudo guardar el correo de la reserva.');
+        $stmt->close();
+    }
+
+    private function guardarReservanteReserva($codRes, $ciReservante)
+    {
+        $stmt = $this->conn->prepare('UPDATE `reserva` SET CiReservante = ? WHERE CodRes = ?');
+        $stmt->bind_param('si', $ciReservante, $codRes);
+        if (!$stmt->execute()) throw new RuntimeException('No se pudo vincular el reservante con la reserva.');
+        $stmt->close();
+    }
+
+    private function guardarCelebranteReserva($codRes, $codPerCelebrante)
+    {
+        $stmt = $this->conn->prepare('UPDATE `reserva` SET CodPerCelebrante = ? WHERE CodRes = ?');
+        $stmt->bind_param('ii', $codPerCelebrante, $codRes);
+        if (!$stmt->execute()) throw new RuntimeException('No se pudo vincular el celebrante con la reserva.');
+        $stmt->close();
+    }
+
+    /** Mantiene el filtro de Persona alineado con la reserva recién creada. */
+    private function actualizarSolicitudPersona($data)
+    {
+        $tipo = $data['TipoCel'] ?? '';
+        $solicitud = $tipo === 'Misa' ? 'Reserva de misa' : 'Reserva de ' . $tipo;
+        $identificaciones = [];
+        $identificaciones[] = $data['CiReservante'] ?? '';
+        if ($tipo === 'Bautizo') {
+            $identificaciones[] = $data['CiPersonaCelebranteB'] ?? '';
+        } elseif ($tipo === 'Matrimonio') {
+            $identificaciones[] = $data['CiPersonaNovio'] ?? '';
+            $identificaciones[] = $data['CiPersonaNovia'] ?? '';
+        } elseif ($tipo === 'Misa') {
+            $identificaciones[] = $data['CiPersonademas'] ?? '';
+        }
+        $stmt = $this->conn->prepare('UPDATE `persona` SET SacramentoSolicita = ? WHERE CiPersona = ?');
+        foreach (array_unique(array_filter($identificaciones)) as $ciPersona) {
+            $stmt->bind_param('ss', $solicitud, $ciPersona);
+            if (!$stmt->execute()) {
+                $stmt->close();
+                throw new RuntimeException('No se pudo actualizar el seguimiento de la persona.');
+            }
+        }
         $stmt->close();
     }
 
@@ -183,6 +271,9 @@ class Reserva
             $codRes = (int) $this->conn->query('SELECT LAST_INSERT_ID() AS id')->fetch_assoc()['id'];
             if ($codRes <= 0) throw new RuntimeException('No se pudo identificar la reserva registrada.');
             $this->guardarCorreoReserva($codRes, $data['CorreoSolicitante'] ?? null);
+            $this->guardarReservanteReserva($codRes, $data['CiReservante']);
+            $this->guardarCelebranteReserva($codRes, $data['CodPerCelebrante']);
+            $this->actualizarSolicitudPersona($data);
             $this->conn->commit();
             return true;
         } catch (Throwable $e) {
@@ -204,7 +295,7 @@ class Reserva
         $this->bloquearHorarioReservas();
         try {
             $this->conn->begin_transaction();
-            $consulta = $this->conn->prepare('SELECT * FROM reserva WHERE CodRes = ? AND TipoCel = ? FOR UPDATE');
+            $consulta = $this->conn->prepare('SELECT * FROM `reserva` WHERE CodRes = ? AND TipoCel = ? FOR UPDATE');
             $consulta->bind_param('is', $data['CodRes'], $tipo);
             $consulta->execute();
             $anterior = $consulta->get_result()->fetch_assoc();
@@ -259,19 +350,23 @@ class Reserva
                 
                 car.DescripCar,
                 pers.CiPersonal,
-                CONCAT(pers.Nombre, ' ', pers.Paterno, ' ', IFNULL(pers.Materno, '')) AS NombrePersonal
+                CONCAT(pers.Nombre, ' ', pers.Paterno, ' ', IFNULL(pers.Materno, '')) AS NombrePersonal,
+                CONCAT(cele.Nombre, ' ', cele.Paterno, ' ', IFNULL(cele.Materno, '')) AS NombreCelebranteAsignado,
+                carcele.DescripCar AS CargoCelebranteAsignado
             FROM 
-                Reserva r
-                JOIN Solicitante s ON r.CiPersona = s.CiPersona AND r.CodIns = s.CodIns
+                `reserva` r
+                JOIN `solicitante` s ON r.CiPersona = s.CiPersona AND r.CodIns = s.CodIns
                 JOIN inssacramento ins ON ins.CodIns = r.CodIns
-                JOIN personal pers ON pers.CodPer = ins.CodPer
-                JOIN cargo car ON car.CodCar = pers.CodCar
+                JOIN `personal` pers ON pers.CodPer = ins.CodPer
+                JOIN `cargo` car ON car.CodCar = pers.CodCar
+                LEFT JOIN `personal` cele ON cele.CodPer = r.CodPerCelebrante
+                LEFT JOIN `cargo` carcele ON carcele.CodCar = cele.CodCar
                 JOIN tiposacramento sac ON sac.CodSac = ins.CodSac
-                JOIN persona p1 ON p1.CiPersona = s.CiPersona
-                LEFT JOIN persona p2 ON p2.CiPersona = (SELECT CiPersona FROM Solicitante WHERE CodIns = r.CodIns AND Rol = 0x506170C3A1)
-                LEFT JOIN persona p3 ON p3.CiPersona = (SELECT CiPersona FROM Solicitante WHERE CodIns = r.CodIns AND Rol = 0x4D616DC3A1)
-                LEFT JOIN persona p4 ON p4.CiPersona = (SELECT CiPersona FROM Solicitante WHERE CodIns = r.CodIns AND Rol = 'Padrino')
-                LEFT JOIN persona p5 ON p5.CiPersona = (SELECT CiPersona FROM Solicitante WHERE CodIns = r.CodIns AND Rol = 'Madrina')
+                JOIN `persona` p1 ON p1.CiPersona = s.CiPersona
+                LEFT JOIN `persona` p2 ON p2.CiPersona = (SELECT CiPersona FROM `solicitante` WHERE CodIns = r.CodIns AND Rol = 0x506170C3A1)
+                LEFT JOIN `persona` p3 ON p3.CiPersona = (SELECT CiPersona FROM `solicitante` WHERE CodIns = r.CodIns AND Rol = 0x4D616DC3A1)
+                LEFT JOIN `persona` p4 ON p4.CiPersona = (SELECT CiPersona FROM `solicitante` WHERE CodIns = r.CodIns AND Rol = 'Padrino')
+                LEFT JOIN `persona` p5 ON p5.CiPersona = (SELECT CiPersona FROM `solicitante` WHERE CodIns = r.CodIns AND Rol = 'Madrina')
             WHERE 
                 r.CodRes = ? AND r.TipoCel = 'Bautizo';
         ");
@@ -309,24 +404,28 @@ class Reserva
                 p10.CiPersona AS TestigoNoviaCiPersona,
                 CONCAT(p10.Nombre, ' ', p10.ApPaterno, ' ', IFNULL(p10.ApMaterno, '')) AS NombreTestigoNovia,
                 CASE WHEN r.TipoCel = 'Misa' THEN 'Misa' ELSE sac.DescripSac END AS DescripSac,
-                sac.CostoSac
+                sac.CostoSac,
+                CONCAT(cele.Nombre, ' ', cele.Paterno, ' ', IFNULL(cele.Materno, '')) AS NombreCelebranteAsignado,
+                carcele.DescripCar AS CargoCelebranteAsignado
             FROM 
-                Reserva r
-                JOIN Solicitante s ON r.CiPersona = s.CiPersona AND r.CodIns = s.CodIns
+                `reserva` r
+                JOIN `solicitante` s ON r.CiPersona = s.CiPersona AND r.CodIns = s.CodIns
                 JOIN inssacramento ins ON ins.CodIns = r.CodIns
-                JOIN personal pers ON pers.CodPer = ins.CodPer
-                JOIN cargo cars ON cars.CodCar = pers.CodCar
+                JOIN `personal` pers ON pers.CodPer = ins.CodPer
+                JOIN `cargo` cars ON cars.CodCar = pers.CodCar
+                LEFT JOIN `personal` cele ON cele.CodPer = r.CodPerCelebrante
+                LEFT JOIN `cargo` carcele ON carcele.CodCar = cele.CodCar
                 JOIN tiposacramento sac ON sac.CodSac = ins.CodSac
-                JOIN persona p1 ON p1.CiPersona = (SELECT CiPersona FROM Solicitante WHERE CodIns = r.CodIns AND Rol = 'Novio')
-                LEFT JOIN persona p2 ON p2.CiPersona = (SELECT CiPersona FROM Solicitante WHERE CodIns = r.CodIns AND Rol = 'Novia')
-                LEFT JOIN persona p3 ON p3.CiPersona = (SELECT CiPersona FROM Solicitante WHERE CodIns = r.CodIns AND Rol = 0x506170C3A1204E6F76696F)
-                LEFT JOIN persona p4 ON p4.CiPersona = (SELECT CiPersona FROM Solicitante WHERE CodIns = r.CodIns AND Rol = 0x4D616DC3A1204E6F76696F)
-                LEFT JOIN persona p5 ON p5.CiPersona = (SELECT CiPersona FROM Solicitante WHERE CodIns = r.CodIns AND Rol = 0x506170C3A1204E6F766961)
-                LEFT JOIN persona p6 ON p6.CiPersona = (SELECT CiPersona FROM Solicitante WHERE CodIns = r.CodIns AND Rol = 0x4D616DC3A1204E6F766961)
-                LEFT JOIN persona p7 ON p7.CiPersona = (SELECT CiPersona FROM Solicitante WHERE CodIns = r.CodIns AND Rol = 'Padrino')
-                LEFT JOIN persona p8 ON p8.CiPersona = (SELECT CiPersona FROM Solicitante WHERE CodIns = r.CodIns AND Rol = 'Madrina')
-                LEFT JOIN persona p9 ON p9.CiPersona = (SELECT CiPersona FROM Solicitante WHERE CodIns = r.CodIns AND Rol = 'Testigo Novio')
-                LEFT JOIN persona p10 ON p10.CiPersona = (SELECT CiPersona FROM Solicitante WHERE CodIns = r.CodIns AND Rol = 'Testigo Novia')
+                JOIN `persona` p1 ON p1.CiPersona = (SELECT CiPersona FROM `solicitante` WHERE CodIns = r.CodIns AND Rol = 'Novio')
+                LEFT JOIN `persona` p2 ON p2.CiPersona = (SELECT CiPersona FROM `solicitante` WHERE CodIns = r.CodIns AND Rol = 'Novia')
+                LEFT JOIN `persona` p3 ON p3.CiPersona = (SELECT CiPersona FROM `solicitante` WHERE CodIns = r.CodIns AND Rol = 0x506170C3A1204E6F76696F)
+                LEFT JOIN `persona` p4 ON p4.CiPersona = (SELECT CiPersona FROM `solicitante` WHERE CodIns = r.CodIns AND Rol = 0x4D616DC3A1204E6F76696F)
+                LEFT JOIN `persona` p5 ON p5.CiPersona = (SELECT CiPersona FROM `solicitante` WHERE CodIns = r.CodIns AND Rol = 0x506170C3A1204E6F766961)
+                LEFT JOIN `persona` p6 ON p6.CiPersona = (SELECT CiPersona FROM `solicitante` WHERE CodIns = r.CodIns AND Rol = 0x4D616DC3A1204E6F766961)
+                LEFT JOIN `persona` p7 ON p7.CiPersona = (SELECT CiPersona FROM `solicitante` WHERE CodIns = r.CodIns AND Rol = 'Padrino')
+                LEFT JOIN `persona` p8 ON p8.CiPersona = (SELECT CiPersona FROM `solicitante` WHERE CodIns = r.CodIns AND Rol = 'Madrina')
+                LEFT JOIN `persona` p9 ON p9.CiPersona = (SELECT CiPersona FROM `solicitante` WHERE CodIns = r.CodIns AND Rol = 'Testigo Novio')
+                LEFT JOIN `persona` p10 ON p10.CiPersona = (SELECT CiPersona FROM `solicitante` WHERE CodIns = r.CodIns AND Rol = 'Testigo Novia')
             WHERE 
                 r.CodRes = ? AND r.TipoCel = 'Matrimonio';
         ");
@@ -341,17 +440,23 @@ class Reserva
             SELECT 
                 r.CodRes, car.DescripCar, per.CiPersonal,
                 CONCAT(per.Nombre, ' ', per.Paterno, ' ', IFNULL(per.Materno, '')) AS NombrePersonal,
-                r.Quien, r.FechaReal, r.HoraReal, r.Realizacion, r.EstadoRes, r.CorreoSolicitante,
+                r.Quien, r.CiReservante, r.FechaReal, r.HoraReal, r.Realizacion, r.EstadoRes, r.CorreoSolicitante,
                 p1.CiPersona AS CelebranteCiPersona, 
                 CONCAT(p1.Nombre, ' ', p1.ApPaterno, ' ', IFNULL(p1.ApMaterno, '')) AS NombreCelebrante,
-                CASE WHEN r.TipoCel = 'Misa' THEN 'Misa' ELSE sac.DescripSac END AS DescripSac, sac.CostoSac
-            FROM Reserva r
-            JOIN Solicitante s ON r.CiPersona = s.CiPersona AND r.CodIns = s.CodIns
+                CONCAT(pr.Nombre, ' ', pr.ApPaterno, ' ', IFNULL(pr.ApMaterno, '')) AS NombreReservante,
+                CASE WHEN r.TipoCel = 'Misa' THEN 'Misa' ELSE sac.DescripSac END AS DescripSac, sac.CostoSac,
+                CONCAT(cele.Nombre, ' ', cele.Paterno, ' ', IFNULL(cele.Materno, '')) AS NombreCelebranteAsignado,
+                carcele.DescripCar AS CargoCelebranteAsignado
+            FROM `reserva` r
+            JOIN `solicitante` s ON r.CiPersona = s.CiPersona AND r.CodIns = s.CodIns
             JOIN inssacramento ins ON ins.CodIns = r.CodIns
-            JOIN personal per ON per.CodPer = ins.CodPer
-            JOIN cargo car ON car.CodCar = per.CodCar
+            JOIN `personal` per ON per.CodPer = ins.CodPer
+            JOIN `cargo` car ON car.CodCar = per.CodCar
+            LEFT JOIN `personal` cele ON cele.CodPer = r.CodPerCelebrante
+            LEFT JOIN `cargo` carcele ON carcele.CodCar = cele.CodCar
             JOIN tiposacramento sac ON sac.CodSac = ins.CodSac
-            JOIN persona p1 ON p1.CiPersona = s.CiPersona
+            JOIN `persona` p1 ON p1.CiPersona = s.CiPersona
+            LEFT JOIN `persona` pr ON pr.CiPersona = r.CiReservante
             WHERE r.CodRes = ? AND r.TipoCel = 'Misa';
         ");
         $stmt->bind_param("i", $codRes);
@@ -365,7 +470,7 @@ class Reserva
     {
         $sql = "
             SELECT r.HoraReal, r.CodRes, CASE WHEN r.TipoCel = 'Misa' THEN 'Misa' ELSE ts.DescripSac END AS DescripSac, r.EstadoRes, r.tipocel, r.Realizacion, i.CodIns
-            FROM Reserva r
+            FROM `reserva` r
             JOIN inssacramento i ON r.CodIns = i.CodIns
             JOIN tiposacramento ts ON i.CodSac = ts.CodSac
             WHERE r.FechaReal = ?
@@ -384,7 +489,7 @@ class Reserva
     {
         $sql = "
             SELECT DISTINCT DAY(r.FechaReal) AS dia, r.TipoCel AS tipocel, ts.DescripSac
-            FROM Reserva r
+            FROM `reserva` r
             JOIN inssacramento i ON r.CodIns = i.CodIns
             JOIN tiposacramento ts ON i.CodSac = ts.CodSac
             WHERE MONTH(r.FechaReal) = ? AND YEAR(r.FechaReal) = ?
@@ -452,20 +557,191 @@ class Reserva
     public function obtenerDocumentosPorInscripcion($codIns) {
         $stmt = $this->conn->prepare("
             SELECT 
+                p.CodPres,
                 p.CodificDoc, 
-                t.DescripTDoc, 
+                p.CodTDoc,
+                p.Dequien,
                 p.FechaPres,
-                p.Dequien
+                p.Archivo,
+                t.DescripTDoc,
+                d.ParroquiaBau,
+                d.NrLib,
+                d.NrPag,
+                d.NrPart,
+                d.FechaBau
             FROM 
                 presentaciondoc p
             JOIN 
                 tipodocumento t ON p.CodTDoc = t.CodTDoc  
+            LEFT JOIN
+                docpresbau d ON d.CodPres = p.CodPres
             WHERE 
                 p.CodIns = ?
+            ORDER BY p.CodPres
         ");
         $stmt->bind_param("i", $codIns);
         $stmt->execute();
         return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    }
+
+    /** Inscripción (sacramento) a la que pertenece el certificado. */
+    public function obtenerInscripcionSacramento($codIns) {
+        $stmt = $this->conn->prepare("
+            SELECT ins.CodIns, ins.CodSac, ins.FechaIns, ts.DescripSac,
+                   (SELECT MAX(d.FechaBau)
+                    FROM presentaciondoc p
+                    INNER JOIN docpresbau d ON d.CodPres = p.CodPres
+                    WHERE p.CodIns = ins.CodIns) AS FechaSacramento
+            FROM inssacramento ins
+            INNER JOIN tiposacramento ts ON ts.CodSac = ins.CodSac
+            WHERE ins.CodIns = ?
+            LIMIT 1
+        ");
+        $stmt->bind_param("i", $codIns);
+        $stmt->execute();
+        $fila = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        return $fila;
+    }
+
+    /** Personas que participan del sacramento, con su rol y datos de identidad. */
+    public function obtenerPersonasSacramento($codIns) {
+        $stmt = $this->conn->prepare("
+            SELECT s.Rol, s.CiPersona,
+                   p.Nombre, p.ApPaterno, p.ApMaterno,
+                   p.NumeroDocumento, p.Estado_per, p.id_certificado_nacimiento
+            FROM `solicitante` s
+            INNER JOIN `persona` p ON p.CiPersona = s.CiPersona
+            WHERE s.CodIns = ?
+            ORDER BY FIELD(s.Rol,
+                'Bautizado', 'Celebrante', 'Confirmante', 'Novio', 'Novia',
+                'Papá', 'Mamá', 'Padre', 'Madre',
+                'Papá Novio', 'Mamá Novio', 'Papá Novia', 'Mamá Novia',
+                'Padrino', 'Madrina', 'Testigo Novio', 'Testigo Novia')
+        ");
+        $stmt->bind_param("i", $codIns);
+        $stmt->execute();
+        $filas = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+        return $filas;
+    }
+
+    /** Bautizo o confirmación registrado de una persona (para reutilizar sus datos). */
+    public function obtenerSacramentoPersona($ciPersona, $codSac) {
+        $tipoDocumento = (int) $codSac === 1 ? 3 : 5;
+        $stmt = $this->conn->prepare("
+            SELECT ins.CodIns, ins.FechaIns,
+                   dpb.ParroquiaBau, dpb.NrLib, dpb.NrPag, dpb.NrPart, dpb.FechaBau
+            FROM `solicitante` s
+            INNER JOIN inssacramento ins ON ins.CodIns = s.CodIns
+            LEFT JOIN presentaciondoc pre ON pre.CodIns = ins.CodIns AND pre.CodTDoc = ?
+            LEFT JOIN docpresbau dpb ON dpb.CodPres = pre.CodPres
+            WHERE s.CiPersona = ? AND ins.CodSac = ?
+              AND s.Rol IN ('Bautizado', 'Celebrante', 'Confirmante', 'Novio', 'Novia')
+            ORDER BY ins.CodIns DESC
+            LIMIT 1
+        ");
+        $stmt->bind_param("isi", $tipoDocumento, $ciPersona, $codSac);
+        $stmt->execute();
+        $fila = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        return $fila;
+    }
+
+    /** Tipos de documento disponibles en el catálogo. */
+    public function obtenerTiposDocumento() {
+        $resultado = $this->conn->query("SELECT CodTDoc, DescripTDoc FROM tipodocumento ORDER BY CodTDoc");
+        return $resultado ? $resultado->fetch_all(MYSQLI_ASSOC) : [];
+    }
+
+    /** Busca la fila de un documento ya presentado para esa inscripción, tipo y rol. */
+    public function buscarDocumentoPresentado($codIns, $codTDoc, $dequien) {
+        $stmt = $this->conn->prepare("
+            SELECT CodPres, Archivo
+            FROM presentaciondoc
+            WHERE CodIns = ? AND CodTDoc = ? AND Dequien = ?
+            ORDER BY CodPres DESC
+            LIMIT 1
+        ");
+        $stmt->bind_param("iis", $codIns, $codTDoc, $dequien);
+        $stmt->execute();
+        $fila = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        return $fila;
+    }
+
+    /**
+     * Inserta un documento nuevo (con archivo opcional) y devuelve su CodPres.
+     */
+    public function registrarDocumentoConArchivo($data, $archivo) {
+        $stmt = $this->conn->prepare("
+            INSERT INTO presentaciondoc (Archivo, FechaPres, dequien, CodificDoc, CodTDoc, CodIns)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ");
+        $fechaPres = (string) ($data['FechaPres'] ?? '');
+        $dequien = (string) ($data['Dequien'] ?? '');
+        $codificDoc = (string) ($data['CodificDoc'] ?? '');
+        $codTDoc = (int) ($data['CodTDoc'] ?? 0);
+        $codIns = (int) ($data['CodIns'] ?? 0);
+
+        $stmt->bind_param("ssssii", $archivo, $fechaPres, $dequien, $codificDoc, $codTDoc, $codIns);
+        if (!$stmt->execute()) {
+            $stmt->close();
+            return false;
+        }
+        $codPres = (int) $this->conn->insert_id;
+        $stmt->close();
+        return $codPres;
+    }
+
+    /** Guarda o reemplaza solo el archivo de un documento requerido. */
+    public function actualizarArchivoDocumento($codIns, $codTDoc, $dequien, $archivo) {
+        $existente = $this->buscarDocumentoPresentado($codIns, $codTDoc, $dequien);
+        if ($existente) {
+            $stmt = $this->conn->prepare("UPDATE presentaciondoc SET Archivo = ? WHERE CodPres = ?");
+            $stmt->bind_param("si", $archivo, $existente['CodPres']);
+            $resultado = $stmt->execute();
+            $stmt->close();
+            return $resultado ? (int) $existente['CodPres'] : false;
+        }
+
+        $stmt = $this->conn->prepare("
+            INSERT INTO presentaciondoc (Archivo, FechaPres, dequien, CodificDoc, CodTDoc, CodIns)
+            VALUES (?, ?, ?, '', ?, ?)
+        ");
+        $hoy = date('Y-m-d');
+        $stmt->bind_param("sssii", $archivo, $hoy, $dequien, $codTDoc, $codIns);
+        if (!$stmt->execute()) {
+            $stmt->close();
+            return false;
+        }
+        $codPres = (int) $this->conn->insert_id;
+        $stmt->close();
+        return $codPres;
+    }
+
+    /** Guarda (reemplazando) los datos de partida del documento. */
+    public function guardarDocPresBau($codPres, $data) {
+        $stmt = $this->conn->prepare("DELETE FROM docpresbau WHERE CodPres = ?");
+        $stmt->bind_param("i", $codPres);
+        $stmt->execute();
+        $stmt->close();
+
+        $stmt = $this->conn->prepare("
+            INSERT INTO docpresbau (ParroquiaBau, NrLib, NrPag, NrPart, FechaBau, CodPres)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ");
+        $stmt->bind_param("sssssi",
+            $data['ParroquiaBau'],
+            $data['NroLibro'],
+            $data['NroPag'],
+            $data['NroPart'],
+            $data['FechaBau'],
+            $codPres
+        );
+        $resultado = $stmt->execute();
+        $stmt->close();
+        return $resultado;
     }
 }
 ?>

@@ -1,5 +1,5 @@
-﻿<?php
-require_once '../controlador/ControladorReserva.php';
+<?php
+require_once '../Controlador/controladorReserva.php';
 require_once '../Modelo/modeloReserva.php';
 
 session_start();
@@ -8,6 +8,8 @@ if (!isset($_SESSION['usuario'])) {
     exit();
 }
 $usuario = $_SESSION['usuario'];
+require_once __DIR__ . '/../Controlador/controladorAcceso.php';
+ControladorAcceso::exigir('celebracion');
 $controller = new ControladorReserva();
 $documentoModel = new Reserva();
 $reserva = null;
@@ -88,7 +90,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['modificar_reserva'])) 
     <link rel="shortcut icon" href="../assets/images/Icono.png">
     <link rel="stylesheet" type="text/css" href="../assets/vendor/font-awesome/css/all.min.css">
     <link rel="stylesheet" type="text/css" href="../assets/vendor/bootstrap-icons/bootstrap-icons.css">
-    <link rel="stylesheet" type="text/css" href="../assets/css/style.css">
+    <link rel="stylesheet" type="text/css" href="../assets/css/style.css?v=<?php echo filemtime(__DIR__ . '/../assets/css/style.css'); ?>">
+    <link rel="stylesheet" type="text/css" href="../assets/css/logo-cabecera.css?v=<?= filemtime(__DIR__ . '/../assets/css/logo-cabecera.css') ?>">
 
     <style>
         .Misas {
@@ -123,8 +126,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['modificar_reserva'])) 
         <nav class="navbar navbar-expand-lg">
             <div class="container">
                 <a class="navbar-brand" href="VistaPersonal.php">
-                    <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png" alt="logo">
-                    <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png" alt="logo">
+                    <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo.png') ?>" alt="logo">
+                    <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo-light.png') ?>" alt="logo">
                 </a>
 
                 <ul class="nav flex-nowrap align-items-center ms-sm-3 list-unstyled">
@@ -136,13 +139,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['modificar_reserva'])) 
 
                     <li class="nav-item ms-2 dropdown">
                         <a class="nav-link btn icon-md p-0" href="#" id="profileDropdown" role="button" data-bs-auto-close="outside" data-bs-display="static" data-bs-toggle="dropdown" aria-expanded="false">
-                            <img class="avatar-img rounded border border-white border-3" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}"; ?>" alt="">
+                            <img class="avatar-img rounded border border-white border-3" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}?v=" . time(); ?>" alt="">
                         </a>
                         <ul class="dropdown-menu dropdown-animation dropdown-menu-end pt-3 small me-md-n3" aria-labelledby="profileDropdown">
                             <li class="px-3">
                                 <div class="d-flex align-items-center position-relative">
                                     <div class="avatar me-3">
-                                        <img class="avatar-img rounded-circle" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}"; ?>" alt="avatar">
+                                        <img class="avatar-img rounded-circle" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}?v=" . time(); ?>" alt="avatar">
                                     </div>
                                     <div>
                                         <a class="h6 stretched-link" href="#"><?php echo $usuario['Nombre'] . " " . $usuario['Paterno'] . " " . $usuario['Materno']; ?></a>
@@ -192,7 +195,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['modificar_reserva'])) 
 
 
     <main>
-        <div class="container">
+        <div class="container personal-dashboard-container">
             <div class="row g-4">
                 <div class="col-lg-3">
                     <div class="d-flex align-items-center d-lg-none">
@@ -207,9 +210,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['modificar_reserva'])) 
                         <div class="offcanvas offcanvas-start" tabindex="-1" id="offcanvasSideNavbar">
                             <div class="offcanvas-header">
                                 <a class="navbar-brand" href="#">
-                                    <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png"
+                                    <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo.png') ?>"
                                         alt="logo">
-                                    <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png"
+                                    <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo-light.png') ?>"
                                         alt="logo">
                                 </a>
                                 <button type="button" class="btn-close text-reset ms-auto" data-bs-dismiss="offcanvas"
@@ -219,13 +222,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['modificar_reserva'])) 
                             <div class="offcanvas-body d-block px-2 px-lg-0">
                                 <div class="card overflow-hidden">
                                     <div class="h-50px"
-                                        style="background-image:url(<?php echo ($usuario['FondoPer'] == 'Ninguno' || empty($usuario['FondoPer'])) ? '../assets/images/fondo/Ninguno.jpg' : "../assets/images/fondo/{$usuario['FondoPer']}"; ?>); background-position: center; background-size: cover; background-repeat: no-repeat;">
+                                        style="background-image:url(<?php echo ($usuario['FondoPer'] == 'Ninguno' || empty($usuario['FondoPer'])) ? '../assets/images/fondo/Ninguno.jpg' : "../assets/images/fondo/{$usuario['FondoPer']}?v=" . time(); ?>); background-position: center; background-size: cover; background-repeat: no-repeat;">
                                     </div>
                                     <div class="card-body pt-0">
                                         <div class="text-center">
                                             <div class="avatar avatar-lg mt-n5 mb-3">
                                                 <img class="avatar-img rounded border border-white border-3"
-                                                    src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}"; ?>" alt="">
+                                                    src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}?v=" . time(); ?>" alt="">
                                             </div>
                                             <h5 class="mb-0"> <a
                                                     href="PerfilAdmin.php"><?php echo $usuario['Nombre'] . " " . $usuario['Paterno'] . " " . $usuario['Materno']; ?></a>
@@ -236,34 +239,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['modificar_reserva'])) 
 
                                         <hr>
 
-                                        <ul class="nav nav-link-secondary flex-column fw-bold gap-2">
-                                            <li class="nav-item">
-                                                <a class="nav-link" href="VistaPersonal.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/mensaje.png" alt=""><span>Inicio </span></a>
-                                            </li>
-                                            <li class="nav-item">
-                                                <a class="nav-link" href="VistaPersona.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/nuevo.png" alt=""><span>Persona </span></a>
-                                            </li>
-                                            <li class="nav-item">
-                                                <a class="nav-link active" href="VistaReservas.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/instrucciones.png" alt=""><span>Celebración </span></a>
-                                            </li>
-                                            <?php if ($usuario['DescripCar'] == 'Párroco') { ?>
-                                                <li class="nav-item">
-                                                    <a class="nav-link" href="VistaGesPersonal.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/seguro.png" alt=""><span>Personal</span></a>
-                                                </li>
-                                                <li class="nav-item">
-                                                    <a class="nav-link" href="VistaCoordinadorAdmin.php"> <span>🔥 ⚪ Coordinador</span></a>
-                                                </li>
-                                            <?php } ?>
-                                            <li class="nav-item">
-                                                <a class="nav-link" href="VistaSolicitante.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/contrato.png" alt=""><span>Certificado </span></a>
-                                            </li>
-                                            <?php if ($usuario['DescripCar'] != "Personal") { ?>
-                                                <li class="nav-item">
-                                                    <a class="nav-link" href="VistaEmitidos.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/Emitido.png" alt=""><span>Certificado Emitido </span></a>
-                                                </li>
-                                            <?php } ?>
-
-                                        </ul>
+                                        <?php require_once __DIR__ . '/../Controlador/controladorAcceso.php'; ControladorAcceso::renderMenu(); ?>
                                     </div>
                                     <div class="card-footer text-center py-2">
                                         <a class="btn btn-link btn-sm" href="PerfilAdmin.php">Ver mi Perfil</a>
@@ -289,6 +265,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['modificar_reserva'])) 
                                         <h4>Datos del Bautizo</h4>
                                         <div class="col-sm-12 col-lg-12">
                                             <p><strong>Registró: </strong> <?php echo $reserva['DescripCar']; ?> | <?php echo $reserva['NombrePersonal']; ?> (<?php echo $reserva['CiPersonal']; ?>)</p>
+                                            <p><strong>Ministro del sacramento: </strong> <?php echo !empty($reserva['NombreCelebranteAsignado']) ? htmlspecialchars(trim($reserva['NombreCelebranteAsignado'] . ' — ' . ($reserva['CargoCelebranteAsignado'] ?? '')), ENT_QUOTES, 'UTF-8') : 'No registrado'; ?></p>
                                             <p><strong>Reservó: </strong> <?php echo $reserva['Quien']; ?> </p>
                                             <p><strong>Feligrés: </strong> <?php echo $reserva['NombreCelebrante']; ?> (<?php echo $reserva['CelebranteCiPersona']; ?>)</p>
                                             <p><strong>Papá: </strong> <?php echo $reserva['NombrePapa']; ?> (<?php echo $reserva['PapaCiPersona']; ?>)</p>
@@ -480,6 +457,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['modificar_reserva'])) 
                                         <h4>Datos del Matrimonio</h4>
                                         <div class="col-sm-12 col-lg-12">
                                             <p><strong>Registró: </strong> <?php echo $reserva['DescripCar']; ?> | <?php echo $reserva['NombrePersonal']; ?> (<?php echo $reserva['CiPersonal']; ?>)</p>
+                                            <p><strong>Ministro del sacramento: </strong> <?php echo !empty($reserva['NombreCelebranteAsignado']) ? htmlspecialchars(trim($reserva['NombreCelebranteAsignado'] . ' — ' . ($reserva['CargoCelebranteAsignado'] ?? '')), ENT_QUOTES, 'UTF-8') : 'No registrado'; ?></p>
                                             <p><strong>Reservó: </strong> <?php echo $reserva['Quien']; ?> </p>
                                             <p><strong>Novio: </strong> <?php echo $reserva['NombreNovio']; ?> (<?php echo $reserva['NovioCiPersona']; ?>)</p>
                                             <p><strong>Novia: </strong> <?php echo $reserva['NombreNovia']; ?> (<?php echo $reserva['NoviaCiPersona']; ?>)</p>
@@ -596,6 +574,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['modificar_reserva'])) 
                                             <h4>Datos de la Misa</h4>
                                             <div class="col-sm-12 col-lg-12">
                                                 <p><strong>Registró: </strong> <?php echo $reserva['DescripCar']; ?> | <?php echo $reserva['NombrePersonal']; ?> (<?php echo $reserva['CiPersonal']; ?>)</p>
+                                                <p><strong>Ministro del sacramento: </strong> <?php echo !empty($reserva['NombreCelebranteAsignado']) ? htmlspecialchars(trim($reserva['NombreCelebranteAsignado'] . ' — ' . ($reserva['CargoCelebranteAsignado'] ?? '')), ENT_QUOTES, 'UTF-8') : 'No registrado'; ?></p>
                                                 <p><strong>Reservó: </strong> <?php echo $reserva['NombreCelebrante']; ?> (<?php echo $reserva['CelebranteCiPersona']; ?>)</p>
                                                 <p><strong>Tipo de reserva: </strong> <?php echo htmlspecialchars($reserva['Realizacion'], ENT_QUOTES, 'UTF-8'); ?></p>
                                                 <p><strong>Por quienes: </strong> <?php echo $reserva['Quien']; ?> </p>
@@ -640,7 +619,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['modificar_reserva'])) 
                                             </div>
                                             <div class="col-12 mb-3">
                                                 <label class="form-label" for="correo-reserva">Correo del solicitante (opcional)</label>
-                                                <input type="email" class="form-control" id="correo-reserva" name="CorreoSolicitante" maxlength="254" autocomplete="email" placeholder="ejemplo@correo.com"
+                                                <input type="email" class="form-control" id="correo-reserva" name="CorreoSolicitante" maxlength="254" autocomplete="new-password" placeholder="ejemplo@correo.com"
                                                     value="<?php echo htmlspecialchars(is_string($_POST['CorreoSolicitante'] ?? null) ? $_POST['CorreoSolicitante'] : ($reserva['CorreoSolicitante'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
                                                 <small class="text-muted">Al guardar con estado Cancelado, se enviará automáticamente un aviso a este correo. Si la reserva es antigua, puedes completar el correo aquí. Sin correo se cancelará sin enviar aviso.</small>
                                             </div>

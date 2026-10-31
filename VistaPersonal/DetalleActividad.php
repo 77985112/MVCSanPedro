@@ -1,10 +1,18 @@
-﻿<?php
+<?php
 session_start();
 if (!isset($_SESSION['usuario'])) {
     header("Location: ../logout.php");
     exit();
 }
 $usuario = $_SESSION['usuario'];
+require_once __DIR__ . '/../Controlador/controladorAcceso.php';
+ControladorAcceso::exigir('inicio');
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($_POST) && empty($_FILES)
+    && (int) ($_SERVER['CONTENT_LENGTH'] ?? 0) > 0) {
+    http_response_code(413);
+    exit('El archivo supera el límite de carga. Use una imagen de hasta 5 MB o un video de hasta 100 MB.');
+}
+
 
 if (!isset($_GET['Actividad'])) {
     header("Location: IndexAdmin.php");
@@ -13,12 +21,12 @@ if (!isset($_GET['Actividad'])) {
 
 $Actividad = $_GET['Actividad'];
 
-include '../Conexion/Conexion.php';
+require_once __DIR__ . '/../Controlador/controladorActividad.php';
 
 $conn = new Conexion();
 $conexion = $conn->getConnection();
 
-$sql = "SELECT * FROM actividades WHERE idActividad = ?";
+$sql = "SELECT * FROM actividades WHERE idActividad = ? AND EstActividad <> 'Eliminado'";
 $stmt = $conexion->prepare($sql);
 $stmt->bind_param("i", $Actividad);
 $stmt->execute();
@@ -30,6 +38,58 @@ if ($result->num_rows == 0) {
 }
 
 $actividad = $result->fetch_assoc();
+$stmt->close();
+$controller = new ControladorActividad();
+$actividad['ImagenesExtrasFilas'] = $controller->imagenesExtras((int) $actividad['idActividad']);
+$actividad['ImagenesExtras'] = array_column($actividad['ImagenesExtrasFilas'], 'ImagenActividad');
+$esAutorActividad = (int) ($actividad['CodPer'] ?? 0) === (int) ($usuario['CodPer'] ?? 0);
+$esParroco = $controller->puedeGestionarActividadParroquia($usuario);
+$puedeEditarActividad = ($esAutorActividad || $esParroco)
+    && ControladorActividad::esActividadEditable($actividad);
+$puedeEliminarActividad = ($esAutorActividad || $esParroco);
+$solicitaEdicion = ($_GET['editar'] ?? '') === '1' || $_SERVER['REQUEST_METHOD'] === 'POST';
+$errorEdicion = '';
+$valoresEdicion = $actividad;
+if (empty($_SESSION['csrf_actividad_editar'])) {
+    $_SESSION['csrf_actividad_editar'] = bin2hex(random_bytes(32));
+}
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!$puedeEditarActividad) {
+        http_response_code(403);
+        $errorEdicion = 'No tienes permiso para editar esta actividad de Parroquia.';
+    } elseif (($_POST['accion'] ?? '') !== 'editar_actividad'
+        || !is_string($_POST['csrf_actividad_editar'] ?? null)
+        || !hash_equals($_SESSION['csrf_actividad_editar'], $_POST['csrf_actividad_editar'])) {
+        http_response_code(403);
+        $errorEdicion = 'La sesión del formulario venció. Revise los datos y vuelva a seleccionar los archivos nuevos.';
+    } else {
+        foreach (['TituloActividad', 'DetalleActividad', 'FechaActividad', 'HoraAct', 'LugarAct'] as $campo) {
+            $valoresEdicion[$campo] = is_string($_POST[$campo] ?? null) ? trim($_POST[$campo]) : '';
+        }
+        try {
+            $datosEdicion = $_POST;
+            $datosEdicion['idActividad'] = (int) $actividad['idActividad'];
+            $controller->actualizarActividadParroquia($datosEdicion, $usuario);
+            $_SESSION['actividad_parroquia_actualizada'] = true;
+            $_SESSION['csrf_actividad_editar'] = bin2hex(random_bytes(32));
+            header('Location: VistaPersonal.php#tab-2', true, 303);
+            exit();
+        } catch (InvalidArgumentException | DomainException $e) {
+            $errorEdicion = $e->getMessage();
+        } catch (Throwable $e) {
+            error_log('Editar actividad de Parroquia: ' . $e->getMessage());
+            $errorEdicion = 'No se pudieron guardar los cambios. Intente nuevamente.';
+        }
+    }
+} elseif ($solicitaEdicion && !$puedeEditarActividad) {
+    $errorEdicion = 'Esta actividad no está disponible para editar. Las actividades concluidas se conservan sin cambios.';
+}
+$valorEdicion = static function ($campo) use ($valoresEdicion) {
+    return htmlspecialchars((string) $valoresEdicion[$campo], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+};
+$fechaMinimaActividad = ControladorActividad::fechaMinimaActividad();
+
+list($archivoImagen, $archivoVideo) = ControladorActividad::archivosActividad($actividad);$esVideoActividad = $archivoVideo !== null;$hayImagen = $archivoImagen !== null;$archivoActividad = rawurlencode($archivoImagen ?? 'Generico.png');
 
 $diassemana = array("Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado");
 $meses = array("Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre");
@@ -54,7 +114,8 @@ $mes = $fecha->format('d') . " de " . $meses[$fecha->format('n') - 1];
     <link rel="shortcut icon" href="../assets/images/Icono.png">
     <link rel="stylesheet" type="text/css" href="../assets/vendor/font-awesome/css/all.min.css">
     <link rel="stylesheet" type="text/css" href="../assets/vendor/bootstrap-icons/bootstrap-icons.css">
-    <link rel="stylesheet" type="text/css" href="../assets/css/style.css">
+    <link rel="stylesheet" type="text/css" href="../assets/css/style.css?v=<?php echo filemtime(__DIR__ . '/../assets/css/style.css'); ?>">
+    <link rel="stylesheet" type="text/css" href="../assets/css/logo-cabecera.css?v=<?= filemtime(__DIR__ . '/../assets/css/logo-cabecera.css') ?>">
 
     <script src="../assets/js/jquery-3.6.4.min.js"></script>
 </head>
@@ -64,8 +125,8 @@ $mes = $fecha->format('d') . " de " . $meses[$fecha->format('n') - 1];
         <nav class="navbar navbar-expand-lg">
             <div class="container">
                 <a class="navbar-brand" href="VistaPersonal.php">
-                    <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png" alt="logo">
-                    <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png" alt="logo">
+                    <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo.png') ?>" alt="logo">
+                    <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo-light.png') ?>" alt="logo">
                 </a>
 
                 <ul class="nav flex-nowrap align-items-center ms-sm-3 list-unstyled">
@@ -77,13 +138,13 @@ $mes = $fecha->format('d') . " de " . $meses[$fecha->format('n') - 1];
 
                     <li class="nav-item ms-2 dropdown">
                         <a class="nav-link btn icon-md p-0" href="#" id="profileDropdown" role="button" data-bs-auto-close="outside" data-bs-display="static" data-bs-toggle="dropdown" aria-expanded="false">
-                            <img class="avatar-img rounded border border-white border-3" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}"; ?>" alt="">
+                            <img class="avatar-img rounded border border-white border-3" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}?v=" . time(); ?>" alt="">
                         </a>
                         <ul class="dropdown-menu dropdown-animation dropdown-menu-end pt-3 small me-md-n3" aria-labelledby="profileDropdown">
                             <li class="px-3">
                                 <div class="d-flex align-items-center position-relative">
                                     <div class="avatar me-3">
-                                        <img class="avatar-img rounded-circle" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}"; ?>" alt="avatar">
+                                        <img class="avatar-img rounded-circle" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}?v=" . time(); ?>" alt="avatar">
                                     </div>
                                     <div>
                                         <a class="h6 stretched-link" href="#"><?php echo $usuario['Nombre'] . " " . $usuario['Paterno'] . " " . $usuario['Materno']; ?></a>
@@ -133,7 +194,7 @@ $mes = $fecha->format('d') . " de " . $meses[$fecha->format('n') - 1];
 
 
     <main>
-        <div class="container">
+        <div class="container personal-dashboard-container">
             <div class="row g-4">
                 <div class="col-lg-3">
                     <div class="d-flex align-items-center d-lg-none">
@@ -147,20 +208,20 @@ $mes = $fecha->format('d') . " de " . $meses[$fecha->format('n') - 1];
                         <div class="offcanvas offcanvas-start" tabindex="-1" id="offcanvasSideNavbar">
                             <div class="offcanvas-header">
                                 <a class="navbar-brand" href="#">
-                                    <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png" alt="logo">
-                                    <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png" alt="logo">
+                                    <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo.png') ?>" alt="logo">
+                                    <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo-light.png') ?>" alt="logo">
                                 </a>
                                 <button type="button" class="btn-close text-reset ms-auto" data-bs-dismiss="offcanvas" aria-label="Close"></button>
                             </div>
 
                             <div class="offcanvas-body d-block px-2 px-lg-0">
                                 <div class="card overflow-hidden">
-                                    <div class="h-50px" style="background-image:url(<?php echo ($usuario['FondoPer'] == 'Ninguno' || empty($usuario['FondoPer'])) ? '../assets/images/fondo/Ninguno.jpg' : "../assets/images/fondo/{$usuario['FondoPer']}"; ?>); background-position: center; background-size: cover; background-repeat: no-repeat;">
+                                    <div class="h-50px" style="background-image:url(<?php echo ($usuario['FondoPer'] == 'Ninguno' || empty($usuario['FondoPer'])) ? '../assets/images/fondo/Ninguno.jpg' : "../assets/images/fondo/{$usuario['FondoPer']}?v=" . time(); ?>); background-position: center; background-size: cover; background-repeat: no-repeat;">
                                     </div>
                                     <div class="card-body pt-0">
                                         <div class="text-center">
                                             <div class="avatar avatar-lg mt-n5 mb-3">
-                                                <img class="avatar-img rounded border border-white border-3" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}"; ?>" alt="">
+                                                <img class="avatar-img rounded border border-white border-3" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}?v=" . time(); ?>" alt="">
                                             </div>
                                             <h5 class="mb-0"> <a href="PerfilAdmin.php"><?php echo $usuario['Nombre'] . " " . $usuario['Paterno'] . " " . $usuario['Materno']; ?></a> </h5>
                                             <small><?php echo $usuario['DescripCar']; ?></small>
@@ -169,33 +230,7 @@ $mes = $fecha->format('d') . " de " . $meses[$fecha->format('n') - 1];
 
                                         <hr>
 
-                                        <ul class="nav nav-link-secondary flex-column fw-bold gap-2">
-                                            <li class="nav-item">
-                                                <a class="nav-link active" href="VistaPersonal.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/mensaje.png" alt=""><span>Inicio </span></a>
-                                            </li>
-                                            <li class="nav-item">
-                                                <a class="nav-link" href="VistaPersona.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/nuevo.png" alt=""><span>Persona </span></a>
-                                            </li>
-                                            <li class="nav-item">
-                                                <a class="nav-link" href="VistaReservas.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/instrucciones.png" alt=""><span>Celebración </span></a>
-                                            </li>
-                                            <?php if ($usuario['DescripCar'] == 'Párroco') { ?>
-                                                <li class="nav-item">
-                                                    <a class="nav-link" href="VistaGesPersonal.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/seguro.png" alt=""><span>Personal</span></a>
-                                                </li>
-                                                <li class="nav-item">
-                                                    <a class="nav-link" href="VistaCoordinadorAdmin.php"> <span>🔥 ⚪ Coordinador</span></a>
-                                                </li>
-                                            <?php } ?>
-                                            <li class="nav-item">
-                                                <a class="nav-link" href="VistaSolicitante.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/contrato.png" alt=""><span>Certificado </span></a>
-                                            </li>
-                                            <?php if ($usuario['DescripCar'] != "Personal") { ?>
-                                                <li class="nav-item">
-                                                    <a class="nav-link" href="VistaEmitidos.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/Emitido.png" alt=""><span>Certificado Emitido </span></a>
-                                                </li>
-                                            <?php } ?>
-                                        </ul>
+                                        <?php require_once __DIR__ . '/../Controlador/controladorAcceso.php'; ControladorAcceso::renderMenu(); ?>
                                     </div>
                                     <div class="card-footer text-center py-2">
                                         <a class="btn btn-link btn-sm" href="PerfilAdmin.php">Ver mi Perfil</a>
@@ -209,8 +244,95 @@ $mes = $fecha->format('d') . " de " . $meses[$fecha->format('n') - 1];
 
 
                 <div class="col-md-8 col-lg-9 vstack gap-4">
-                    <div class="card card-body card-overlay-bottom border-0" style="background-image:url(../assets/images/events/<?php echo $actividad['ImagenActividad'] !== 'Ninguno' ? $actividad['ImagenActividad'] : 'Generico.png'; ?>" class="img-fluid rounded activity-image" alt="Imagen de <?php echo $actividad['TituloActividad']; ?>); background-position: center; background-size: cover; background-repeat: no-repeat;" data-bs-toggle="modal"
-                        data-bs-target="#imageModal">
+                    <?php if ($errorEdicion !== ''): ?>
+                    <div class="alert alert-danger" role="alert"><?php echo htmlspecialchars($errorEdicion, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></div>
+                    <?php endif; ?>
+                    <?php if ($puedeEditarActividad && $solicitaEdicion): ?>
+                    <div class="card card-body" id="editarActividad" style="scroll-margin-top:90px;">
+                        <h1 class="h4">Editar actividad de Parroquia</h1>
+                        <p class="small text-body-secondary">Actualice los datos y guarde los cambios. Si no selecciona archivos nuevos, se conservarán la imagen y el video actuales.</p>
+                        <form id="formEditarActividadParroquia" action="DetalleActividad.php?Actividad=<?php echo (int) $actividad['idActividad']; ?>&amp;editar=1#editarActividad" method="POST" class="row g-3" enctype="multipart/form-data">
+                            <input type="hidden" name="accion" value="editar_actividad">
+                            <input type="hidden" name="csrf_actividad_editar" value="<?php echo htmlspecialchars($_SESSION['csrf_actividad_editar'], ENT_QUOTES, 'UTF-8'); ?>">
+                            <div class="col-12">
+                                <label class="form-label" for="editarTituloActividad">Título de la actividad *</label>
+                                <input type="text" class="form-control" id="editarTituloActividad" name="TituloActividad" maxlength="150" value="<?php echo $valorEdicion('TituloActividad'); ?>" required>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label" for="editarDetalleActividad">Descripción *</label>
+                                <textarea class="form-control" id="editarDetalleActividad" name="DetalleActividad" rows="5" maxlength="<?php echo ControladorActividad::LIMITE_DESCRIPCION; ?>" aria-describedby="ayudaDescripcionEdicion" required><?php echo $valorEdicion('DetalleActividad'); ?></textarea>
+                                <div class="form-text" id="ayudaDescripcionEdicion">Hasta 5.000 caracteres.</div>
+                            </div>
+                            <div class="col-sm-6">
+                                <label class="form-label" for="editarFechaActividad">Fecha *</label>
+                                <input type="date" class="form-control" id="editarFechaActividad" name="FechaActividad" min="<?php echo $fechaMinimaActividad; ?>" value="<?php echo $valorEdicion('FechaActividad'); ?>" aria-describedby="ayudaFechaEdicion" required>
+                                <div class="form-text" id="ayudaFechaEdicion">Solo fechas desde hoy en adelante; al pasar la fecha la actividad queda concluida automáticamente.</div>
+                            </div>
+                            <div class="col-sm-6">
+                                <label class="form-label" for="editarHoraAct">Hora *</label>
+                                <input type="time" class="form-control" id="editarHoraAct" name="HoraAct" step="1" value="<?php echo $valorEdicion('HoraAct'); ?>" required>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label" for="editarLugarAct">Lugar *</label>
+                                <input type="text" class="form-control" id="editarLugarAct" name="LugarAct" maxlength="<?php echo ControladorActividad::LIMITE_LUGAR; ?>" value="<?php echo $valorEdicion('LugarAct'); ?>" aria-describedby="ayudaLugarEdicion" required>
+                                <div class="form-text" id="ayudaLugarEdicion">Hasta 255 caracteres; puede incluir la dirección y referencias.</div>
+                            </div>
+                            <div class="col-sm-6">
+                                <?php $imagenesActuales = ControladorActividad::imagenesActividad($actividad); $filasExtras = $actividad['ImagenesExtrasFilas'] ?? []; ?>
+                                <label class="form-label" for="editarImagenActividad">Imágenes actuales / nuevas imágenes (hasta 7 en total)</label>
+                                <?php if ($imagenesActuales): ?>
+                                <div id="galeriaActualImagen" class="d-flex flex-wrap align-items-start gap-2 mb-2">
+                                    <div class="text-center">
+                                        <img src="../assets/images/events/<?php echo rawurlencode($imagenesActuales[0]); ?>" class="rounded border" style="width:86px; height:66px; object-fit:cover;" alt="Imagen principal">
+                                        <div class="form-text" style="font-size:.65rem;">Principal</div>
+                                    </div>
+                                    <?php foreach ($filasExtras as $filaExtra): ?>
+                                    <div class="text-center">
+                                        <img src="../assets/images/events/<?php echo rawurlencode($filaExtra['ImagenActividad']); ?>" class="rounded border" style="width:86px; height:66px; object-fit:cover;" alt="Imagen adicional">
+                                        <div class="form-check m-0" style="font-size:.65rem;">
+                                            <input class="form-check-input" type="checkbox" name="QuitarImagenExtra[]" value="<?php echo (int) $filaExtra['idActImg']; ?>" id="quitarExtra<?php echo (int) $filaExtra['idActImg']; ?>">
+                                            <label class="form-check-label" for="quitarExtra<?php echo (int) $filaExtra['idActImg']; ?>">Quitar</label>
+                                        </div>
+                                    </div>
+                                    <?php endforeach; ?>
+                                </div>
+                                <?php endif; ?>
+                                <input type="file" class="form-control" id="editarImagenActividad" name="NuevaImagenActividad[]" multiple accept=".jpg,.jpeg,.png,image/jpeg,image/png" data-actividad-imagen="previewImagenEdicion" data-actividad-grupo="editarActividadParroquia" data-actividad-maximas="<?php echo max(0, ControladorActividad::MAXIMO_IMAGENES - count($imagenesActuales)); ?>" data-actividad-galeria="galeriaActualImagen">
+                                <div class="form-text">JPG/PNG, hasta 5 MB c/u. Las imágenes nuevas se agregan a la actividad.</div>
+                                <?php if ($hayImagen): ?>
+                                <div class="form-check mt-2">
+                                    <input class="form-check-input" type="checkbox" id="quitarImagenEdicion" name="QuitarImagen" value="1" data-quitar-actividad="editarImagenActividad">
+                                    <label class="form-check-label small" for="quitarImagenEdicion">Quitar todas las imágenes actuales</label>
+                                </div>
+                                <?php endif; ?>
+                                <div id="previewImagenEdicion" class="d-flex flex-wrap gap-2 mt-3"></div>
+                            </div>
+                            <div class="col-sm-6">
+                                <label class="form-label" for="editarVideoActividad">Nuevo video (opcional)</label>
+                                <input type="file" class="form-control" id="editarVideoActividad" name="NuevaVideoActividad" accept=".mp4,.webm,video/mp4,video/webm" data-actividad-video="previewVideoEdicion" data-actividad-grupo="editarActividadParroquia">
+                                <div class="form-text">MP4/WebM, hasta 100 MB.</div>
+                                <?php if ($esVideoActividad): ?>
+                                <div class="form-check mt-2">
+                                    <input class="form-check-input" type="checkbox" id="quitarVideoEdicion" name="QuitarVideo" value="1" data-quitar-actividad="editarVideoActividad">
+                                    <label class="form-check-label small" for="quitarVideoEdicion">Quitar el video actual</label>
+                                </div>
+                                <?php endif; ?>
+                                <video id="previewVideoEdicion" <?php if ($esVideoActividad): ?>src="../assets/images/events/<?php echo rawurlencode($archivoVideo); ?>"<?php endif; ?> class="w-100 rounded mt-3 actividad-video <?php echo $esVideoActividad ? '' : 'd-none'; ?>" controls playsinline preload="none" style="max-height:300px;"></video>
+                            </div>
+                            <div class="col-12 small">Conserve al menos una imagen o un video. Organiza: <strong>Parroquia</strong>.</div>
+                            <div class="col-12 d-flex flex-wrap gap-2">
+                                <button type="submit" class="btn btn-success-soft"><i class="bi bi-check2 me-1"></i>Guardar cambios</button>
+                                <a class="btn btn-light" href="VistaPersonal.php#tab-2">Cancelar</a>
+                            </div>
+                        </form>
+                    </div>
+                    <?php elseif ($puedeEditarActividad): ?>
+                    <div><a class="btn btn-primary-soft" href="DetalleActividad.php?Actividad=<?php echo (int) $actividad['idActividad']; ?>&amp;editar=1#editarActividad"><i class="bi bi-pencil-square me-1"></i>Editar actividad</a></div>
+                    <?php endif; ?>
+                    <div class="card card-body <?php echo $hayImagen || !$esVideoActividad ? 'card-overlay-bottom' : 'bg-dark'; ?> border-0" <?php if ($hayImagen || !$esVideoActividad): ?>style="background-image:url('../assets/images/events/<?php echo $archivoActividad; ?>'); background-position:center; background-size:cover; background-repeat:no-repeat;" data-bs-toggle="modal" data-bs-target="#imageModal"<?php endif; ?>>
+                        <?php if ($esVideoActividad): ?>
+                          <video class="w-100 rounded actividad-video" src="../assets/images/events/<?php echo rawurlencode($archivoVideo); ?>" controls playsinline preload="none" style="max-height:65vh; background:#000;">Su navegador no puede reproducir este video. <a href="../assets/images/events/<?php echo rawurlencode($archivoVideo); ?>">Abrir video</a></video>
+                        <?php endif; ?>
                         <div class="row g-3 justify-content-between">
                             <div class="col-lg-2">
                                 <div class="bg-mode text-center rounded overflow-hidden p-1 d-inline-block">
@@ -219,9 +341,9 @@ $mes = $fecha->format('d') . " de " . $meses[$fecha->format('n') - 1];
                                 </div>
                             </div>
                         </div>
-                        <div class="row g-3 justify-content-between align-items-center mt-5 pt-5 position-relative z-index-9">
+                        <div class="row g-3 justify-content-between align-items-center <?php echo $esVideoActividad ? 'mt-3' : 'mt-5 pt-5'; ?> position-relative z-index-9">
                             <div class="col-lg-9">
-                                <h1 class="h3 mb-1 text-white"><?php echo $actividad['TituloActividad']; ?></h1>
+                                <h1 class="h3 mb-1 text-white"><?php echo htmlspecialchars($actividad['TituloActividad'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></h1>
                             </div>
                             <div class="col-lg-3 text-lg-end">
                                 <a class="btn btn-light-soft" href="VistaPersonal.php"> Volver </a>
@@ -231,7 +353,7 @@ $mes = $fecha->format('d') . " de " . $meses[$fecha->format('n') - 1];
                     <div class="card card-body">
                         <div class="row g-4">
                             <div class="col-12">
-                                <p class="mb-0"><?php echo $actividad['DetalleActividad']; ?></p>
+                                <p class="mb-0"><?php echo htmlspecialchars($actividad['DetalleActividad'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></p>
                             </div>
                             <hr class="mt-4">
                             <div class="col-sm-6 col-lg-4">
@@ -252,7 +374,7 @@ $mes = $fecha->format('d') . " de " . $meses[$fecha->format('n') - 1];
                             </div>
                             <div class="col-lg-6">
                                 <h5>¿Donde?</h5>
-                                <p> <?php echo $actividad['LugarAct']; ?></p>
+                                <p> <?php echo htmlspecialchars($actividad['LugarAct'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></p>
                             </div>
                         </div>
                     </div>
@@ -267,11 +389,24 @@ $mes = $fecha->format('d') . " de " . $meses[$fecha->format('n') - 1];
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="imageModalLabel"><?php echo $actividad['TituloActividad']; ?></h5>
+                    <h5 class="modal-title" id="imageModalLabel"><?php echo htmlspecialchars($actividad['TituloActividad'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <img src="../assets/images/events/<?php echo $actividad['ImagenActividad'] !== 'Ninguno' ? $actividad['ImagenActividad'] : 'Generico.png'; ?>" class="img-fluid" alt="Imagen completa de <?php echo $actividad['TituloActividad']; ?>">
+                    <?php if ($hayImagen || !$esVideoActividad): ?>
+                    <img id="imagenGrandeDetalle" src="../assets/images/events/<?php echo $archivoActividad; ?>" class="img-fluid" alt="Imagen completa de <?php echo htmlspecialchars($actividad['TituloActividad'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>">
+                    <?php $imagenesGaleria = ControladorActividad::imagenesActividad($actividad); ?>
+                    <?php if (count($imagenesGaleria) > 1): ?>
+                    <div class="d-flex flex-wrap justify-content-center gap-2 mt-3">
+                        <?php foreach ($imagenesGaleria as $indiceGaleria => $nombreGaleria): ?>
+                        <img src="../assets/images/events/<?php echo rawurlencode($nombreGaleria); ?>" class="rounded border" style="width:84px; height:64px; object-fit:cover; cursor:pointer;" data-imagen-modal="../assets/images/events/<?php echo rawurlencode($nombreGaleria); ?>" onclick="var galeriaGrande = document.getElementById('imagenGrandeDetalle'); galeriaGrande.src = this.dataset.imagenModal; galeriaGrande.alt = this.alt;" alt="Imagen <?php echo $indiceGaleria + 1; ?> de la actividad">
+                        <?php endforeach; ?>
+                    </div>
+                    <?php endif; ?>
+                    <?php endif; ?>
+                    <?php if ($esVideoActividad): ?>
+                    <video class="w-100 rounded actividad-video<?php echo $hayImagen ? ' mt-3' : ''; ?>" src="../assets/images/events/<?php echo rawurlencode($archivoVideo); ?>" controls playsinline preload="none" style="max-height:65vh; background:#000;">Su navegador no puede reproducir este video. <a href="../assets/images/events/<?php echo rawurlencode($archivoVideo); ?>">Abrir video</a></video>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
@@ -309,6 +444,7 @@ $mes = $fecha->format('d') . " de " . $meses[$fecha->format('n') - 1];
     <script src="../assets/vendor/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="../assets/js/functions.js"></script>
     <script src="../assets/js/tema.js"></script>
+  <script src="../assets/js/actividad-multimedia.js?v=<?php echo filemtime(__DIR__ . '/../assets/js/actividad-multimedia.js'); ?>"></script>
 </body>
 
 </html>

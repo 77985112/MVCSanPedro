@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 require_once '../Controlador/controladorSolicitud.php';
 
 session_start();
@@ -6,15 +6,102 @@ if (!isset($_SESSION['usuario'])) {
   header("Location: ../logout.php");
   exit();
 }
+if (empty($_SESSION['token_detalle_confirmacion'])) {
+  $_SESSION['token_detalle_confirmacion'] = bin2hex(random_bytes(32));
+}
 
 $usuario = $_SESSION['usuario'];
+require_once __DIR__ . '/../Controlador/controladorAcceso.php';
+ControladorAcceso::exigir('certificado');
 $controller = new ControladorInsSacramento();
 $certificadoData = [];
+$antecedenteBautizo = [];
+$edadConfirmacion = '';
 $mensaje = '';
+$mensajeEdicion = isset($_GET['actualizado']) ? 'Datos del certificado actualizados correctamente.' : '';
+$modoEdicion = false;
 
 if (isset($_GET['CodIns'])) {
   $codIns = $_GET['CodIns'];
   $certificadoData = $controller->VerCertificadoConfirmacion($codIns);
+  if ($certificadoData) {
+    $antecedenteBautizo = $controller->VerCertificadoExtraC($certificadoData['CiPersona'], 'Celebrante', $codIns) ?: [];
+    $nacimiento = DateTimeImmutable::createFromFormat('!Y-m-d', (string) ($certificadoData['FechaNac'] ?? ''));
+    $confirmacion = DateTimeImmutable::createFromFormat('!Y-m-d', (string) ($certificadoData['FechaReal'] ?? ''));
+    if ($nacimiento && $confirmacion && $nacimiento->format('Y-m-d') === $certificadoData['FechaNac']
+        && $confirmacion->format('Y-m-d') === $certificadoData['FechaReal'] && $nacimiento <= $confirmacion) {
+      $edadConfirmacion = $nacimiento->diff($confirmacion)->y . ' años';
+    }
+  }
+}
+$partidaGuardada = $certificadoData
+  && trim((string) ($certificadoData['NroLibro'] ?? '')) !== ''
+  && trim((string) ($certificadoData['NroPag'] ?? '')) !== ''
+  && trim((string) ($certificadoData['NroPart'] ?? '')) !== '';
+
+$padreMostrar = trim((string) ($certificadoData['NombrePadreManual'] ?? '')) !== ''
+  ? $certificadoData['NombrePadreManual'] : ($certificadoData['NombrePadre'] ?? '');
+$madreMostrar = trim((string) ($certificadoData['NombreMadreManual'] ?? '')) !== ''
+  ? $certificadoData['NombreMadreManual'] : ($certificadoData['NombreMadre'] ?? '');
+$padrinoMostrar = trim((string) ($certificadoData['NombrePadrinoManual'] ?? '')) !== ''
+  ? $certificadoData['NombrePadrinoManual'] : ($certificadoData['NombrePadrino'] ?? '');
+$madrinaMostrar = trim((string) ($certificadoData['NombreMadrinaManual'] ?? '')) !== ''
+  ? $certificadoData['NombreMadrinaManual'] : ($certificadoData['NombreMadrina'] ?? '');
+$parroquiaBauMostrar = $antecedenteBautizo['ParroquiaBau'] ?? '';
+$fechaBauMostrar = $antecedenteBautizo['FechaBau'] ?? '';
+$presbiteroMostrar = (string) ($certificadoData['PresbiteroEm'] ?? '');
+$celebrantePresMostrar = (string) ($certificadoData['CelebrantePres'] ?? '');
+$observacionMostrar = (string) ($certificadoData['Observacion'] ?? '');
+$valorFormulario = function ($campo, $actual) {
+  if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['actualizar_datos_confirmacion'])) {
+    return $_POST[$campo] ?? '';
+  }
+  return $actual;
+};
+
+$mensajeEmision = '';
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['cambiar_emision'])) {
+  try {
+    $nroEmision = (string) ($_POST['NroEmision'] ?? '');
+    $controller->ActualizarNroEmision((int) ($_POST['CodIns'] ?? ($codIns ?? 0)), $nroEmision);
+    $certificadoData['NroEmision'] = $nroEmision;
+    $mensajeEmision = 'ok';
+  } catch (Throwable $e) {
+    $mensajeEmision = $e->getMessage();
+  }
+}
+
+$mensajeFecha = '';
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['actualizar_fecha_emision'])) {
+  try {
+    if (!$partidaGuardada) {
+      throw new InvalidArgumentException('Guarde primero los datos de la partida.');
+    }
+    $controller->ActualizarFechaEmision((int) ($codIns ?? 0));
+    $certificadoData['FechaEmision'] = date('Y-m-d');
+    $mensajeFecha = 'ok';
+  } catch (Throwable $e) {
+    $mensajeFecha = $e->getMessage();
+  }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['actualizar_datos_confirmacion'])) {
+  try {
+    if (!is_string($_POST['token_confirmacion'] ?? null) || !hash_equals($_SESSION['token_detalle_confirmacion'], $_POST['token_confirmacion'])) {
+      throw new InvalidArgumentException('Recargue la página antes de guardar.');
+    }
+    $controller->ActualizarDatosConfirmacion((int) ($codIns ?? 0), $_POST);
+    $_SESSION['token_detalle_confirmacion'] = bin2hex(random_bytes(32));
+    header('Location: VistaRegistradoConfirmacion.php?CodIns=' . (int) $codIns . '&actualizado=1');
+    exit;
+  } catch (InvalidArgumentException $e) {
+    $mensajeEdicion = $e->getMessage();
+    $modoEdicion = true;
+  } catch (Throwable $e) {
+    error_log('Error al actualizar datos de confirmación: ' . $e->getMessage());
+    $mensajeEdicion = 'No se pudieron guardar los datos. Intente nuevamente.';
+    $modoEdicion = true;
+  }
 }
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrar_certificado'])) {
@@ -37,7 +124,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrar_certificado'
   <link rel="shortcut icon" href="../assets/images/Icono.png">
   <link rel="stylesheet" type="text/css" href="../assets/vendor/font-awesome/css/all.min.css">
   <link rel="stylesheet" type="text/css" href="../assets/vendor/bootstrap-icons/bootstrap-icons.css">
-  <link rel="stylesheet" type="text/css" href="../assets/css/style.css">
+  <link rel="stylesheet" type="text/css" href="../assets/css/style.css?v=<?php echo filemtime(__DIR__ . '/../assets/css/style.css'); ?>">
+  <link rel="stylesheet" type="text/css" href="../assets/css/logo-cabecera.css?v=<?= filemtime(__DIR__ . '/../assets/css/logo-cabecera.css') ?>">
   <script src="../assets/js/jquery-3.6.4.min.js"></script>
 </head>
 
@@ -47,8 +135,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrar_certificado'
     <nav class="navbar navbar-expand-lg">
       <div class="container">
         <a class="navbar-brand" href="VistaPersonal.php">
-          <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png" alt="logo">
-          <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png" alt="logo">
+          <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo.png') ?>" alt="logo">
+          <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo-light.png') ?>" alt="logo">
         </a>
 
         <ul class="nav flex-nowrap align-items-center ms-sm-3 list-unstyled">
@@ -60,13 +148,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrar_certificado'
 
           <li class="nav-item ms-2 dropdown">
             <a class="nav-link btn icon-md p-0" href="#" id="profileDropdown" role="button" data-bs-auto-close="outside" data-bs-display="static" data-bs-toggle="dropdown" aria-expanded="false">
-              <img class="avatar-img rounded border border-white border-3" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}"; ?>" alt="">
+              <img class="avatar-img rounded border border-white border-3" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}?v=" . time(); ?>" alt="">
             </a>
             <ul class="dropdown-menu dropdown-animation dropdown-menu-end pt-3 small me-md-n3" aria-labelledby="profileDropdown">
               <li class="px-3">
                 <div class="d-flex align-items-center position-relative">
                   <div class="avatar me-3">
-                    <img class="avatar-img rounded-circle" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}"; ?>" alt="avatar">
+                    <img class="avatar-img rounded-circle" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}?v=" . time(); ?>" alt="avatar">
                   </div>
                   <div>
                     <a class="h6 stretched-link" href="#"><?php echo $usuario['Nombre'] . " " . $usuario['Paterno'] . " " . $usuario['Materno']; ?></a>
@@ -114,7 +202,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrar_certificado'
     </nav>
   </header>
   <main>
-    <div class="container">
+    <div class="container personal-dashboard-container">
       <div class="row g-4">
         <div class="col-lg-3">
           <div class="d-flex align-items-center d-lg-none">
@@ -128,20 +216,20 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrar_certificado'
             <div class="offcanvas offcanvas-start" tabindex="-1" id="offcanvasSideNavbar">
               <div class="offcanvas-header">
                 <a class="navbar-brand" href="#">
-                  <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png" alt="logo">
-                  <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png" alt="logo">
+                  <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo.png') ?>" alt="logo">
+                  <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo-light.png') ?>" alt="logo">
                 </a>
                 <button type="button" class="btn-close text-reset ms-auto" data-bs-dismiss="offcanvas" aria-label="Close"></button>
               </div>
 
               <div class="offcanvas-body d-block px-2 px-lg-0">
                 <div class="card overflow-hidden">
-                  <div class="h-50px" style="background-image:url(<?php echo ($usuario['FondoPer'] == 'Ninguno' || empty($usuario['FondoPer'])) ? '../assets/images/fondo/Ninguno.jpg' : "../assets/images/fondo/{$usuario['FondoPer']}"; ?>); background-position: center; background-size: cover; background-repeat: no-repeat;">
+                  <div class="h-50px" style="background-image:url(<?php echo ($usuario['FondoPer'] == 'Ninguno' || empty($usuario['FondoPer'])) ? '../assets/images/fondo/Ninguno.jpg' : "../assets/images/fondo/{$usuario['FondoPer']}?v=" . time(); ?>); background-position: center; background-size: cover; background-repeat: no-repeat;">
                   </div>
                   <div class="card-body pt-0">
                     <div class="text-center">
                       <div class="avatar avatar-lg mt-n5 mb-3">
-                        <img class="avatar-img rounded border border-white border-3" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}"; ?>" alt="">
+                        <img class="avatar-img rounded border border-white border-3" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}?v=" . time(); ?>" alt="">
                       </div>
                       <h5 class="mb-0"> <a href="PerfilAdmin.php"><?php echo $usuario['Nombre'] . " " . $usuario['Paterno'] . " " . $usuario['Materno']; ?></a> </h5>
                       <small><?php echo $usuario['DescripCar']; ?></small>
@@ -150,34 +238,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrar_certificado'
 
                     <hr>
 
-                    <ul class="nav nav-link-secondary flex-column fw-bold gap-2">
-                      <li class="nav-item">
-                        <a class="nav-link" href="VistaPersonal.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/mensaje.png" alt=""><span>Inicio </span></a>
-                      </li>
-                      <li class="nav-item">
-                        <a class="nav-link" href="VistaPersona.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/nuevo.png" alt=""><span>Persona </span></a>
-                      </li>
-                      <li class="nav-item">
-                        <a class="nav-link" href="VistaReservas.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/instrucciones.png" alt=""><span>Celebración </span></a>
-                      </li>
-                      <?php if ($usuario['DescripCar'] == 'Párroco') { ?>
-                        <li class="nav-item">
-                          <a class="nav-link" href="VistaGesPersonal.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/seguro.png" alt=""><span>Personal</span></a>
-                        </li>
-                        <li class="nav-item">
-                          <a class="nav-link" href="VistaCoordinadorAdmin.php"> <span>🔥 ⚪ Coordinador</span></a>
-                        </li>
-                      <?php } ?>
-                      <li class="nav-item">
-                        <a class="nav-link active" href="VistaSolicitante.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/contrato.png" alt=""><span>Certificado </span></a>
-                      </li>
-                      <?php if ($usuario['DescripCar'] != "Personal") { ?>
-                        <li class="nav-item">
-                          <a class="nav-link" href="VistaEmitidos.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/Emitido.png" alt=""><span>Certificado Emitido </span></a>
-                        </li>
-                      <?php } ?>
-
-                    </ul>
+                    <?php require_once __DIR__ . '/../Controlador/controladorAcceso.php'; ControladorAcceso::renderMenu(); ?>
                   </div>
                   <div class="card-footer text-center py-2">
                     <a class="btn btn-link btn-sm" href="PerfilAdmin.php">Ver mi Perfil</a>
@@ -196,25 +257,132 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrar_certificado'
               <div class="mx-auto bg-mode shadow rounded p-4 mt-2 col-sm-10 col-lg-10">
                 <div class="row align-items-end g-4">
                   <div class="col-sm-12 col-lg-12">
-                    <h3>Información detallada del Certificado</h3>
-                    <p><strong>Confirmante:</strong> <?php echo $certificadoData['Celebrante']; ?>(<?php echo $certificadoData['CiPersona']; ?>)</p>
-                    <p><strong>Padrino:</strong> <?php echo $certificadoData['NombrePadrino']; ?></p>
-                    <p><strong>Madrina:</strong> <?php echo $certificadoData['NombreMadrina']; ?></p>
+                    <div class="d-flex justify-content-between align-items-center gap-2">
+                      <h3 class="mb-0">Información detallada del Certificado</h3>
+                      <button type="button" id="btnEditarConfirmacion" class="btn btn-sm btn-primary-soft <?php echo $modoEdicion ? 'd-none' : ''; ?>"><i class="bi bi-pencil-square me-1"></i>Editar</button>
+                    </div>
+                    <?php if ($mensajeEdicion): ?>
+                      <div class="alert alert-<?php echo $modoEdicion ? 'danger' : 'success'; ?> py-2 mt-2 mb-2" role="alert">
+                        <?php echo htmlspecialchars($mensajeEdicion, ENT_QUOTES, 'UTF-8'); ?>
+                      </div>
+                    <?php endif; ?>
+                    <div id="detalleConfirmacionLectura" class="<?php echo $modoEdicion ? 'd-none' : ''; ?>">
+                      <p><strong>Confirmante:</strong> <?php echo $certificadoData['Celebrante']; ?>(<?php echo $certificadoData['CiPersona']; ?>)</p>
+                      <p><strong>Fecha de nacimiento:</strong> <?php echo htmlspecialchars((string) ($certificadoData['FechaNac'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></p>
+                      <p><strong>Edad al recibir la confirmación:</strong> <?php echo htmlspecialchars((string) ($edadConfirmacion), ENT_QUOTES, 'UTF-8'); ?></p>
+                      <p><strong>Padre:</strong> <?php echo htmlspecialchars((string) $padreMostrar, ENT_QUOTES, 'UTF-8'); ?></p>
+                      <p><strong>Madre:</strong> <?php echo htmlspecialchars((string) $madreMostrar, ENT_QUOTES, 'UTF-8'); ?></p>
+                      <p><strong>Parroquia donde se bautizó:</strong> <?php echo htmlspecialchars((string) $parroquiaBauMostrar, ENT_QUOTES, 'UTF-8'); ?></p>
+                      <p><strong>Fecha de bautizo:</strong> <?php echo htmlspecialchars((string) $fechaBauMostrar, ENT_QUOTES, 'UTF-8'); ?></p>
+                      <p><strong>Padrino:</strong> <?php echo htmlspecialchars((string) $padrinoMostrar, ENT_QUOTES, 'UTF-8'); ?></p>
+                      <p><strong>Madrina:</strong> <?php echo htmlspecialchars((string) $madrinaMostrar, ENT_QUOTES, 'UTF-8'); ?></p>
+                      <p><strong>Nombre Parroquia:</strong> <?php echo $certificadoData['NomParroquia']; ?></p>
+                      <p><strong>Número de Libro:</strong> <?php echo $certificadoData['NroLibro']; ?></p>
+                      <p><strong>Número de Página:</strong> <?php echo $certificadoData['NroPag']; ?></p>
+                      <p><strong>Número de Partida:</strong> <?php echo $certificadoData['NroPart']; ?></p>
+                      <p><strong>Lugar de Nacimiento:</strong> <?php echo $certificadoData['LugarNac']; ?></p>
+                      <p><strong>Fecha Real:</strong> <?php echo htmlspecialchars((string) ($certificadoData['FechaReal'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></p>
+                      <p><strong>El suscrito Pbro. (certifica y firma):</strong> <?php echo htmlspecialchars($presbiteroMostrar, ENT_QUOTES, 'UTF-8'); ?></p>
+                      <p><strong>Observaciones:</strong> <?php echo htmlspecialchars($observacionMostrar, ENT_QUOTES, 'UTF-8'); ?></p>
+                      <p><strong>Celebrante Presbítero:</strong> <?php echo htmlspecialchars($celebrantePresMostrar, ENT_QUOTES, 'UTF-8'); ?></p>
+                    </div>
 
-                    <p><strong>Nombre Parroquia:</strong> <?php echo $certificadoData['NomParroquia']; ?></p>
-                    <p><strong>Dirección Parroquia:</strong> <?php echo $certificadoData['LugParroquia']; ?></p>
-                    <p><strong>Número de Libro:</strong> <?php echo $certificadoData['NroLibro']; ?></p>
-                    <p><strong>Número de Página:</strong> <?php echo $certificadoData['NroPag']; ?></p>
-                    <p><strong>Número de Partida:</strong> <?php echo $certificadoData['NroPart']; ?></p>
-                    <p><strong>Lugar de Nacimiento:</strong> <?php echo $certificadoData['LugarNac']; ?></p>
-                    <p><strong>Fecha Real:</strong> <?php echo $certificadoData['FechaReal']; ?></p>
-                    <p><strong>Hora Real:</strong> <?php echo $certificadoData['HoraReal']; ?></p>
-                    <p><strong>Número de Emisión:</strong> <?php echo $certificadoData['NroEmision']; ?></p>
-                    <p><strong>Fecha de Emisión:</strong> <?php echo $certificadoData['FechaEmision']; ?></p>
-                    <p><strong>Presbítero Emisor:</strong> <?php echo $certificadoData['PresbiteroEm']; ?></p>
-                    <p><strong>Observación:</strong> <?php echo $certificadoData['Observacion']; ?></p>
-                    <p><strong>Celebrante Presbítero:</strong> <?php echo $certificadoData['CelebrantePres']; ?></p>
-                    <p><strong>Estado del Certificado:</strong> <?php echo $certificadoData['EstadoCert']; ?></p>
+                    <form method="POST" id="formEditarConfirmacion" class="row g-3 mt-1 <?php echo $modoEdicion ? '' : 'd-none'; ?>">
+                      <input type="hidden" name="token_confirmacion" value="<?php echo htmlspecialchars($_SESSION['token_detalle_confirmacion'], ENT_QUOTES, 'UTF-8'); ?>">
+                      <div class="col-sm-6">
+                        <label class="form-label" for="editNombrePadre">Padre</label>
+                        <input type="text" class="form-control" id="editNombrePadre" name="NombrePadreManual" maxlength="100" value="<?php echo htmlspecialchars((string) $valorFormulario('NombrePadreManual', $padreMostrar), ENT_QUOTES, 'UTF-8'); ?>">
+                      </div>
+                      <div class="col-sm-6">
+                        <label class="form-label" for="editNombreMadre">Madre</label>
+                        <input type="text" class="form-control" id="editNombreMadre" name="NombreMadreManual" maxlength="100" value="<?php echo htmlspecialchars((string) $valorFormulario('NombreMadreManual', $madreMostrar), ENT_QUOTES, 'UTF-8'); ?>">
+                      </div>
+                      <div class="col-sm-6">
+                        <label class="form-label" for="editNombrePadrino">Padrino</label>
+                        <input type="text" class="form-control" id="editNombrePadrino" name="NombrePadrinoManual" maxlength="100" value="<?php echo htmlspecialchars((string) $valorFormulario('NombrePadrinoManual', $padrinoMostrar), ENT_QUOTES, 'UTF-8'); ?>">
+                      </div>
+                      <div class="col-sm-6">
+                        <label class="form-label" for="editNombreMadrina">Madrina</label>
+                        <input type="text" class="form-control" id="editNombreMadrina" name="NombreMadrinaManual" maxlength="100" value="<?php echo htmlspecialchars((string) $valorFormulario('NombreMadrinaManual', $madrinaMostrar), ENT_QUOTES, 'UTF-8'); ?>">
+                      </div>
+                      <div class="col-sm-6">
+                        <label class="form-label" for="editParroquiaBau">Parroquia donde se bautizó</label>
+                        <input type="text" class="form-control" id="editParroquiaBau" name="ParroquiaBau" maxlength="30" value="<?php echo htmlspecialchars((string) $valorFormulario('ParroquiaBau', $parroquiaBauMostrar), ENT_QUOTES, 'UTF-8'); ?>">
+                      </div>
+                      <div class="col-sm-6">
+                        <label class="form-label" for="editFechaBau">Fecha de bautizo</label>
+                        <input type="date" class="form-control" id="editFechaBau" name="FechaBau" value="<?php echo htmlspecialchars((string) $valorFormulario('FechaBau', $fechaBauMostrar), ENT_QUOTES, 'UTF-8'); ?>">
+                      </div>
+                      <div class="col-sm-6">
+                        <label class="form-label" for="editNomParroquia">Nombre Parroquia</label>
+                        <input type="text" class="form-control" id="editNomParroquia" name="NomParroquia" maxlength="50" value="<?php echo htmlspecialchars((string) $valorFormulario('NomParroquia', $certificadoData['NomParroquia'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
+                      </div>
+                      <div class="col-sm-2">
+                        <label class="form-label" for="editNroLibro">Número de Libro</label>
+                        <input type="text" class="form-control" id="editNroLibro" name="NroLibro" maxlength="10" value="<?php echo htmlspecialchars((string) $valorFormulario('NroLibro', $certificadoData['NroLibro'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
+                      </div>
+                      <div class="col-sm-2">
+                        <label class="form-label" for="editNroPag">Número de Página</label>
+                        <input type="text" class="form-control" id="editNroPag" name="NroPag" maxlength="10" value="<?php echo htmlspecialchars((string) $valorFormulario('NroPag', $certificadoData['NroPag'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
+                      </div>
+                      <div class="col-sm-2">
+                        <label class="form-label" for="editNroPart">Número de Partida</label>
+                        <input type="text" class="form-control" id="editNroPart" name="NroPart" maxlength="10" value="<?php echo htmlspecialchars((string) $valorFormulario('NroPart', $certificadoData['NroPart'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
+                      </div>
+                      <div class="col-sm-6">
+                        <label class="form-label" for="editLugarNac">Lugar de Nacimiento</label>
+                        <input type="text" class="form-control" id="editLugarNac" name="LugarNac" maxlength="50" value="<?php echo htmlspecialchars((string) $valorFormulario('LugarNac', $certificadoData['LugarNac'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
+                      </div>
+                      <div class="col-sm-6">
+                        <label class="form-label" for="editFechaReal">Fecha Real</label>
+                        <input type="date" class="form-control" id="editFechaReal" name="FechaReal" value="<?php echo htmlspecialchars((string) $valorFormulario('FechaReal', $certificadoData['FechaReal'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
+                      </div>
+                      <div class="col-sm-6">
+                        <label class="form-label" for="editPresbitero">Pbro. que certifica y firma</label>
+                        <input type="text" class="form-control" id="editPresbitero" name="PresbiteroEm" maxlength="50" value="<?php echo htmlspecialchars((string) $valorFormulario('PresbiteroEm', $presbiteroMostrar), ENT_QUOTES, 'UTF-8'); ?>">
+                      </div>
+                      <div class="col-sm-6">
+                        <label class="form-label" for="editCelebrantePres">Celebrante Presbítero</label>
+                        <input type="text" class="form-control" id="editCelebrantePres" name="CelebrantePres" maxlength="50" value="<?php echo htmlspecialchars((string) $valorFormulario('CelebrantePres', $celebrantePresMostrar), ENT_QUOTES, 'UTF-8'); ?>">
+                      </div>
+                      <div class="col-12">
+                        <label class="form-label" for="editObservacion">Observaciones</label>
+                        <input type="text" class="form-control" id="editObservacion" name="Observacion" maxlength="80" value="<?php echo htmlspecialchars((string) $valorFormulario('Observacion', $observacionMostrar), ENT_QUOTES, 'UTF-8'); ?>">
+                      </div>
+                      <div class="col-12 d-flex gap-2">
+                        <button type="button" id="btnCancelarConfirmacion" class="btn btn-warning-soft">Cancelar</button>
+                        <button type="submit" name="actualizar_datos_confirmacion" value="1" class="btn btn-success-soft"><i class="bi bi-check-circle me-1"></i>Actualizar</button>
+                      </div>
+                    </form>
+                    <div class="d-flex align-items-center flex-wrap gap-2">
+                      <strong class="me-1">Número de Emisión:</strong>
+                      <form method="POST" class="d-flex align-items-center gap-2 mb-0">
+                        <input type="hidden" name="CodIns" value="<?php echo htmlspecialchars((string) ($codIns ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
+                        <input type="number" class="form-control form-control-sm" style="width: 130px;" name="NroEmision" value="<?php echo htmlspecialchars((string) $certificadoData['NroEmision'], ENT_QUOTES, 'UTF-8'); ?>" min="1" max="9999999999" required>
+                        <button type="submit" name="cambiar_emision" value="1" class="btn btn-sm btn-primary-soft">Guardar</button>
+                      </form>
+                    </div>
+                    <?php if ($mensajeEmision !== ''): ?>
+                      <p class="<?php echo $mensajeEmision === 'ok' ? 'text-success' : 'text-danger'; ?> mb-1">
+                        <?php echo $mensajeEmision === 'ok' ? 'Número de emisión actualizado.' : htmlspecialchars($mensajeEmision, ENT_QUOTES, 'UTF-8'); ?>
+                      </p>
+                    <?php endif; ?>
+                    <div class="d-flex align-items-center flex-wrap gap-2">
+                      <strong class="me-1">Fecha de última emisión:</strong>
+                      <span><?php echo htmlspecialchars((string) $certificadoData['FechaEmision'], ENT_QUOTES, 'UTF-8'); ?></span>
+                      <?php if ($partidaGuardada): ?>
+                        <form method="POST" class="mb-0">
+                          <input type="hidden" name="CodIns" value="<?php echo htmlspecialchars((string) ($codIns ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
+                          <button type="submit" name="actualizar_fecha_emision" value="1" class="btn btn-sm <?php echo $mensajeFecha === 'ok' ? 'btn-success' : 'btn-outline-primary'; ?>"><i class="bi <?php echo $mensajeFecha === 'ok' ? 'bi-check-circle' : 'bi-calendar-check'; ?> me-1"></i><?php echo $mensajeFecha === 'ok' ? 'Fecha actualizada' : 'Actualizar a hoy'; ?></button>
+                        </form>
+                      <?php else: ?>
+                        <small class="text-muted">Guarde primero los datos de la partida para cambiar la fecha de emisión.</small>
+                      <?php endif; ?>
+                    </div>
+                    <?php if ($mensajeFecha !== '' && $mensajeFecha !== 'ok'): ?>
+                      <p class="text-danger mb-1"><?php echo htmlspecialchars($mensajeFecha, ENT_QUOTES, 'UTF-8'); ?></p>
+                    <?php endif; ?>
+                    <p><strong>Estado del Certificado:</strong> <?php echo htmlspecialchars((string) ($certificadoData['EstadoCert'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></p>
 
                     <div class="col-sm-12 col-lg-12 d-flex align-items-center">
                       <div class="col-sm-4 col-lg-4">
@@ -241,10 +409,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrar_certificado'
                     <input type="text" class="form-control" name="NomParroquia" placeholder="Nombre de la Parroquia" required>
                   </div>
                   <div class="col-sm-6 col-lg-6">
-                    <label class="form-label">Lugar de la Parroquia</label>
-                    <input type="text" class="form-control" name="LugParroquia" placeholder="Lugar de la Parroquia" required>
-                  </div>
-                  <div class="col-sm-6 col-lg-6">
                     <label class="form-label">Número de Libro</label>
                     <input type="text" class="form-control" name="NroLibro" placeholder="Número de Libro" required>
                   </div>
@@ -260,10 +424,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrar_certificado'
                   <div class="col-sm-6 col-lg-6">
                     <label class="form-label">Fecha Real</label>
                     <input type="date" class="form-control" name="FechaReal" required>
-                  </div>
-                  <div class="col-sm-6 col-lg-6">
-                    <label class="form-label">Hora Real</label>
-                    <input type="time" class="form-control" name="HoraReal" required>
                   </div>
                   <div class="col-sm-6 col-lg-6">
                     <label class="form-label">Número de Emisión</label>
@@ -328,6 +488,27 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrar_certificado'
 
       setInterval(obtenerEstado, 5000);
     });
+  </script>
+  <script>
+    (function () {
+      var btnEditar = document.getElementById('btnEditarConfirmacion');
+      var lectura = document.getElementById('detalleConfirmacionLectura');
+      var formulario = document.getElementById('formEditarConfirmacion');
+      var btnCancelar = document.getElementById('btnCancelarConfirmacion');
+      if (!btnEditar || !lectura || !formulario) return;
+      btnEditar.addEventListener('click', function () {
+        lectura.classList.add('d-none');
+        formulario.classList.remove('d-none');
+        btnEditar.classList.add('d-none');
+      });
+      if (btnCancelar) {
+        btnCancelar.addEventListener('click', function () {
+          formulario.classList.add('d-none');
+          lectura.classList.remove('d-none');
+          btnEditar.classList.remove('d-none');
+        });
+      }
+    }());
   </script>
   <script src="../assets/vendor/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
   <script src="../assets/js/functions.js"></script>

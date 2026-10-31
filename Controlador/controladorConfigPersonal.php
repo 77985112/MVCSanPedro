@@ -15,7 +15,14 @@ class UsuarioController
             $archivoTmp = $file['tmp_name'];
             $nombreArchivo = $file['name'];
             $extension = strtolower(pathinfo($nombreArchivo, PATHINFO_EXTENSION));
-    
+
+            // Validar extensión permitida
+            $extensionesPermitidas = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+            if (!in_array($extension, $extensionesPermitidas, true)) {
+                echo "Formato de imagen no permitido. Use JPG, JPEG, PNG, GIF o WEBP.";
+                return false;
+            }
+
             // Obtener las iniciales del nombre completo
             $nombreCompleto = $_SESSION['usuario']['Nombre'] . ' ' . $_SESSION['usuario']['Paterno'] . ' ' . $_SESSION['usuario']['Materno'];
             $iniciales = '';
@@ -24,32 +31,32 @@ class UsuarioController
                     $iniciales .= strtoupper($parte[0]);
                 }
             }
-    
-            // Generar el nuevo nombre de archivo
-            $nuevaImagenNombre = "{$ciPersonal}{$iniciales}{$tipoImagen}.{$extension}";
-    
+
+            $campo = ($tipoImagen === 'PerfilPer') ? 'PerfilPer' : 'FondoPer';
+
+            // Generar un nombre único corto para evitar caché y quepa en VARCHAR(25)
+            $tipoCorto = ($tipoImagen === 'PerfilPer') ? 'P' : 'F';
+            $timestamp = base_convert((string) time(), 10, 36);
+            $nuevaImagenNombre = "{$ciPersonal}_{$tipoCorto}_{$timestamp}.{$extension}";
+
             // Definir la ruta de la carpeta según el tipo de imagen
             $rutaCarpeta = ($tipoImagen === 'PerfilPer') ? "../assets/images/avatar/" : "../assets/images/fondo/";
             $rutaCompleta = $rutaCarpeta . $nuevaImagenNombre;
-    
-            // Eliminar imagen anterior si existe
-            if ($tipoImagen === 'PerfilPer' && !empty($_SESSION['usuario']['PerfilPer'])) {
-                $rutaImagenAnterior = $rutaCarpeta . $_SESSION['usuario']['PerfilPer'];
-                if (file_exists($rutaImagenAnterior)) {
-                    unlink($rutaImagenAnterior);
-                }
-            } elseif ($tipoImagen === 'FondoPer' && !empty($_SESSION['usuario']['FondoPer'])) {
-                $rutaImagenAnterior = $rutaCarpeta . $_SESSION['usuario']['FondoPer'];
-                if (file_exists($rutaImagenAnterior)) {
-                    unlink($rutaImagenAnterior);
+
+            // Borrar la imagen/fondo anterior si existe y no es la genérica
+            $imagenAnterior = $_SESSION['usuario'][$campo] ?? 'Ninguno';
+            if ($imagenAnterior !== 'Ninguno' && !empty($imagenAnterior)) {
+                $rutaAnterior = $rutaCarpeta . basename($imagenAnterior);
+                if (file_exists($rutaAnterior) && is_file($rutaAnterior)) {
+                    @unlink($rutaAnterior);
                 }
             }
-    
+
             // Mover el archivo a la carpeta de destino
             if (move_uploaded_file($archivoTmp, $rutaCompleta)) {
                 // Actualizar la base de datos
-                if ($this->usuarioModel->actualizarImagen($ciPersonal, ($tipoImagen === 'PerfilPer' ? 'PerfilPer' : 'FondoPer'), $nuevaImagenNombre)) {
-                    $_SESSION['usuario'][($tipoImagen === 'PerfilPer' ? 'PerfilPer' : 'FondoPer')] = $nuevaImagenNombre;
+                if ($this->usuarioModel->actualizarImagen($ciPersonal, $campo, $nuevaImagenNombre)) {
+                    $_SESSION['usuario'][$campo] = $nuevaImagenNombre;
                     return true;
                 } else {
                     echo "Error al actualizar la base de datos.";
@@ -85,7 +92,11 @@ class UsuarioController
     {
         if ($actualC === $claveActual) {
             if ($nuevoC1 === $nuevoC2) {
-                return $this->usuarioModel->actualizarContrasena($ciPersonal, password_hash($nuevoC1, PASSWORD_DEFAULT));
+                if ($this->usuarioModel->actualizarContrasena($ciPersonal, $nuevoC1)) {
+                    $_SESSION['usuario']['ClavePer'] = $nuevoC1;
+                    return true;
+                }
+                return false;
             } else {
                 echo "Las nuevas contraseñas no coinciden.";
             }

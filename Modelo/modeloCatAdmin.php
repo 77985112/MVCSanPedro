@@ -83,8 +83,8 @@ class Catequista
     {
         $sql = "SELECT c.CiCat, CONCAT(p.Nombre, ' ', p.ApPaterno, ' ', p.ApMaterno) AS NombreCompleto, c.ImagenCat, a.RolCat
                 FROM catequista c
-                INNER JOIN persona p ON c.CiCat = p.CiPersona
-                INNER JOIN asignacion a ON c.CiCat = a.CiCat
+                INNER JOIN `persona` p ON c.CiCat = p.CiPersona
+                INNER JOIN `asignacion` a ON c.CiCat = a.CiCat
                 WHERE a.IdGrupo = ? AND c.CiCat != ?";
 
         $stmt = $this->conn->prepare($sql);
@@ -104,8 +104,8 @@ class Catequista
     {
         $sql = "SELECT c.CiCat, CONCAT(p.Nombre, ' ', p.ApPaterno, ' ', p.ApMaterno) AS NombreCompleto, c.ImagenCat, a.RolCat
                 FROM catequista c
-                INNER JOIN persona p ON c.CiCat = p.CiPersona
-                INNER JOIN asignacion a ON c.CiCat = a.CiCat
+                INNER JOIN `persona` p ON c.CiCat = p.CiPersona
+                INNER JOIN `asignacion` a ON c.CiCat = a.CiCat
                 WHERE a.IdGrupo = ?";
 
         $stmt = $this->conn->prepare($sql);

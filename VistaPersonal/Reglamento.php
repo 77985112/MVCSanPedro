@@ -18,7 +18,8 @@ $usuario = $_SESSION['usuario'];
     <link rel="shortcut icon" href="../assets/images/Icono.png">
     <link rel="stylesheet" type="text/css" href="../assets/vendor/font-awesome/css/all.min.css">
     <link rel="stylesheet" type="text/css" href="../assets/vendor/bootstrap-icons/bootstrap-icons.css">
-    <link rel="stylesheet" type="text/css" href="../assets/css/style.css">
+    <link rel="stylesheet" type="text/css" href="../assets/css/style.css?v=<?php echo filemtime(__DIR__ . '/../assets/css/style.css'); ?>">
+    <link rel="stylesheet" type="text/css" href="../assets/css/logo-cabecera.css?v=<?= filemtime(__DIR__ . '/../assets/css/logo-cabecera.css') ?>">
     <script src="../assets/js/jquery-3.6.4.min.js"></script>
 </head>
 
@@ -27,8 +28,8 @@ $usuario = $_SESSION['usuario'];
         <nav class="navbar navbar-expand-lg">
             <div class="container">
                 <a class="navbar-brand" href="VistaPersonal.php">
-                    <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png" alt="logo">
-                    <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png" alt="logo">
+                    <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo.png') ?>" alt="logo">
+                    <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo-light.png') ?>" alt="logo">
                 </a>
 
                 <ul class="nav flex-nowrap align-items-center ms-sm-3 list-unstyled">
@@ -40,13 +41,13 @@ $usuario = $_SESSION['usuario'];
 
                     <li class="nav-item ms-2 dropdown">
                         <a class="nav-link btn icon-md p-0" href="#" id="profileDropdown" role="button" data-bs-auto-close="outside" data-bs-display="static" data-bs-toggle="dropdown" aria-expanded="false">
-                            <img class="avatar-img rounded border border-white border-3" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}"; ?>" alt="">
+                            <img class="avatar-img rounded border border-white border-3" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}?v=" . time(); ?>" alt="">
                         </a>
                         <ul class="dropdown-menu dropdown-animation dropdown-menu-end pt-3 small me-md-n3" aria-labelledby="profileDropdown">
                             <li class="px-3">
                                 <div class="d-flex align-items-center position-relative">
                                     <div class="avatar me-3">
-                                        <img class="avatar-img rounded-circle" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}"; ?>" alt="avatar">
+                                        <img class="avatar-img rounded-circle" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}?v=" . time(); ?>" alt="avatar">
                                     </div>
                                     <div>
                                         <a class="h6 stretched-link" href="#"><?php echo $usuario['Nombre'] . " " . $usuario['Paterno'] . " " . $usuario['Materno']; ?></a>
@@ -96,7 +97,7 @@ $usuario = $_SESSION['usuario'];
 
 
     <main>
-        <div class="container">
+        <div class="container personal-dashboard-container">
             <div class="row g-4">
                 <div class="col-lg-8 mx-auto">
                     <div class="card">

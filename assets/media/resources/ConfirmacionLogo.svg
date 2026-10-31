@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 320" role="img" aria-label="Logo Confirmación - cruz con paloma">
+  <defs>
+    <linearGradient id="confCruzRoja" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#b31212"/>
+      <stop offset="55%" stop-color="#e01b16"/>
+      <stop offset="100%" stop-color="#a80f0f"/>
+    </linearGradient>
+  </defs>
+
+  <g fill="url(#confCruzRoja)" stroke="#f4d03f" stroke-width="4" stroke-linejoin="round">
+    <path d="M95 150 L95 55 L110 25 L130 55 L150 25 L165 55 L165 150"/>
+    <path d="M95 150 L95 55 L110 25 L130 55 L150 25 L165 55 L165 150" transform="rotate(90 130 150)"/>
+    <path d="M95 150 L95 55 L110 25 L130 55 L150 25 L165 55 L165 150" transform="rotate(180 130 150)"/>
+    <path d="M95 150 L95 55 L110 25 L130 55 L150 25 L165 55 L165 150" transform="rotate(270 130 150)"/>
+  </g>
+
+  <g fill="#ffffff">
+    <path d="M130 70
+      C122 86 118 104 116 116
+      C90 98 58 96 30 108
+      C34 126 62 144 112 152
+      C114 170 120 188 130 204
+      C140 188 146 170 148 152
+      C198 144 226 126 230 108
+      C202 96 170 98 144 116
+      C142 104 138 86 130 70 Z"/>
+    <path d="M118 80 L106 62 L130 70 L154 62 L142 80 Z"/>
+    <circle cx="130" cy="204" r="9"/>
+    <path d="M130 212 L123 223 L137 223 Z"/>
+  </g>
+</svg>

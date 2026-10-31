@@ -66,7 +66,7 @@ $sql_actividades = "SELECT DISTINCT FechaAsisConf FROM asistenciacel
 $result_actividades = $conexion->query($sql_actividades);
 
 $sql_reuniones = "SELECT DISTINCT r.FechaReu 
-                  FROM ReunionCel r
+                  FROM `reunioncel` r
                   INNER JOIN asistenciaapoderado aa ON r.IdReunion = aa.IdReunion
                   INNER JOIN inscripcion i ON aa.IdInscripcion = i.IdInscripcion
                   WHERE i.IdGrupo = $idGrupo
@@ -97,8 +97,8 @@ function dibujarTabla($pdf, $titulo, $result_fechas, $sql_asistencias, $conexion
     $pdf->Ln(15);
     
     $sql_personas = "SELECT DISTINCT p.CiPersona, p.Nombre, p.ApPaterno, p.ApMaterno, i.IdInscripcion 
-                     FROM persona p 
-                     INNER JOIN celebrante c ON p.CiPersona = c.CiCel
+                     FROM `persona` p 
+                     INNER JOIN `celebrante` c ON p.CiPersona = c.CiCel
                      INNER JOIN inscripcion i ON c.CiCel = i.CiCel
                      WHERE i.IdGrupo = $idGrupo";
     $result_personas = $conexion->query($sql_personas);
@@ -138,7 +138,7 @@ dibujarTabla($pdf, 'Asistencia a Actividades', $result_actividades, $sql_asisten
 
 $sql_asistencias_reuniones = "SELECT aa.DetalleAsis as TipoAsis
                               FROM asistenciaapoderado aa
-                              INNER JOIN ReunionCel r ON aa.IdReunion = r.IdReunion
+                              INNER JOIN `reunioncel` r ON aa.IdReunion = r.IdReunion
                               WHERE aa.IdInscripcion = %d AND r.FechaReu = '%s'";
 dibujarTabla($pdf, 'Asistencia a Reuniones', $result_reuniones, $sql_asistencias_reuniones, $conexion, $name_width, $date_width, $table_width + 30, $pdf->GetY()-32, $idGrupo, true);
 

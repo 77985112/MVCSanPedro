@@ -102,14 +102,14 @@ class AsistenciaApoderadoModel
 
     public function obtenerReunion()
     {
-        $stmt = $this->conn->prepare("SELECT * FROM reunioncel");
+        $stmt = $this->conn->prepare("SELECT * FROM `reunioncel`");
         $stmt->execute();
         return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
     }
 
 
     public function RegistrarReu($data) {
-        $sql = "INSERT INTO ReunionCel (FechaReu, HoraReu, Sacramento, DetalleReu, Gestion, CiCat, IdGrupo) 
+        $sql = "INSERT INTO `reunioncel` (FechaReu, HoraReu, Sacramento, DetalleReu, Gestion, CiCat, IdGrupo) 
                 VALUES (?, ?, ?, ?, ?, ?, ?)";
         
         $stmt = $this->conn->prepare($sql);

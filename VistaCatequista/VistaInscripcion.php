@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 require_once '../Controlador/controladorCelAdmin.php';
 require_once '../Controlador/ControladorPersona.php';
 
@@ -8,9 +8,90 @@ if (!isset($_SESSION['CiPersona'])) {
     exit();
 }
 $Catequista = $_SESSION['CiPersona'];
-
-
 $controller = new ControladorPersona();
+$controllerCel = new CelebranteControllerAdmin();
+$mensaje = '';
+$mensaje1 = '';
+$celebranteAdmin = null;
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['registrarCel'])) {
+    $ciCel = trim((string) ($_POST['CiCelNuevo'] ?? ''));
+    $usuarioCel = trim((string) ($_POST['UsuarioCel'] ?? ''));
+    $claveCel = trim((string) ($_POST['ClaveCel'] ?? ''));
+    $sacramentoCel = $Catequista['Sacramento'] ?? '';
+    $tiposPermitidos = $sacramentoCel === 'Primera Comunión' ? [1, 2]
+        : ($sacramentoCel === 'Confirmación' ? [3, 4, 5] : []);
+    $codTipoItem = filter_var($_POST['CodTipoItem'] ?? null, FILTER_VALIDATE_INT);
+    $idGrupo = $sacramentoCel === 'Primera Comunión' ? 1 : 22;
+    $personaInscripcion = $ciCel !== '' ? $controller->buscarPersona($ciCel) : null;
+
+    if (!$personaInscripcion) {
+        $mensaje1 = 'Primero registre a la persona y luego vuelva a ingresar su identificación.';
+    } elseif ($usuarioCel === '' || $claveCel === '' ||
+        mb_strlen($usuarioCel, 'UTF-8') > 100 || mb_strlen($claveCel, 'UTF-8') > 100) {
+        $mensaje1 = 'Ingrese un usuario y una contraseña válidos para el catequisando.';
+    } elseif ($codTipoItem === false || !in_array($codTipoItem, $tiposPermitidos, true)) {
+        $mensaje1 = 'Seleccione un tipo de inscripción válido.';
+    } else {
+        $ciCel = $personaInscripcion['CiPersona'];
+        $datosCelebrante = [
+            'CiCel' => $ciCel,
+            'SacramentoCel' => $sacramentoCel,
+            'UsuarioCel' => $usuarioCel,
+            'ClaveCel' => $claveCel,
+            'IdGrupo' => $idGrupo,
+            'PreValor' => trim((string) ($_POST['PreValor'] ?? '0')),
+            'CodTipoItem' => $codTipoItem
+        ];
+        try {
+            if ($controllerCel->registrarCelebrante($datosCelebrante)) {
+                $mensaje = 'Catequisando registrado correctamente.';
+            } else {
+                $mensaje1 = 'No se pudo registrar al catequisando.';
+            }
+        } catch (Throwable $e) {
+            error_log('Inscripción de catequisando: ' . $e->getMessage());
+            $mensaje1 = 'No se pudo registrar. Verifique que el CI y el usuario no estén inscritos previamente.';
+        }
+    }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['Buscar_Celebrante'])) {
+    $ciCel = trim((string) ($_POST['CiCel'] ?? ''));
+    $celebranteAdmin = $controllerCel->buscarCelebrante($ciCel, $Catequista['Sacramento']);
+    if (!$celebranteAdmin) {
+        $mensaje1 = 'No se encontró un catequisando de este sacramento con esa identificación.';
+    }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['modificar'])) {
+    $ciCel = trim((string) ($_POST['CiCel'] ?? ''));
+    $datosCelebrante = [
+        'Sacramento' => $_POST['Sacramento'] ?? $Catequista['Sacramento'],
+        'EstadoCel' => $_POST['EstadoCel'] ?? 'Activo',
+        'PerfilCel' => $_POST['PerfilCel'] ?? 'Ninguno',
+        'FondoCel' => $_POST['FondoCel'] ?? 'Ninguno'
+    ];
+    $datosInscripcion = [
+        'IdGrupo' => (int) ($_POST['IdGrupo'] ?? 0),
+        'PreValor' => trim((string) ($_POST['PreValor'] ?? '0')),
+        'CodTipoItem' => (int) ($_POST['CodTipoItem'] ?? 0)
+    ];
+    try {
+        $controllerCel->modificarCelebrante($ciCel, $datosCelebrante, $datosInscripcion);
+        $mensaje = 'Catequisando modificado con éxito.';
+        $celebranteAdmin = $controllerCel->buscarCelebrante($ciCel, $Catequista['Sacramento']);
+    } catch (Throwable $e) {
+        error_log('Modificación de catequisando: ' . $e->getMessage());
+        $mensaje1 = 'No se pudo modificar al catequisando.';
+    }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ver_apoderado_padrino'])) {
+    $_SESSION['ACCIns'] = (int) ($_POST['ACCIns'] ?? 0);
+    header('Location: VistaCelApPad.php');
+    exit;
+}
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['crear'])) {
     $controller->crearPersona($_POST);
@@ -24,8 +105,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['actualizar'])) {
 }
 
 $persona = null;
-if (isset($_POST['ciPersona'])) {
-    $persona = $controller->buscarPersona($_POST['ciPersona']);
+if (isset($_GET['ciPersona'])) {
+    $ciPersona = trim((string) $_GET['ciPersona']);
+    header('Content-Type: application/json; charset=utf-8');
+    if ($ciPersona === '' || mb_strlen($ciPersona, 'UTF-8') > 15) {
+        echo json_encode(['error' => 'Identificación no válida'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    $persona = $controller->buscarPersona($ciPersona);
+    echo json_encode($persona ?: ['error' => 'Persona no encontrada'], JSON_UNESCAPED_UNICODE);
+    exit;
 }
 
 
@@ -40,7 +129,7 @@ function getActiveNotifications($conn)
     $sql = "SELECT n.idNotificacion, n.TituloNot, n.DetalleNot, n.FechaNotFin, CONCAT(p.Nombre, ' ', p.ApPaterno) AS datoscat 
             FROM notificaciones n 
             INNER JOIN catequista c ON n.CiNotificador = c.CiCat 
-            INNER JOIN persona p ON c.CiCat = p.CiPersona 
+            INNER JOIN `persona` p ON c.CiCat = p.CiPersona 
             WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ?
             ORDER BY n.FechaNotFin ASC";
 
@@ -73,6 +162,7 @@ $activeNotifications = getActiveNotifications($conn);
     <link rel="stylesheet" type="text/css" href="../assets/vendor/font-awesome/css/all.min.css">
     <link rel="stylesheet" type="text/css" href="../assets/vendor/bootstrap-icons/bootstrap-icons.css">
     <link rel="stylesheet" type="text/css" href="../assets/css/style.css">
+    <link rel="stylesheet" type="text/css" href="../assets/css/logo-cabecera.css?v=<?= filemtime(__DIR__ . '/../assets/css/logo-cabecera.css') ?>">
     <script src="../assets/js/jquery-3.6.4.min.js"></script>
 </head>
 
@@ -81,8 +171,8 @@ $activeNotifications = getActiveNotifications($conn);
         <nav class="navbar navbar-expand-lg">
             <div class="container">
                 <a class="navbar-brand" href="VistaCatequista.php">
-                    <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png" alt="logo">
-                    <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png" alt="logo">
+                    <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo.png') ?>" alt="logo">
+                    <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo-light.png') ?>" alt="logo">
                 </a>
 
                 <ul class="nav flex-nowrap align-items-center ms-sm-3 list-unstyled">
@@ -127,13 +217,13 @@ $activeNotifications = getActiveNotifications($conn);
 
                     <li class="nav-item ms-2 dropdown">
                         <a class="nav-link btn icon-md p-0" href="#" id="profileDropdown" role="button" data-bs-auto-close="outside" data-bs-display="static" data-bs-toggle="dropdown" aria-expanded="false">
-                            <img class="avatar-img rounded border border-white border-3" src="<?php echo ($Catequista['ImagenCat'] == 'Ninguno' || empty($Catequista['ImagenCat'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$Catequista['ImagenCat']}"; ?>" alt="">
+                            <img class="avatar-img rounded border border-white border-3" src="<?php echo ($Catequista['ImagenCat'] == 'Ninguno' || empty($Catequista['ImagenCat'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$Catequista['ImagenCat']}?v=" . time(); ?>" alt="">
                         </a>
                         <ul class="dropdown-menu dropdown-animation dropdown-menu-end pt-3 small me-md-n3" aria-labelledby="profileDropdown">
                             <li class="px-3">
                                 <div class="d-flex align-items-center position-relative">
                                     <div class="avatar me-3">
-                                        <img class="avatar-img rounded-circle" src="<?php echo ($Catequista['ImagenCat'] == 'Ninguno' || empty($Catequista['ImagenCat'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$Catequista['ImagenCat']}"; ?>" alt="avatar">
+                                        <img class="avatar-img rounded-circle" src="<?php echo ($Catequista['ImagenCat'] == 'Ninguno' || empty($Catequista['ImagenCat'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$Catequista['ImagenCat']}?v=" . time(); ?>" alt="avatar">
                                     </div>
                                     <div>
                                         <a class="h6 stretched-link" href="#"><?php echo $Catequista['Nombre'] . " " . $Catequista['ApPaterno'] . " " . $Catequista['ApMaterno']; ?></a>
@@ -205,20 +295,20 @@ $activeNotifications = getActiveNotifications($conn);
                         <div class="offcanvas offcanvas-start" tabindex="-1" id="offcanvasSideNavbar">
                             <div class="offcanvas-header">
                                 <a class="navbar-brand" href="#">
-                                    <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png" alt="logo">
-                                    <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png" alt="logo">
+                                    <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo.png') ?>" alt="logo">
+                                    <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo-light.png') ?>" alt="logo">
                                 </a>
                                 <button type="button" class="btn-close text-reset ms-auto" data-bs-dismiss="offcanvas" aria-label="Close"></button>
                             </div>
 
                             <div class="offcanvas-body d-block px-2 px-lg-0">
                                 <div class="card overflow-hidden">
-                                    <div class="h-50px" style="background-image:url(<?php echo ($Catequista['FondoCat'] == 'Ninguno' || empty($Catequista['FondoCat'])) ? '../assets/images/fondo/Ninguno.jpg' : "../assets/images/fondo/{$Catequista['FondoCat']}"; ?>); background-position: center; background-size: cover; background-repeat: no-repeat;">
+                                    <div class="h-50px" style="background-image:url(<?php echo ($Catequista['FondoCat'] == 'Ninguno' || empty($Catequista['FondoCat'])) ? '../assets/images/fondo/Ninguno.jpg' : "../assets/images/fondo/{$Catequista['FondoCat']}?v=" . time(); ?>); background-position: center; background-size: cover; background-repeat: no-repeat;">
                                     </div>
                                     <div class="card-body pt-0">
                                         <div class="text-center">
                                             <div class="avatar avatar-lg mt-n5 mb-3">
-                                                <img class="avatar-img rounded border border-white border-3" src="<?php echo ($Catequista['ImagenCat'] == 'Ninguno' || empty($Catequista['ImagenCat'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$Catequista['ImagenCat']}"; ?>" alt="">
+                                                <img class="avatar-img rounded border border-white border-3" src="<?php echo ($Catequista['ImagenCat'] == 'Ninguno' || empty($Catequista['ImagenCat'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$Catequista['ImagenCat']}?v=" . time(); ?>" alt="">
                                             </div>
                                             <h5 class="mb-0"> <a href="PerfilCatequista.php"><?php echo $Catequista['Nombre'] . " " . $Catequista['ApPaterno'] . " " . $Catequista['ApMaterno']; ?></a> </h5>
 
@@ -360,11 +450,11 @@ $activeNotifications = getActiveNotifications($conn);
                                             <li class="list-group-item d-md-flex justify-content-between align-items-center col-lg-8">
                                                 <div class="me-md-3">
                                                     <h6 class="mb-0">Imagen de Perfil</h6>
-                                                    <img id="imagenPreviewPerfil" class="avatar-img rounded-circle border border-white border-3" src="<?php echo ($celebranteAdmin['PerfilCel'] == 'Ninguno' || empty($celebranteAdmin['PerfilCel'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$celebranteAdmin['PerfilCel']}"; ?>" alt="" style="width: 200px; height: 200px;">
+                                                    <img id="imagenPreviewPerfil" class="avatar-img rounded-circle border border-white border-3" src="<?php echo ($celebranteAdmin['PerfilCel'] == 'Ninguno' || empty($celebranteAdmin['PerfilCel'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$celebranteAdmin['PerfilCel']}?v=" . time(); ?>" alt="" style="width: 200px; height: 200px;">
                                                 </div>
                                                 <div class="me-md-3">
                                                     <h6 class="mb-0">Imagen de Fondo</h6>
-                                                    <img id="imagenPreviewFondo" class="h-200px rounded" src="<?php echo ($celebranteAdmin['FondoCel'] == 'Ninguno' || empty($celebranteAdmin['FondoCel'])) ? '../assets/images/fondo/Ninguno.jpg' : "../assets/images/fondo/{$celebranteAdmin['FondoCel']}"; ?>" alt="" style="background-size: cover; background-repeat: no-repeat; width: 450px; height: 200px;">
+                                                    <img id="imagenPreviewFondo" class="h-200px rounded" src="<?php echo ($celebranteAdmin['FondoCel'] == 'Ninguno' || empty($celebranteAdmin['FondoCel'])) ? '../assets/images/fondo/Ninguno.jpg' : "../assets/images/fondo/{$celebranteAdmin['FondoCel']}?v=" . time(); ?>" alt="" style="background-size: cover; background-repeat: no-repeat; width: 450px; height: 200px;">
                                                 </div>
                                             </li>
                                         </ul>
@@ -491,13 +581,21 @@ $activeNotifications = getActiveNotifications($conn);
                 <div class="modal-body">
                     <form method="POST" class="row g-1">
 
-                        <div class="form-group col-sm-1 col-lg-4">
+                        <div class="form-group col-sm-12 col-lg-4">
                             <label class="form-label">CI del Catequisando</label>
-                            <input type="text" class="form-control" id="CiCelNuevo" name="CiCelNuevo" placeholder="CI Persona">
-                            <a class="celebrantenew btn btn-sm btn-dashed rounded mt-0" href="VistaPersona.php"> <i class="bi bi-plus-circle-dotted me-1"></i>registrar a la Persona</a>
+                            <input type="text" class="form-control" id="CiCelNuevo" name="CiCelNuevo" placeholder="CI Persona" maxlength="15" required autocomplete="off">
+                            <a class="celebrantenew btn btn-sm btn-dashed rounded mt-0" href="VistaPersona.php"><i class="bi bi-plus-circle-dotted me-1"></i>registrar a la Persona</a>
+                        </div>
+                        <div class="form-group col-sm-6 col-lg-4">
+                            <label class="form-label">Usuario de acceso</label>
+                            <input type="text" class="form-control" name="UsuarioCel" maxlength="100" required autocomplete="off">
+                        </div>
+                        <div class="form-group col-sm-6 col-lg-4">
+                            <label class="form-label">Contraseña de acceso</label>
+                            <input type="password" class="form-control" name="ClaveCel" maxlength="100" required autocomplete="new-password">
                         </div>
 
-                        <input type="hidden" name="SacramentoCel" value="<?php echo $Catequista['Sacramento']; ?>">
+                        <input type="hidden" name="SacramentoCel" value="<?php echo htmlspecialchars($Catequista['Sacramento']); ?>">
 
                         <div class="form-group col-lg-5">
                             <label for="CodTipoItem" class="form-label">Sacramento</label>
@@ -537,21 +635,29 @@ $activeNotifications = getActiveNotifications($conn);
                 var ciPersona = $(this).val();
                 if (ciPersona.length >= 6 || ciPersona.length <= 0) {
                     $.ajax({
-                        url: '',
+                        url: 'VistaInscripcion.php',
                         type: 'GET',
+                        dataType: 'json',
+                        cache: false,
                         data: {
                             ciPersona: ciPersona
                         },
-                        success: function(response) {
-                            var persona = JSON.parse(response);
-                            if (persona.error) {
+                        success: function(persona) {
+                            if (!persona || persona.error) {
                                 $('.celebrantenew').html(
-                                    `<i class="bi bi-plus-circle-dotted me-1""></i>registrar a la Persona`
+                                    '<i class="bi bi-plus-circle-dotted me-1"></i>registrar a la Persona'
                                 );
                             } else {
-                                var form = `${persona.Nombre} ${persona.ApPaterno}`;
-                                $('.celebrantenew').html(form);
+                                this.value = persona.CiPersona;
+                                var nombre = [persona.Nombre, persona.ApPaterno, persona.ApMaterno]
+                                    .filter(Boolean).join(' ');
+                                var estado = persona.ProcesosPastorales
+                                    ? persona.ProcesosPastorales.estadoActual : 'Registrado';
+                                $('.celebrantenew').text(nombre + ' · ' + estado);
                             }
+                        },
+                        error: function() {
+                            $('.celebrantenew').text('No se pudo consultar la persona');
                         }
                     });
                 }

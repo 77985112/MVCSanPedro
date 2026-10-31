@@ -1,0 +1,338 @@
+.sacramentos-pagina {
+    padding: 2.5rem 0 4rem;
+    overflow: hidden;
+    color: #101828;
+    background:
+        radial-gradient(circle at 15% 8%, rgba(217, 162, 11, .13), transparent 22rem),
+        radial-gradient(circle at 88% 18%, rgba(31, 95, 191, .11), transparent 26rem),
+        #f3f6fa;
+}
+
+.sacramentos-intro {
+    position: relative;
+    max-width: 1050px;
+    padding: 2.5rem clamp(1.25rem, 4vw, 3.5rem);
+    margin: 0 auto 2rem;
+    overflow: hidden;
+    text-align: center;
+    background: rgba(255, 255, 255, .94);
+    border: 1px solid #e2e8f0;
+    border-radius: 24px;
+    box-shadow: 0 18px 45px rgba(15, 45, 82, .1);
+}
+
+.sacramentos-intro::before {
+    display: grid;
+    width: 3.3rem;
+    height: 3.3rem;
+    margin: 0 auto 1rem;
+    place-items: center;
+    color: #ffffff;
+    background: linear-gradient(145deg, #d9a20b, #a87300);
+    border-radius: 50%;
+    box-shadow: 0 8px 20px rgba(184, 127, 0, .25);
+    content: "\271D";
+    font-size: 1.7rem;
+}
+
+.sacramentos-intro h1 {
+    margin-bottom: 1rem;
+    color: #0b2545;
+    font-size: clamp(2.1rem, 5vw, 3.5rem);
+    font-weight: 800;
+    letter-spacing: -.035em;
+}
+
+.sacramentos-intro p {
+    max-width: 900px;
+    margin: 0 auto .8rem;
+    color: #1d2939;
+    font-size: 1.04rem;
+    line-height: 1.7;
+}
+
+.sacramentos-intro p:last-child {
+    margin-bottom: 0;
+}
+
+.sacramentos-carrusel {
+    position: relative;
+    width: 100%;
+    max-width: 1500px;
+    margin: 0 auto;
+}
+
+.sacramentos-etiqueta {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: .6rem;
+    margin-bottom: 1.25rem;
+    color: #0b2545;
+    font-size: .9rem;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+
+.sacramentos-etiqueta::before,
+.sacramentos-etiqueta::after {
+    width: 48px;
+    height: 1px;
+    background: #d9a20b;
+    content: "";
+}
+
+.sacramentos-pista {
+    position: relative;
+    min-height: 720px;
+    overflow: hidden;
+    transition: height .55s ease;
+}
+
+.sacramento-slide {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    z-index: 0;
+    width: min(940px, 74%);
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(-50%) scale(.86);
+    transition: left .65s cubic-bezier(.22, 1, .36, 1),
+        opacity .5s ease,
+        transform .65s cubic-bezier(.22, 1, .36, 1);
+}
+
+.sacramento-slide .card {
+    overflow: hidden;
+    background: #ffffff;
+    border: 1px solid #dfe6ef;
+    border-radius: 24px;
+    box-shadow: 0 24px 55px rgba(15, 45, 82, .16);
+}
+
+.sacramento-slide .card-body {
+    padding: clamp(1.25rem, 3vw, 2.25rem);
+}
+
+.sacramento-slide.es-activo {
+    z-index: 3;
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateX(-50%) scale(1);
+}
+
+.sacramento-slide.es-anterior {
+    left: 0;
+    z-index: 1;
+    max-height: 520px;
+    overflow: hidden;
+    opacity: .3;
+    cursor: pointer;
+    pointer-events: auto;
+    transform: translateX(-72%) scale(.8) rotateY(5deg);
+}
+
+.sacramento-slide.es-siguiente {
+    left: 100%;
+    z-index: 1;
+    max-height: 520px;
+    overflow: hidden;
+    opacity: .3;
+    cursor: pointer;
+    pointer-events: auto;
+    transform: translateX(-28%) scale(.8) rotateY(-5deg);
+}
+
+.sacramento-slide .card-title {
+    margin: 0 0 .65rem;
+    color: #0b2545;
+    font-size: clamp(1.8rem, 4vw, 2.65rem);
+    font-weight: 800;
+}
+
+.sacramento-slide .sacramento-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    padding: .38rem .75rem;
+    margin-bottom: 1.25rem;
+    color: #7a5200;
+    background: #fff3d1;
+    border-radius: 999px;
+    font-size: .82rem;
+    font-weight: 700;
+}
+
+.sacramento-slide img {
+    display: block;
+    width: 100%;
+    height: clamp(250px, 38vw, 430px);
+    margin-bottom: 1.4rem;
+    object-fit: cover;
+    object-position: center;
+    border-radius: 17px;
+    box-shadow: 0 12px 28px rgba(15, 45, 82, .14);
+}
+
+.sacramento-slide p,
+.sacramento-slide li {
+    color: #1d2939;
+    font-size: 1rem;
+    line-height: 1.72;
+}
+
+.sacramento-slide h3 {
+    padding-top: 1rem;
+    margin: 1.35rem 0 .7rem;
+    color: #0b2545;
+    border-top: 1px solid #e6ebf2;
+    font-size: 1.45rem;
+    font-weight: 750;
+}
+
+.sacramento-slide strong {
+    color: #101828;
+}
+
+.sacramentos-control {
+    position: absolute;
+    top: 250px;
+    z-index: 5;
+    display: grid;
+    width: 54px;
+    height: 54px;
+    place-items: center;
+    color: #0b2545;
+    background: #ffffff;
+    border: 1px solid #dfe6ef;
+    border-radius: 50%;
+    box-shadow: 0 10px 28px rgba(15, 45, 82, .18);
+    transition: color .2s ease, background-color .2s ease, transform .2s ease;
+}
+
+.sacramentos-control:hover,
+.sacramentos-control:focus-visible {
+    color: #ffffff;
+    background: #12345b;
+    transform: scale(1.08);
+}
+
+.sacramentos-control-anterior { left: max(18px, 5vw); }
+.sacramentos-control-siguiente { right: max(18px, 5vw); }
+
+.sacramentos-progreso {
+    display: flex;
+    justify-content: center;
+    gap: .45rem;
+    padding: 1.2rem 0;
+}
+
+.sacramentos-punto {
+    width: 28px;
+    height: 6px;
+    padding: 0;
+    background: #cfdae8;
+    border: 0;
+    border-radius: 999px;
+    transition: width .3s ease, background-color .3s ease;
+}
+
+.sacramentos-punto.es-activo {
+    width: 54px;
+    background: #c58b00;
+}
+
+.sacramentos-pestanas {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(115px, 1fr));
+    width: min(1320px, calc(100% - 2rem));
+    margin: 0 auto;
+    overflow-x: auto;
+    background: #ffffff;
+    border: 1px solid #e1e7ef;
+    border-radius: 18px;
+    box-shadow: 0 12px 32px rgba(15, 45, 82, .09);
+    scrollbar-width: thin;
+}
+
+.sacramentos-pestana {
+    position: relative;
+    display: flex;
+    min-height: 92px;
+    padding: .8rem .55rem;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: .35rem;
+    color: #344054;
+    background: transparent;
+    border: 0;
+    border-right: 1px solid #e7ebf1;
+    font-size: .78rem;
+    font-weight: 700;
+    white-space: nowrap;
+    transition: color .2s ease, background-color .2s ease;
+}
+
+.sacramentos-pestana:last-child { border-right: 0; }
+
+.sacramentos-pestana i {
+    color: #b77d00;
+    font-size: 1.65rem;
+}
+
+.sacramentos-pestana::after {
+    position: absolute;
+    right: 20%;
+    bottom: 0;
+    left: 20%;
+    height: 3px;
+    background: transparent;
+    border-radius: 999px;
+    content: "";
+}
+
+.sacramentos-pestana:hover,
+.sacramentos-pestana.es-activo {
+    color: #0b2545;
+    background: #f7f9fc;
+}
+
+.sacramentos-pestana.es-activo::after { background: #c58b00; }
+
+.sacramentos-ayuda {
+    margin: .9rem 0 0;
+    color: #667085;
+    font-size: .82rem;
+    text-align: center;
+}
+
+@media (max-width: 991.98px) {
+    .sacramento-slide { width: min(760px, 82%); }
+    .sacramento-slide.es-anterior { transform: translateX(-82%) scale(.78); }
+    .sacramento-slide.es-siguiente { transform: translateX(-18%) scale(.78); }
+}
+
+@media (max-width: 767.98px) {
+    .sacramentos-pagina { padding-top: 1.25rem; }
+    .sacramentos-intro { border-radius: 18px; }
+    .sacramentos-intro p { font-size: .96rem; }
+    .sacramento-slide { width: calc(100% - 2rem); }
+    .sacramento-slide.es-anterior,
+    .sacramento-slide.es-siguiente { opacity: 0; pointer-events: none; }
+    .sacramentos-control { top: 220px; width: 44px; height: 44px; }
+    .sacramentos-control-anterior { left: 1.4rem; }
+    .sacramentos-control-siguiente { right: 1.4rem; }
+    .sacramentos-pestanas { width: calc(100% - 1rem); grid-template-columns: repeat(7, 125px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sacramento-slide,
+    .sacramentos-pista,
+    .sacramentos-control,
+    .sacramentos-punto {
+        transition: none;
+    }
+}

@@ -37,19 +37,14 @@ if (isset($_GET['CodIns'])) {
         $pdf->Cell($offsetX, 10, 'Madre del Novia', 0, 0);
         $pdf->Cell(0, 10, ($certificadoData['NombreMadreNovia']), 0, 1);
 
-        $pdf->Cell($offsetX, 10, 'Padrino:', 0, 0);
+        $pdf->Cell($offsetX, 10, 'Testigo presencial 1:', 0, 0);
         $pdf->Cell(0, 10, ($certificadoData['NombrePadrino']), 0, 1);
 
-        $pdf->Cell($offsetX, 10, 'Madrina:', 0, 0);
+        $pdf->Cell($offsetX, 10, 'Testigo presencial 2:', 0, 0);
         $pdf->Cell(0, 10, ($certificadoData['NombreMadrina']), 0, 1);
 
         $pdf->Cell($offsetX, 10, 'Fecha Realizado:', 0, 0);
         $pdf->Cell(0, 10, ($certificadoData['FechaReal']), 0, 1);
-
-        $pdf->Cell($offsetX, 10, 'Hora Realizado:', 0, 0);
-        $pdf->Cell(0, 10, ($certificadoData['HoraReal']), 0, 1);
-
-
 
         $pdf->Output('I', 'Certificado_Matrimonio.pdf');
         exit();

@@ -14,8 +14,8 @@ class ModPersonal
     public function getPersonal()
     {
         $sql = "SELECT per.*, CONCAT(per.Nombre, ' ', per.Paterno, ' ', per.Materno) AS NombreCompleto, car.DescripCar
-                FROM Personal per
-                INNER JOIN cargo car ON car.CodCar = per.CodCar
+                FROM `personal` per
+                INNER JOIN `cargo` car ON car.CodCar = per.CodCar
                 WHERE per.Estado = 'Activo'";
 
         $stmt = $this->conn->prepare($sql);
@@ -34,8 +34,8 @@ class ModPersonal
     public function PerfildePersonal($CiPer)
     {
         $sql = "SELECT per.*, CONCAT(per.Nombre, ' ', per.Paterno, ' ', per.Materno) AS NombreCompleto, car.DescripCar
-                FROM Personal per
-                INNER JOIN cargo car ON car.CodCar = per.CodCar
+                FROM `personal` per
+                INNER JOIN `cargo` car ON car.CodCar = per.CodCar
                 WHERE per.Estado = 'Activo' AND per.CiPersonal=?";
         
         $stmt = $this->conn->prepare($sql);

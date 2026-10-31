@@ -8,7 +8,7 @@ if (!isset($_SESSION['CiPersona'])) {
 }
 $Celebrante = $_SESSION['CiPersona'];
 
-require_once '../controlador/ControladorActividad.php';
+require_once '../Controlador/controladorActividad.php';
 
 $controller = new ControladorActividad();
 $actividadesParroquia = $controller->obtenerActividades('Parroquia');
@@ -34,7 +34,7 @@ function getActiveNotifications($conn)
     $sql = "SELECT n.idNotificacion, n.TituloNot, n.DetalleNot, n.FechaNotFin, CONCAT(p.Nombre, ' ', p.ApPaterno) AS datoscat 
             FROM notificaciones n 
             INNER JOIN catequista c ON n.CiNotificador = c.CiCat 
-            INNER JOIN persona p ON c.CiCat = p.CiPersona 
+            INNER JOIN `persona` p ON c.CiCat = p.CiPersona 
             WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ?
             ORDER BY n.FechaNotFin ASC";
 
@@ -68,6 +68,7 @@ $activeNotifications = getActiveNotifications($conn);
     <link rel="stylesheet" type="text/css" href="../assets/vendor/font-awesome/css/all.min.css">
     <link rel="stylesheet" type="text/css" href="../assets/vendor/bootstrap-icons/bootstrap-icons.css">
     <link rel="stylesheet" type="text/css" href="../assets/css/style.css">
+    <link rel="stylesheet" type="text/css" href="../assets/css/logo-cabecera.css?v=<?= filemtime(__DIR__ . '/../assets/css/logo-cabecera.css') ?>">
     <script src="../assets/js/jquery-3.6.4.min.js"></script>
 
     <style>
@@ -102,8 +103,8 @@ $activeNotifications = getActiveNotifications($conn);
     <nav class="navbar navbar-expand-lg">
       <div class="container">
         <a class="navbar-brand" href="VistaCelebrante.php">
-          <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png" alt="logo">
-          <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png" alt="logo">
+          <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo.png') ?>" alt="logo">
+          <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo-light.png') ?>" alt="logo">
         </a>
 
         <ul class="nav flex-nowrap align-items-center ms-sm-3 list-unstyled">
@@ -141,13 +142,13 @@ $activeNotifications = getActiveNotifications($conn);
                     </li>
           <li class="nav-item ms-2 dropdown">
             <a class="nav-link btn icon-md p-0" href="#" id="profileDropdown" role="button" data-bs-auto-close="outside" data-bs-display="static" data-bs-toggle="dropdown" aria-expanded="false">
-              <img class="avatar-img border border-white border-3 rounded" src="<?php echo ($Celebrante['PerfilCel'] == 'Ninguno' || empty($Celebrante['PerfilCel'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$Celebrante['PerfilCel']}"; ?>" alt="">
+              <img class="avatar-img border border-white border-3 rounded" src="<?php echo ($Celebrante['PerfilCel'] == 'Ninguno' || empty($Celebrante['PerfilCel'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$Celebrante['PerfilCel']}?v=" . time(); ?>" alt="">
             </a>
             <ul class="dropdown-menu dropdown-animation dropdown-menu-end pt-3 small me-md-n3" aria-labelledby="profileDropdown">
               <li class="px-3">
                 <div class="d-flex align-items-center position-relative">
                   <div class="avatar me-3">
-                    <img class="avatar-img rounded-circle" src="<?php echo ($Celebrante['PerfilCel'] == 'Ninguno' || empty($Celebrante['PerfilCel'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$Celebrante['PerfilCel']}"; ?>" alt="avatar">
+                    <img class="avatar-img rounded-circle" src="<?php echo ($Celebrante['PerfilCel'] == 'Ninguno' || empty($Celebrante['PerfilCel'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$Celebrante['PerfilCel']}?v=" . time(); ?>" alt="avatar">
                   </div>
                   <div>
                     <a class="h6 stretched-link" href="PerfilCelebrante.php"><?php echo $Celebrante['Nombre'] . " " . $Celebrante['ApPaterno'] . " " . $Celebrante['ApMaterno']; ?></a>
@@ -279,14 +280,14 @@ $activeNotifications = getActiveNotifications($conn);
                           <div class="col-sm-6 col-xl-4">
                             <div class="card h-100">
                               <div class="position-relative">
-                                <img class="img-fluid rounded-top fixed-height" src="../assets/images/events/<?php echo $actividad['ImagenActividad'] !== 'Ninguno' ? $actividad['ImagenActividad'] : 'Generico.png'; ?>" alt="" style="width: 100%; height:150px;">
+                                <?php echo ControladorActividad::mediaActividad($actividad, '150px'); ?>
                                 <div class="badge bg-<?php echo $actividad['EstActividad'] == 'Activo' ? 'success' : 'danger'; ?> text-white mt-2 me-2 position-absolute top-0 end-0"><?php echo $actividad['EstActividad']; ?></div>
                               </div>
                               <div class="card-body position-relative pt-0">
                                 <input type="hidden" value="<?php echo $actividad['idActividad']; ?>">
-                                <h6 class="mt-3"><a href="DetalleActividad.php?Actividad=<?php echo $actividad['idActividad']; ?>"><?php echo $actividad['TituloActividad']; ?></a></h6>
+                                <h6 class="mt-3"><a href="DetalleActividad.php?Actividad=<?php echo $actividad['idActividad']; ?>"><?php echo htmlspecialchars($actividad['TituloActividad'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></a></h6>
                                 <p class="mb-0 small"><i class="bi bi-calendar-check pe-1"></i><?php echo $actividad['FechaActividad']; ?> a <?php echo $actividad['HoraAct']; ?></p>
-                                <p class="small"><i class="bi bi-geo-alt pe-1"></i><?php echo $actividad['LugarAct']; ?></p>
+                                <p class="small"><i class="bi bi-geo-alt pe-1"></i><?php echo htmlspecialchars($actividad['LugarAct'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></p>
                               </div>
                             </div>
                           </div>
@@ -307,14 +308,14 @@ $activeNotifications = getActiveNotifications($conn);
                           <div class="col-sm-6 col-xl-4">
                             <div class="card h-100">
                               <div class="position-relative">
-                                <img class="img-fluid rounded-top fixed-height" src="../assets/images/events/<?php echo $actividad['ImagenActividad'] !== 'Ninguno' ? $actividad['ImagenActividad'] : 'Generico.png'; ?>" alt="" style="width: 100%; height:150px;">
+                                <?php echo ControladorActividad::mediaActividad($actividad, '150px'); ?>
                                 <div class="badge bg-<?php echo $actividad['EstActividad'] == 'Activo' ? 'success' : 'danger'; ?> text-white mt-2 me-2 position-absolute top-0 end-0"><?php echo $actividad['EstActividad']; ?></div>
                               </div>
                               <div class="card-body position-relative pt-0">
                                 <input type="hidden" value="<?php echo $actividad['idActividad']; ?>">
-                                <h6 class="mt-3"><a href="DetalleActividad.php?Actividad=<?php echo $actividad['idActividad']; ?>"><?php echo $actividad['TituloActividad']; ?></a></h6>
+                                <h6 class="mt-3"><a href="DetalleActividad.php?Actividad=<?php echo $actividad['idActividad']; ?>"><?php echo htmlspecialchars($actividad['TituloActividad'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></a></h6>
                                 <p class="mb-0 small"><i class="bi bi-calendar-check pe-1"></i><?php echo $actividad['FechaActividad']; ?> a <?php echo $actividad['HoraAct']; ?></p>
-                                <p class="small"><i class="bi bi-geo-alt pe-1"></i><?php echo $actividad['LugarAct']; ?></p>
+                                <p class="small"><i class="bi bi-geo-alt pe-1"></i><?php echo htmlspecialchars($actividad['LugarAct'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></p>
                               </div>
                             </div>
                           </div>
@@ -336,14 +337,14 @@ $activeNotifications = getActiveNotifications($conn);
                           <div class="col-sm-6 col-xl-4">
                             <div class="card h-100">
                               <div class="position-relative">
-                                <img class="img-fluid rounded-top fixed-height" src="../assets/images/events/<?php echo $actividad['ImagenActividad'] !== 'Ninguno' ? $actividad['ImagenActividad'] : 'Generico.png'; ?>" alt="" style="width: 100%; height:150px;">
+                                <?php echo ControladorActividad::mediaActividad($actividad, '150px'); ?>
                                 <div class="badge bg-<?php echo $actividad['EstActividad'] == 'Activo' ? 'success' : 'danger'; ?> text-white mt-2 me-2 position-absolute top-0 end-0"><?php echo $actividad['EstActividad']; ?></div>
                               </div>
                               <div class="card-body position-relative pt-0">
                                 <input type="hidden" value="<?php echo $actividad['idActividad']; ?>">
-                                <h6 class="mt-3"><a href="DetalleActividad.php?Actividad=<?php echo $actividad['idActividad']; ?>"><?php echo $actividad['TituloActividad']; ?></a></h6>
+                                <h6 class="mt-3"><a href="DetalleActividad.php?Actividad=<?php echo $actividad['idActividad']; ?>"><?php echo htmlspecialchars($actividad['TituloActividad'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></a></h6>
                                 <p class="mb-0 small"><i class="bi bi-calendar-check pe-1"></i><?php echo $actividad['FechaActividad']; ?> a <?php echo $actividad['HoraAct']; ?></p>
-                                <p class="small"><i class="bi bi-geo-alt pe-1"></i><?php echo $actividad['LugarAct']; ?></p>
+                                <p class="small"><i class="bi bi-geo-alt pe-1"></i><?php echo htmlspecialchars($actividad['LugarAct'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></p>
                               </div>
                             </div>
                           </div>
@@ -364,14 +365,14 @@ $activeNotifications = getActiveNotifications($conn);
                           <div class="col-sm-6 col-xl-4">
                             <div class="card h-100">
                               <div class="position-relative">
-                                <img class="img-fluid rounded-top fixed-height" src="../assets/images/events/<?php echo $actividad['ImagenActividad'] !== 'Ninguno' ? $actividad['ImagenActividad'] : 'Generico.png'; ?>" alt="" style="width: 100%; height:150px;">
+                                <?php echo ControladorActividad::mediaActividad($actividad, '150px'); ?>
                                 <div class="badge bg-<?php echo $actividad['EstActividad'] == 'Activo' ? 'success' : 'danger'; ?> text-white mt-2 me-2 position-absolute top-0 end-0"><?php echo $actividad['EstActividad']; ?></div>
                               </div>
                               <div class="card-body position-relative pt-0">
                                 <input type="hidden" value="<?php echo $actividad['idActividad']; ?>">
-                                <h6 class="mt-3"><a href="DetalleActividad.php?Actividad=<?php echo $actividad['idActividad']; ?>"><?php echo $actividad['TituloActividad']; ?></a></h6>
+                                <h6 class="mt-3"><a href="DetalleActividad.php?Actividad=<?php echo $actividad['idActividad']; ?>"><?php echo htmlspecialchars($actividad['TituloActividad'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></a></h6>
                                 <p class="mb-0 small"><i class="bi bi-calendar-check pe-1"></i><?php echo $actividad['FechaActividad']; ?> a <?php echo $actividad['HoraAct']; ?></p>
-                                <p class="small"><i class="bi bi-geo-alt pe-1"></i><?php echo $actividad['LugarAct']; ?></p>
+                                <p class="small"><i class="bi bi-geo-alt pe-1"></i><?php echo htmlspecialchars($actividad['LugarAct'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></p>
                               </div>
                             </div>
                           </div>
@@ -424,6 +425,7 @@ $activeNotifications = getActiveNotifications($conn);
   <script src="../assets/vendor/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
   <script src="../assets/js/functions.js"></script>
   <script src="../assets/js/tema.js"></script>
+  <script src="../assets/js/actividad-multimedia.js"></script>
 </body>
 
 </html>

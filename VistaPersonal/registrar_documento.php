@@ -1,5 +1,5 @@
-﻿<?php
-require_once '../controlador/ControladorReserva.php';
+<?php
+require_once '../Controlador/controladorReserva.php';
 
 session_start();
 if (!isset($_SESSION['usuario'])) {
@@ -7,19 +7,159 @@ if (!isset($_SESSION['usuario'])) {
     exit();
 }
 $usuario = $_SESSION['usuario'];
+require_once __DIR__ . '/../Controlador/controladorAcceso.php';
+ControladorAcceso::exigir('certificado');
 
 $controller = new ControladorReserva();
-$documentoModel = new Reserva();
-$codIns = $_GET['CodIns'] ?? null;
-$documentos = $documentoModel->obtenerDocumentosPorInscripcion($codIns);
+$codIns = isset($_GET['CodIns']) ? (int) $_GET['CodIns'] : 0;
+$mensaje = '';
+$error = '';
 
-
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrar_documento'])) {
-    $controller->registrarDocumentoExt($_POST);
-
-    header("Location: registrar_documento.php?CodIns=" . $codIns);
-    exit();
+$situaciones = [];
+foreach (['padrino', 'madrina'] as $clave) {
+    if (isset($_GET['cond_' . $clave]) && in_array((string) $_GET['cond_' . $clave], ['5', '8'], true)) {
+        $situaciones[$clave] = (int) $_GET['cond_' . $clave];
+    }
 }
+
+$busqueda = isset($_GET['buscar']) && is_string($_GET['buscar']) ? trim($_GET['buscar']) : '';
+$sacramentoVolver = isset($_GET['sac']) && is_string($_GET['sac']) ? $_GET['sac'] : '';
+if (!in_array($sacramentoVolver, ['bautizo', 'confirmacion', 'matrimonio'], true)) {
+    $sacramentoVolver = '';
+}
+$contextoVolver = '';
+$urlVolver = 'VistaSolicitante.php';
+if ($busqueda !== '' && $sacramentoVolver !== '') {
+    $contextoVolver = '&buscar=' . rawurlencode($busqueda) . '&sac=' . $sacramentoVolver;
+    $urlVolver .= '?ciPersonaBus=' . rawurlencode($busqueda) . '&' . $sacramentoVolver . '=';
+}
+
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    if (isset($_POST['subir_documento'])) {
+        if ($controller->registrarDocumentoRequerido($_POST, $_FILES)) {
+            header("Location: registrar_documento.php?CodIns=" . $codIns . "&doc=1" . $contextoVolver);
+            exit();
+        }
+        $error = $controller->obtenerErrorDocumento() ?: 'No se pudo guardar el archivo.';
+    } elseif (isset($_POST['registrar_documento'])) {
+        if ($controller->registrarDocumentoExt($_POST, $_FILES)) {
+            header("Location: registrar_documento.php?CodIns=" . $codIns . "&doc=1" . $contextoVolver);
+            exit();
+        }
+        $error = $controller->obtenerErrorDocumento() ?: 'No se pudo registrar el documento.';
+    }
+}
+
+if (isset($_GET['doc'])) {
+    $mensaje = 'Documento registrado correctamente.';
+}
+
+$inscripcion = $codIns > 0 ? $controller->obtenerInscripcionSacramento($codIns) : null;
+$requisitos = $inscripcion ? $controller->construirRequisitos($codIns, $situaciones) : null;
+$personas = $requisitos['personas'] ?? [];
+$documentos = $requisitos['documentos'] ?? [];
+$tiposDocumento = $controller->obtenerTiposDocumento();
+
+$nombrePrincipal = '';
+$nombreNovio = '';
+$nombreNovia = '';
+foreach ($personas as $persona) {
+    $nombreCompleto = trim(implode(' ', array_filter([$persona['Nombre'], $persona['ApPaterno'], $persona['ApMaterno']])));
+    if ($nombrePrincipal === '' && in_array($persona['Rol'], ['Bautizado', 'Celebrante', 'Confirmante'], true)) {
+        $nombrePrincipal = $nombreCompleto;
+    }
+    if ($persona['Rol'] === 'Novio') {
+        $nombreNovio = $nombreCompleto;
+    }
+    if ($persona['Rol'] === 'Novia') {
+        $nombreNovia = $nombreCompleto;
+    }
+}
+if ($nombrePrincipal === '') {
+    $nombrePrincipal = trim($nombreNovio . ($nombreNovia !== '' ? ' y ' . $nombreNovia : ''));
+}
+
+$porcentaje = $requisitos && $requisitos['total'] > 0
+    ? (int) round($requisitos['adjuntos'] * 100 / $requisitos['total'])
+    : 0;
+
+$notasSacramento = [
+    1 => 'Los padrinos deben ser católicos y no pueden vivir en concubinato ni estar casados solo por lo civil.',
+    3 => 'Inscripciones: 23 de enero, de 8:00 a 12:00 y de 14:00 a 16:00.',
+    4 => 'Reservar 6 meses antes de la boda y presentar todos los documentos 3 meses antes. Informes matrimoniales: martes de 8:30 a 11:00.',
+];
+$notaSacramento = $inscripcion ? ($notasSacramento[(int) $inscripcion['CodSac']] ?? '') : '';
+
+$etiquetaFecha = 'Registro';
+$fechaCabecera = $inscripcion['FechaIns'] ?? '';
+if ($inscripcion && (int) $inscripcion['CodSac'] === 1 && !empty($inscripcion['FechaSacramento'])) {
+    $etiquetaFecha = 'Sacramento';
+    $fechaCabecera = $inscripcion['FechaSacramento'];
+}
+
+$estadosDocumento = [
+    'adjunto' => ['texto' => 'Adjunto', 'clase' => 'bg-success-subtle text-success', 'icono' => 'bi-check-circle'],
+    'registrado' => ['texto' => 'Datos registrados', 'clase' => 'bg-primary-subtle text-primary', 'icono' => 'bi-database-check'],
+    'pendiente' => ['texto' => 'Pendiente', 'clase' => 'bg-secondary-subtle text-secondary', 'icono' => 'bi-clock'],
+    'noaplica' => ['texto' => 'No aplica', 'clase' => 'bg-warning-subtle text-warning', 'icono' => 'bi-slash-circle'],
+];
+
+$etiquetasRol = [
+    'Bautizado' => 'Bautizado', 'Celebrante' => 'Feligrés', 'Confirmante' => 'Confirmante',
+    'Novio' => 'Novio', 'Novia' => 'Novia', 'Padre' => 'Padre', 'Madre' => 'Madre',
+    'Papá' => 'Papá', 'Mamá' => 'Mamá', 'Papá Novio' => 'Papá del novio',
+    'Mamá Novio' => 'Mamá del novio', 'Papá Novia' => 'Papá de la novia',
+    'Mamá Novia' => 'Mamá de la novia', 'Padrino' => 'Padrino', 'Madrina' => 'Madrina',
+    'Testigo Novio' => 'Testigo del novio', 'Testigo Novia' => 'Testigo de la novia',
+];
+
+$badgeEstado = function ($estado) use ($estadosDocumento) {
+    $info = $estadosDocumento[$estado] ?? $estadosDocumento['pendiente'];
+    return '<span class="badge ' . $info['clase'] . '"><i class="bi ' . $info['icono'] . ' me-1"></i>' . $info['texto'] . '</span>';
+};
+
+$accionDocumento = function ($item) use ($codIns) {
+    if (!$item['aplica']) {
+        return '<span class="text-muted">—</span>';
+    }
+
+    $html = '';
+    if (!empty($item['archivo'])) {
+        $html .= '<a class="btn btn-sm btn-light border me-1" target="_blank" href="ver_documento_presentado.php?archivo=' . rawurlencode($item['archivo']) . '"><i class="bi bi-eye"></i> Ver</a>';
+    }
+    $texto = !empty($item['archivo']) ? 'Reemplazar' : 'Adjuntar';
+    $html .= '<form method="POST" enctype="multipart/form-data" class="d-inline-flex align-items-center mb-0">'
+        . '<input type="hidden" name="subir_documento" value="1">'
+        . '<input type="hidden" name="CodIns" value="' . (int) $codIns . '">'
+        . '<input type="hidden" name="CodTDoc" value="' . (int) $item['tipo'] . '">'
+        . '<input type="hidden" name="Dequien" value="' . htmlspecialchars($item['rol'], ENT_QUOTES, 'UTF-8') . '">'
+        . '<input type="hidden" name="CodificDoc" value="' . htmlspecialchars($item['codificDoc'], ENT_QUOTES, 'UTF-8') . '">'
+        . '<label class="btn btn-sm btn-success-soft mb-0" title="' . $texto . '">'
+        . '<i class="bi bi-paperclip"></i> ' . $texto
+        . '<input type="file" name="Archivo" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf" class="d-none" onchange="this.form.submit()">'
+        . '</label>'
+        . '</form>';
+
+    return $html;
+};
+
+$cambiarCondicional = function ($item) use ($codIns, $situaciones, $busqueda, $sacramentoVolver) {
+    if (empty($item['grupoCondicional']) || !$item['aplica']) {
+        return '';
+    }
+
+    $parametros = ['CodIns' => $codIns];
+    if ($busqueda !== '' && $sacramentoVolver !== '') {
+        $parametros['buscar'] = $busqueda;
+        $parametros['sac'] = $sacramentoVolver;
+    }
+    foreach ($situaciones as $clave => $valor) {
+        $parametros['cond_' . $clave] = $valor;
+    }
+    $parametros['cond_' . $item['grupoCondicional']] = (int) $item['tipo'] === 8 ? 5 : 8;
+
+    return '<a class="small ms-1" href="registrar_documento.php?' . htmlspecialchars(http_build_query($parametros), ENT_QUOTES, 'UTF-8') . '">Cambiar</a>';
+};
 
 ?>
 
@@ -34,7 +174,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrar_documento'])
     <link rel="shortcut icon" href="../assets/images/Icono.png">
     <link rel="stylesheet" type="text/css" href="../assets/vendor/font-awesome/css/all.min.css">
     <link rel="stylesheet" type="text/css" href="../assets/vendor/bootstrap-icons/bootstrap-icons.css">
-    <link rel="stylesheet" type="text/css" href="../assets/css/style.css">
+    <link rel="stylesheet" type="text/css" href="../assets/css/style.css?v=<?php echo filemtime(__DIR__ . '/../assets/css/style.css'); ?>">
+    <link rel="stylesheet" type="text/css" href="../assets/css/logo-cabecera.css?v=<?= filemtime(__DIR__ . '/../assets/css/logo-cabecera.css') ?>">
     <script src="../assets/js/jquery-3.6.4.min.js"></script>
 </head>
 
@@ -44,8 +185,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrar_documento'])
         <nav class="navbar navbar-expand-lg">
             <div class="container">
                 <a class="navbar-brand" href="VistaPersonal.php">
-                    <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png" alt="logo">
-                    <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png" alt="logo">
+                    <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo.png') ?>" alt="logo">
+                    <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo-light.png') ?>" alt="logo">
                 </a>
 
                 <ul class="nav flex-nowrap align-items-center ms-sm-3 list-unstyled">
@@ -57,13 +198,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrar_documento'])
 
                     <li class="nav-item ms-2 dropdown">
                         <a class="nav-link btn icon-md p-0" href="#" id="profileDropdown" role="button" data-bs-auto-close="outside" data-bs-display="static" data-bs-toggle="dropdown" aria-expanded="false">
-                            <img class="avatar-img rounded border border-white border-3" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}"; ?>" alt="">
+                            <img class="avatar-img rounded border border-white border-3" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}?v=" . time(); ?>" alt="">
                         </a>
                         <ul class="dropdown-menu dropdown-animation dropdown-menu-end pt-3 small me-md-n3" aria-labelledby="profileDropdown">
                             <li class="px-3">
                                 <div class="d-flex align-items-center position-relative">
                                     <div class="avatar me-3">
-                                        <img class="avatar-img rounded-circle" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}"; ?>" alt="avatar">
+                                        <img class="avatar-img rounded-circle" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}?v=" . time(); ?>" alt="avatar">
                                     </div>
                                     <div>
                                         <a class="h6 stretched-link" href="#"><?php echo $usuario['Nombre'] . " " . $usuario['Paterno'] . " " . $usuario['Materno']; ?></a>
@@ -111,7 +252,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrar_documento'])
         </nav>
     </header>
     <main>
-        <div class="container">
+        <div class="container personal-dashboard-container">
             <div class="row g-4">
                 <div class="col-lg-3">
                     <div class="d-flex align-items-center d-lg-none">
@@ -125,20 +266,20 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrar_documento'])
                         <div class="offcanvas offcanvas-start" tabindex="-1" id="offcanvasSideNavbar">
                             <div class="offcanvas-header">
                                 <a class="navbar-brand" href="#">
-                                    <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png" alt="logo">
-                                    <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png" alt="logo">
+                                    <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo.png') ?>" alt="logo">
+                                    <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo-light.png') ?>" alt="logo">
                                 </a>
                                 <button type="button" class="btn-close text-reset ms-auto" data-bs-dismiss="offcanvas" aria-label="Close"></button>
                             </div>
 
                             <div class="offcanvas-body d-block px-2 px-lg-0">
                                 <div class="card overflow-hidden">
-                                    <div class="h-50px" style="background-image:url(<?php echo ($usuario['FondoPer'] == 'Ninguno' || empty($usuario['FondoPer'])) ? '../assets/images/fondo/Ninguno.jpg' : "../assets/images/fondo/{$usuario['FondoPer']}"; ?>); background-position: center; background-size: cover; background-repeat: no-repeat;">
+                                    <div class="h-50px" style="background-image:url(<?php echo ($usuario['FondoPer'] == 'Ninguno' || empty($usuario['FondoPer'])) ? '../assets/images/fondo/Ninguno.jpg' : "../assets/images/fondo/{$usuario['FondoPer']}?v=" . time(); ?>); background-position: center; background-size: cover; background-repeat: no-repeat;">
                                     </div>
                                     <div class="card-body pt-0">
                                         <div class="text-center">
                                             <div class="avatar avatar-lg mt-n5 mb-3">
-                                                <img class="avatar-img rounded border border-white border-3" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}"; ?>" alt="">
+                                                <img class="avatar-img rounded border border-white border-3" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}?v=" . time(); ?>" alt="">
                                             </div>
                                             <h5 class="mb-0"> <a href="PerfilAdmin.php"><?php echo $usuario['Nombre'] . " " . $usuario['Paterno'] . " " . $usuario['Materno']; ?></a> </h5>
                                             <small><?php echo $usuario['DescripCar']; ?></small>
@@ -147,33 +288,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrar_documento'])
 
                                         <hr>
 
-                                        <ul class="nav nav-link-secondary flex-column fw-bold gap-2">
-                                            <li class="nav-item">
-                                                <a class="nav-link" href="VistaPersonal.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/mensaje.png" alt=""><span>Inicio </span></a>
-                                            </li>
-                                            <li class="nav-item">
-                                                <a class="nav-link" href="VistaPersona.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/nuevo.png" alt=""><span>Persona </span></a>
-                                            </li>
-                                            <li class="nav-item">
-                                                <a class="nav-link" href="VistaReservas.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/instrucciones.png" alt=""><span>Celebración </span></a>
-                                            </li>
-                                            <?php if ($usuario['DescripCar'] == 'Párroco') { ?>
-                                                <li class="nav-item">
-                                                    <a class="nav-link" href="VistaGesPersonal.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/seguro.png" alt=""><span>Personal</span></a>
-                                                </li>
-                                                <li class="nav-item">
-                                                    <a class="nav-link" href="VistaCoordinadorAdmin.php"> <span>🔥 ⚪ Coordinador</span></a>
-                                                </li>
-                                            <?php } ?>
-                                            <li class="nav-item">
-                                                <a class="nav-link active" href="VistaSolicitante.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/contrato.png" alt=""><span>Certificado </span></a>
-                                            </li>
-                                            <?php if ($usuario['DescripCar'] != "Personal") { ?>
-                                                <li class="nav-item">
-                                                    <a class="nav-link" href="VistaEmitidos.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/Emitido.png" alt=""><span>Certificado Emitido </span></a>
-                                                </li>
-                                            <?php } ?>
-                                        </ul>
+                                        <?php require_once __DIR__ . '/../Controlador/controladorAcceso.php'; ControladorAcceso::renderMenu(); ?>
                                     </div>
                                     <div class="card-footer text-center py-2">
                                         <a class="btn btn-link btn-sm" href="PerfilAdmin.php">Ver mi Perfil</a>
@@ -185,126 +300,356 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrar_documento'])
                     </nav>
                 </div>
 
-                <div class="col-md-12 col-lg-6 vstack gap-4">
-                    <div class="card h-100 p-4 mt-2">
+                <div class="col-md-12 col-lg-9 vstack gap-4">
+                    <?php if ($mensaje): ?>
+                        <div class="alert alert-success alert-dismissible fade show" role="alert">
+                            <?php echo htmlspecialchars($mensaje, ENT_QUOTES, 'UTF-8'); ?>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+                        </div>
+                    <?php endif; ?>
+                    <?php if ($error): ?>
+                        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                            <?php echo htmlspecialchars($error, ENT_QUOTES, 'UTF-8'); ?>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+                        </div>
+                    <?php endif; ?>
 
-                        <h2>Documentos Registrados</h2>
-
-                        <hr>
-                        <?php if (count($documentos) > 0): ?>
-                            <div class="col-sm-12 col-lg-12">
-                                <table class="table">
-                                    <thead class="table-dark">
-                                        <tr>
-                                            <th>Código Documento</th>
-                                            <th>Pertenece a</th>
-                                            <th>Tipo Documento</th>
-                                            <th>Presentado</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <?php foreach ($documentos as $documento): ?>
-                                            <tr>
-                                                <td><?php echo $documento['CodificDoc']; ?></td>
-                                                <td><?php echo $documento['Dequien']; ?></td>
-                                                <td><?php echo $documento['DescripTDoc']; ?></td>
-                                                <td><?php echo $documento['FechaPres']; ?></td>
-                                            </tr>
-                                        <?php endforeach; ?>
-                                    </tbody>
-                                </table>
-
-                                <br>
-                                <h6>Agregar más documentos</h6>
+                    <div class="card p-4">
+                        <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+                            <div>
+                                <h2 class="h3 mb-1">Entrega de Documentos</h2>
+                                <?php if ($inscripcion): ?>
+                                    <div class="d-flex flex-wrap align-items-center gap-2 small text-muted">
+                                        <span class="badge bg-primary-subtle text-primary"><?php echo htmlspecialchars($inscripcion['DescripSac'], ENT_QUOTES, 'UTF-8'); ?></span>
+                                        <span class="fw-semibold text-body"><?php echo htmlspecialchars($nombrePrincipal, ENT_QUOTES, 'UTF-8'); ?></span>
+                                        <span>·</span>
+                                        <span><?php echo $etiquetaFecha; ?>: <?php echo !empty($fechaCabecera) ? date('d/m/Y', strtotime($fechaCabecera)) : '—'; ?></span>
+                                    </div>
+                                <?php else: ?>
+                                    <p class="text-muted mb-0">Seleccione un certificado desde Información de Certificados.</p>
+                                <?php endif; ?>
                             </div>
-
-                        <?php else: ?>
-                            <div class="col-sm-12 col-lg-12">
-                                <p>No se han registrado documentos.</p>
+                            <div class="d-flex align-items-center gap-2">
+                                <?php if ($codIns > 0): ?>
+                                    <span class="small text-muted">Código interno: <strong class="text-body"><?php echo (int) $codIns; ?></strong></span>
+                                <?php endif; ?>
+                                <a href="<?php echo htmlspecialchars($urlVolver, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-warning-soft btn-sm"><i class="bi bi-arrow-left"></i> Volver</a>
                             </div>
-                        <?php endif; ?>
+                        </div>
+                    </div>
 
-                        <div class="col-sm-12 col-lg-12">
-                            <form method="POST" class="row g-3">
-                                <input type="hidden" name="CodIns" value="<?php echo $codIns; ?>">
-                                <div class="form-group col-sm-4 col-lg-4">
-                                    <label for="CodTDoc">Tipo de Documento</label>
-                                    <select name="CodTDoc" class="form-control" id="CodTDoc" required onchange="toggleFields()">
-                                        <option value="1">Cedula de Identidad</option>
-                                        <option value="2">Certificado de Nacimiento</option>
-                                        <option value="3">Certificado de Bautizo</option>
-                                        <option value="4">Certificado de Primera Comunión</option>
-                                        <option value="5">Certificado de Confirmación</option>
-                                        <option value="6">Certificado de Matrimonio</option>
-                                        <option value="7">Certificado de Defunción</option>
-                                    </select>
-                                </div>
-                                <div class="form-group col-sm-4 col-lg-3">
-                                    <label for="CiPersona">Fecha Presentada</label>
-                                    <input type="date" class="form-control" name="FechaPres" required
-                                        max="<?php echo date('Y-m-d'); ?>"
-                                        value="<?php echo date('Y-m-d'); ?>">
-                                </div>
-                                <div class="form-group col-sm-4 col-lg-3">
-                                    <label for="CodificDoc">Código de Documento</label>
-                                    <input type="text" class="form-control" name="CodificDoc" placeholder="Código Documento" required>
-                                </div>
-                                <div class="form-group col-sm-3 col-lg-2">
-                                    <label for="Dequien">A quien Pertenece</label>
-                                    <select name="Dequien" class="form-control" required>
-                                        <option value="Celebrante">Feligrés</option>
-                                        <option value="Novio">Novio</option>
-                                        <option value="Novia">Novia</option>
-                                        <option value="Papá">Papá</option>
-                                        <option value="Mamá">Mamá</option>
-                                        <option value="Padrino">Padrino</option>
-                                        <option value="Madrina">Madrina</option>
-                                        <option value="Testigo Novio">Testigo Novio</option>
-                                        <option value="Testigo Novia">Testigo Novia</option>
-                                    </select>
-                                </div>
-
-                                <div id="conditionalFields" style="display: none;">
-                                    <div class="form-group col-sm-3 col-lg-3">
-                                        <label for="ParroquiaBau">Donde se realizó</label>
-                                        <input type="text" class="form-control" name="ParroquiaBau" placeholder="Nombre de lugar" required>
+                    <?php if ($requisitos): ?>
+                        <div class="card">
+                            <div class="card-body d-flex flex-wrap align-items-center gap-4">
+                                <div class="flex-grow-1" style="min-width:260px;">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <strong><?php echo (int) $requisitos['adjuntos']; ?> de <?php echo (int) $requisitos['total']; ?> documentos adjuntos</strong>
+                                        <span class="small text-muted"><?php echo $porcentaje; ?>% completado</span>
                                     </div>
-
-                                    <div class="form-group col-sm-3 col-lg-2">
-                                        <label for="NroLibro">Libro</label>
-                                        <input type="text" class="form-control" name="NroLibro" placeholder="Libro" required>
-                                    </div>
-
-                                    <div class="form-group col-sm-3 col-lg-2">
-                                        <label for="NroPag">Página</label>
-                                        <input type="text" class="form-control" name="NroPag" placeholder="Página" required>
-                                    </div>
-
-                                    <div class="form-group col-sm-3 col-lg-2">
-                                        <label for="NroPart">Partida</label>
-                                        <input type="text" class="form-control" name="NroPart" placeholder="Partida" required>
-                                    </div>
-
-                                    <div class="form-group col-sm-3 col-lg-3">
-                                        <label for="FechaBau">Fecha Registro</label>
-                                        <input type="date" class="form-control" name="FechaBau" max="<?php echo date('Y-m-d'); ?>" required>
+                                    <div class="progress" style="height:8px;">
+                                        <div class="progress-bar bg-success" role="progressbar" style="width:<?php echo $porcentaje; ?>%" aria-valuenow="<?php echo $porcentaje; ?>" aria-valuemin="0" aria-valuemax="100"></div>
                                     </div>
                                 </div>
-
-                                <div class="col-sm-6 col-lg-6">
-                                    <a href="VistaSolicitante.php" class="btn btn-warning-soft w-100"><i class="bi bi-arrow-bar-left"></i> Volver a Anterior</a>
+                                <div class="border-start ps-4 text-end">
+                                    <div class="small text-muted">Datos reutilizables del registro</div>
+                                    <div class="fw-bold text-primary"><?php echo (int) $requisitos['reutilizables']; ?> documento<?php echo $requisitos['reutilizables'] === 1 ? '' : 's'; ?></div>
                                 </div>
-                                <div class="col-sm-6 col-lg-6">
-                                    <button type="submit" name="registrar_documento" class="btn btn-success-soft w-100">Registrar Documento <i class="bi bi-upload"></i></button>
-                                </div>
-                            </form>
+                            </div>
                         </div>
 
+                        <div class="card">
+                            <div class="card-header bg-transparent d-flex flex-wrap justify-content-between align-items-center gap-2">
+                                <div>
+                                    <h6 class="mb-0">Personas del sacramento</h6>
+                                    <small class="text-muted">Se cargan automáticamente de la inscripción.</small>
+                                </div>
+                                <span class="badge bg-primary-subtle text-primary"><i class="bi bi-people me-1"></i><?php echo count($personas); ?> persona<?php echo count($personas) === 1 ? '' : 's'; ?></span>
+                            </div>
+                            <div class="card-body">
+                                <div class="row g-2">
+                                    <?php foreach ($personas as $persona): ?>
+                                        <?php $nombreCompleto = trim(implode(' ', array_filter([$persona['Nombre'], $persona['ApPaterno'], $persona['ApMaterno']]))); ?>
+                                        <div class="col-sm-6 col-xl-4">
+                                            <div class="border rounded-3 p-2 h-100 d-flex align-items-center gap-2">
+                                                <span class="bg-primary-subtle text-primary rounded-circle d-flex align-items-center justify-content-center flex-shrink-0" style="width:34px;height:34px;">
+                                                    <i class="bi bi-person"></i>
+                                                </span>
+                                                <div class="min-w-0">
+                                                    <div class="text-uppercase text-muted" style="font-size:.68rem;letter-spacing:.04em;"><?php echo htmlspecialchars($etiquetasRol[$persona['Rol']] ?? $persona['Rol'], ENT_QUOTES, 'UTF-8'); ?></div>
+                                                    <div class="fw-semibold small text-truncate"><?php echo htmlspecialchars($nombreCompleto, ENT_QUOTES, 'UTF-8'); ?></div>
+                                                    <div class="small text-muted">CI <?php echo htmlspecialchars((string) (!empty($persona['NumeroDocumento']) ? $persona['NumeroDocumento'] : $persona['CiPersona']), ENT_QUOTES, 'UTF-8'); ?></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
+                        </div>
 
-                    </div>
+                        <?php foreach ($requisitos['secciones'] as $seccion): ?>
+                            <div class="card">
+                                <div class="card-header bg-transparent d-flex flex-wrap justify-content-between align-items-center gap-2">
+                                    <div>
+                                        <h6 class="mb-0"><?php echo htmlspecialchars($seccion['titulo'], ENT_QUOTES, 'UTF-8'); ?></h6>
+                                        <?php if ($seccion['modo'] === 'lista'): ?>
+                                            <small class="text-muted">Los datos ya registrados se reutilizan; solo falta adjuntar la copia digital.</small>
+                                        <?php endif; ?>
+                                    </div>
+                                    <?php
+                                    $cantidadAplicables = 0;
+                                    if ($seccion['modo'] === 'lista') {
+                                        foreach ($seccion['items'] as $item) {
+                                            if ($item['aplica']) {
+                                                $cantidadAplicables++;
+                                            }
+                                        }
+                                    } else {
+                                        foreach ($seccion['filas'] as $fila) {
+                                            foreach ($fila['celdas'] as $celda) {
+                                                if ($celda['aplica']) {
+                                                    $cantidadAplicables++;
+                                                }
+                                            }
+                                        }
+                                    }
+                                    ?>
+                                    <span class="badge bg-secondary-subtle text-secondary"><i class="bi bi-list-check me-1"></i><?php echo $cantidadAplicables; ?> requerido<?php echo $cantidadAplicables === 1 ? '' : 's'; ?></span>
+                                </div>
+                                <div class="card-body p-0">
+                                    <div class="table-responsive">
+                                        <table class="table align-middle mb-0">
+                                            <?php if ($seccion['modo'] === 'pareja'): ?>
+                                                <thead class="table-light">
+                                                    <tr>
+                                                        <th style="width:34%">Documento</th>
+                                                        <th>Novio</th>
+                                                        <th>Novia</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <?php foreach ($seccion['filas'] as $fila): ?>
+                                                        <tr>
+                                                            <td class="fw-semibold"><?php echo htmlspecialchars($fila['documento'], ENT_QUOTES, 'UTF-8'); ?></td>
+                                                            <?php foreach ($fila['celdas'] as $celda): ?>
+                                                                <td>
+                                                                    <div class="d-flex flex-column gap-1 align-items-start">
+                                                                        <?php echo $badgeEstado($celda['estado']); ?>
+                                                                        <?php if ($celda['datos'] !== ''): ?>
+                                                                            <small class="text-muted"><?php echo htmlspecialchars($celda['datos'], ENT_QUOTES, 'UTF-8'); ?></small>
+                                                                        <?php endif; ?>
+                                                                        <div class="d-flex flex-wrap align-items-center gap-1">
+                                                                            <?php echo $accionDocumento($celda); ?>
+                                                                        </div>
+                                                                    </div>
+                                                                </td>
+                                                            <?php endforeach; ?>
+                                                        </tr>
+                                                    <?php endforeach; ?>
+                                                </tbody>
+                                            <?php else: ?>
+                                                <thead class="table-light">
+                                                    <tr>
+                                                        <th style="width:32%">Documento</th>
+                                                        <th style="width:20%">Pertenece a</th>
+                                                        <th style="width:22%">Datos ya registrados</th>
+                                                        <th style="width:12%">Estado</th>
+                                                        <th class="text-end">Archivo digital</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <?php foreach ($seccion['items'] as $item): ?>
+                                                        <tr>
+                                                            <td>
+                                                                <div class="fw-semibold"><?php echo htmlspecialchars($item['documento'], ENT_QUOTES, 'UTF-8'); ?></div>
+                                                                <?php if ($item['detalle'] !== ''): ?>
+                                                                    <small class="text-muted"><?php echo htmlspecialchars($item['detalle'], ENT_QUOTES, 'UTF-8'); ?></small>
+                                                                <?php endif; ?>
+                                                            </td>
+                                                            <td>
+                                                                <?php if ($item['persona'] !== ''): ?>
+                                                                    <div class="small"><?php echo htmlspecialchars($item['persona'], ENT_QUOTES, 'UTF-8'); ?></div>
+                                                                    <small class="text-muted"><?php echo htmlspecialchars($etiquetasRol[$item['rol']] ?? $item['rol'], ENT_QUOTES, 'UTF-8'); ?></small>
+                                                                <?php else: ?>
+                                                                    <span class="text-muted">—</span>
+                                                                <?php endif; ?>
+                                                            </td>
+                                                            <td>
+                                                                <?php if ($item['datos'] !== ''): ?>
+                                                                    <small class="text-muted"><?php echo htmlspecialchars($item['datos'], ENT_QUOTES, 'UTF-8'); ?></small>
+                                                                <?php else: ?>
+                                                                    <small class="text-muted">—</small>
+                                                                <?php endif; ?>
+                                                                <?php if (!empty($item['generarCodIns'])): ?>
+                                                                    <div><a class="small" target="_blank" href="<?php echo htmlspecialchars($item['generarPagina'], ENT_QUOTES, 'UTF-8'); ?>?CodIns=<?php echo (int) $item['generarCodIns']; ?>">Ver certificado</a></div>
+                                                                <?php endif; ?>
+                                                            </td>
+                                                            <td>
+                                                                <?php echo $badgeEstado($item['estado']); ?>
+                                                                <?php echo $cambiarCondicional($item); ?>
+                                                            </td>
+                                                            <td class="text-end">
+                                                                <?php echo $accionDocumento($item); ?>
+                                                            </td>
+                                                        </tr>
+                                                    <?php endforeach; ?>
+                                                </tbody>
+                                            <?php endif; ?>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+
+                        <div class="card">
+                            <div class="card-body small text-muted">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Se guarda la copia digital; el original y la fotocopia se verifican en ventanilla.
+                                <?php if ($notaSacramento !== ''): ?>
+                                    <?php echo htmlspecialchars($notaSacramento, ENT_QUOTES, 'UTF-8'); ?>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    <?php else: ?>
+                        <div class="card">
+                            <div class="card-body text-center py-5">
+                                <i class="bi bi-file-earmark-x display-6 text-muted"></i>
+                                <h5 class="mt-3">Certificado no encontrado</h5>
+                                <p class="text-muted mb-3">Verifique el código del certificado o vuelva a la búsqueda.</p>
+                                <a href="<?php echo htmlspecialchars($urlVolver, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-warning-soft"><i class="bi bi-arrow-left"></i> Volver a Información de Certificados</a>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+
+                    <?php if ($inscripcion): ?>
+                        <div class="card">
+                            <div class="card-header bg-transparent d-flex flex-wrap justify-content-between align-items-center gap-2">
+                                <div>
+                                    <h6 class="mb-0">Documentos registrados</h6>
+                                    <small class="text-muted">Documentos ya guardados para este certificado.</small>
+                                </div>
+                                <span class="badge bg-secondary-subtle text-secondary"><?php echo count($documentos); ?></span>
+                            </div>
+                            <div class="card-body p-0">
+                                <?php if (count($documentos) > 0): ?>
+                                    <div class="table-responsive">
+                                        <table class="table align-middle mb-0">
+                                            <thead class="table-dark">
+                                                <tr>
+                                                    <th>Código Documento</th>
+                                                    <th>Pertenece a</th>
+                                                    <th>Tipo Documento</th>
+                                                    <th>Presentado</th>
+                                                    <th>Archivo</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <?php foreach ($documentos as $documento): ?>
+                                                    <tr>
+                                                        <td><?php echo !empty($documento['CodificDoc']) ? htmlspecialchars((string) $documento['CodificDoc'], ENT_QUOTES, 'UTF-8') : '—'; ?></td>
+                                                        <td><?php echo htmlspecialchars($etiquetasRol[$documento['Dequien']] ?? $documento['Dequien'], ENT_QUOTES, 'UTF-8'); ?></td>
+                                                        <td><?php echo htmlspecialchars($documento['DescripTDoc'], ENT_QUOTES, 'UTF-8'); ?></td>
+                                                        <td><?php echo !empty($documento['FechaPres']) ? date('d/m/Y', strtotime($documento['FechaPres'])) : '—'; ?></td>
+                                                        <td>
+                                                            <?php if (!empty($documento['Archivo'])): ?>
+                                                                <a class="btn btn-sm btn-light border" target="_blank" href="ver_documento_presentado.php?archivo=<?php echo rawurlencode($documento['Archivo']); ?>"><i class="bi bi-eye"></i> Ver</a>
+                                                            <?php else: ?>
+                                                                <span class="text-muted">—</span>
+                                                            <?php endif; ?>
+                                                        </td>
+                                                    </tr>
+                                                <?php endforeach; ?>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="p-4 text-center text-muted">No se han registrado documentos.</div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-header bg-transparent">
+                                <h6 class="mb-0">Agregar un documento adicional</h6>
+                                <small class="text-muted">Para documentos que no están en la lista del sacramento.</small>
+                            </div>
+                            <div class="card-body">
+                                <form method="POST" enctype="multipart/form-data" class="row g-3">
+                                    <input type="hidden" name="CodIns" value="<?php echo (int) $codIns; ?>">
+                                    <input type="hidden" name="registrar_documento" value="1">
+
+                                    <div class="form-group col-sm-6 col-lg-3">
+                                        <label for="CodTDoc" class="form-label">Tipo de Documento</label>
+                                        <select name="CodTDoc" class="form-select" id="CodTDoc" required onchange="toggleFields()">
+                                            <?php foreach ($tiposDocumento as $tipo): ?>
+                                                <option value="<?php echo (int) $tipo['CodTDoc']; ?>"><?php echo htmlspecialchars($tipo['DescripTDoc'], ENT_QUOTES, 'UTF-8'); ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+                                    <div class="form-group col-sm-6 col-lg-3">
+                                        <label class="form-label">Fecha Presentada</label>
+                                        <input type="date" class="form-control" name="FechaPres" required max="<?php echo date('Y-m-d'); ?>" value="<?php echo date('Y-m-d'); ?>">
+                                    </div>
+                                    <div class="form-group col-sm-6 col-lg-3">
+                                        <label class="form-label">Código de Documento</label>
+                                        <input type="text" class="form-control" name="CodificDoc" placeholder="Código Documento" maxlength="20">
+                                    </div>
+                                    <div class="form-group col-sm-6 col-lg-3">
+                                        <label class="form-label">A quién Pertenece</label>
+                                        <select name="Dequien" class="form-select" required>
+                                            <?php if ($personas): ?>
+                                                <?php foreach ($personas as $persona): ?>
+                                                    <?php $nombreCompleto = trim(implode(' ', array_filter([$persona['Nombre'], $persona['ApPaterno'], $persona['ApMaterno']]))); ?>
+                                                    <option value="<?php echo htmlspecialchars($persona['Rol'], ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars(($etiquetasRol[$persona['Rol']] ?? $persona['Rol']) . ' — ' . $nombreCompleto, ENT_QUOTES, 'UTF-8'); ?></option>
+                                                <?php endforeach; ?>
+                                            <?php else: ?>
+                                                <option value="Celebrante">Feligrés</option>
+                                                <option value="Novio">Novio</option>
+                                                <option value="Novia">Novia</option>
+                                                <option value="Padrino">Padrino</option>
+                                                <option value="Madrina">Madrina</option>
+                                            <?php endif; ?>
+                                        </select>
+                                    </div>
+
+                                    <div class="col-12" id="conditionalFields" style="display:none;">
+                                        <div class="row g-3">
+                                            <div class="form-group col-sm-6 col-lg-4">
+                                                <label class="form-label">Donde se realizó</label>
+                                                <input type="text" class="form-control" name="ParroquiaBau" placeholder="Nombre de lugar" maxlength="30">
+                                            </div>
+                                            <div class="form-group col-sm-6 col-lg-2">
+                                                <label class="form-label">Libro</label>
+                                                <input type="text" class="form-control" name="NroLibro" placeholder="Libro" maxlength="10">
+                                            </div>
+                                            <div class="form-group col-sm-6 col-lg-2">
+                                                <label class="form-label">Página</label>
+                                                <input type="text" class="form-control" name="NroPag" placeholder="Página" maxlength="10">
+                                            </div>
+                                            <div class="form-group col-sm-6 col-lg-2">
+                                                <label class="form-label">Partida</label>
+                                                <input type="text" class="form-control" name="NroPart" placeholder="Partida" maxlength="10">
+                                            </div>
+                                            <div class="form-group col-sm-6 col-lg-2">
+                                                <label class="form-label">Fecha Registro</label>
+                                                <input type="date" class="form-control" name="FechaBau" max="<?php echo date('Y-m-d'); ?>">
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-12">
+                                        <label class="form-label" for="ArchivoAdicional">Archivo (JPG, PNG o PDF, máximo 5 MB)</label>
+                                        <input type="file" class="form-control" id="ArchivoAdicional" name="Archivo" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf">
+                                    </div>
+
+                                    <div class="col-12 d-flex flex-wrap gap-2">
+                                        <a href="<?php echo htmlspecialchars($urlVolver, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-warning-soft"><i class="bi bi-arrow-bar-left"></i> Volver a Anterior</a>
+                                        <button type="submit" class="btn btn-success-soft">Registrar Documento <i class="bi bi-upload"></i></button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    <?php endif; ?>
                 </div>
-            </div>
-        </div>
     </main>
 
     <script>
@@ -340,13 +685,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrar_documento'])
         function toggleFields() {
             const select = document.getElementById('CodTDoc');
             const conditionalFields = document.getElementById('conditionalFields');
-
-            if (select.value === "2" || select.value === "3" || select.value === "5" || select.value === "6") {
-                conditionalFields.style.display = 'flex';
-            } else {
-                conditionalFields.style.display = 'none';
+            if (!select || !conditionalFields) {
+                return;
             }
+
+            const tiposConPartida = ['2', '3', '5', '6', '8'];
+            conditionalFields.style.display = tiposConPartida.indexOf(select.value) !== -1 ? 'block' : 'none';
         }
+
+        document.addEventListener('DOMContentLoaded', toggleFields);
     </script>
     <script src="../assets/vendor/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="../assets/js/functions.js"></script>

@@ -44,8 +44,24 @@ class ControladorCoordinadorAdmin {
         return $this->modelo->buscarPersonasPorNombre($nombre);
     }
 
-    public function registrarPersona($ci, $nombre, $apPaterno, $apMaterno, $sexo, $fechaNac, $direccion, $contacto, $estadoCivil) {
-        return $this->modelo->registrarPersona($ci, $nombre, $apPaterno, $apMaterno, $sexo, $fechaNac, $direccion, $contacto, $estadoCivil);
+    public function buscarPersonasFiltradas($texto = '', $sacramento = '', $zona = '', $estadoCivil = '') {
+        return $this->modelo->buscarPersonasFiltradas($texto, $sacramento, $zona, $estadoCivil);
+    }
+
+    public function obtenerZonasSector() {
+        return $this->modelo->obtenerZonasSector();
+    }
+
+    public function obtenerSacramentosSolicitados() {
+        return $this->modelo->obtenerSacramentosSolicitados();
+    }
+
+    public function obtenerEstadosCiviles() {
+        return $this->modelo->obtenerEstadosCiviles();
+    }
+
+    public function registrarPersona($ci, $nombre, $apPaterno, $apMaterno, $sexo, $fechaNac, $direccion, $zonaSector, $contacto, $telefonoAlternativo, $correo, $estadoCivil, $sacramentoSolicita, $observaciones) {
+        return $this->modelo->registrarPersona($ci, $nombre, $apPaterno, $apMaterno, $sexo, $fechaNac, $direccion, $zonaSector, $contacto, $telefonoAlternativo, $correo, $estadoCivil, $sacramentoSolicita, $observaciones);
     }
 }
 ?>

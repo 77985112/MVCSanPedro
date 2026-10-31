@@ -1,5 +1,6 @@
-﻿<?php
+<?php
 require_once '../Controlador/ControladorPersona.php';
+require_once '../src/formulario_persona_ampliado.php';
 
 session_start();
 if (!isset($_SESSION['usuario'])) {
@@ -7,21 +8,82 @@ if (!isset($_SESSION['usuario'])) {
   exit();
 }
 $usuario = $_SESSION['usuario'];
+require_once __DIR__ . '/../Controlador/controladorAcceso.php';
+ControladorAcceso::exigir('persona');
 
 $controller = new ControladorPersona();
+$mensajePersona = '';
+$errorPersona = '';
+
+if (isset($_GET['seguimientoPersona'])) {
+  header('Content-Type: application/json; charset=utf-8');
+  $identificacion = is_string($_GET['seguimientoPersona']) ? trim($_GET['seguimientoPersona']) : '';
+  if ($identificacion === '') {
+    http_response_code(400);
+    echo json_encode(['error' => 'Identificación no válida.'], JSON_UNESCAPED_UNICODE);
+    exit;
+  }
+  $seguimientoPersona = $controller->buscarPersona($identificacion);
+  if (!$seguimientoPersona) {
+    http_response_code(404);
+    echo json_encode(['error' => 'Persona no encontrada.'], JSON_UNESCAPED_UNICODE);
+    exit;
+  }
+  echo json_encode([
+    'CiPersona' => $seguimientoPersona['CiPersona'],
+    'NombreCompleto' => trim(implode(' ', array_filter([
+      $seguimientoPersona['Nombre'], $seguimientoPersona['ApPaterno'], $seguimientoPersona['ApMaterno']
+    ]))),
+    'SacramentoSolicita' => $seguimientoPersona['SacramentoSolicita'] ?? '',
+    'ProcesosPastorales' => $seguimientoPersona['ProcesosPastorales'] ?? []
+  ], JSON_UNESCAPED_UNICODE);
+  exit;
+}
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['crear'])) {
-  $controller->crearPersona($_POST);
+  if ($controller->crearPersona($_POST)) {
+    $mensajePersona = '<strong>Persona registrada correctamente.</strong> CI: ' . htmlspecialchars($controller->obtenerCiPersonaRegistrada() ?? ($_POST['CiPersona'] ?? ''));
+  } else {
+    $errorPersona = $controller->obtenerError() ?: 'No se pudo registrar la persona. Verifique los datos e intente nuevamente.';
+  }
 }
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['actualizar'])) {
-  $controller->actualizarPersona($_POST);
-  header("Location: VistaPersona.php?datPer=" . $_POST['datPer']);
+  $actualizada = $controller->actualizarPersona($_POST);
+  $destino = 'VistaPersona.php?datPer=' . rawurlencode($_POST['CiPersona'] ?? '');
+  if (!empty($_POST['buscarActual'])) $destino .= '&buscarPersona=' . rawurlencode($_POST['buscarActual']);
+  $destino .= $actualizada ? '&actualizada=1' : '&actualizada=0';
+  header('Location: ' . $destino);
   exit;
+}
+
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['cambiar_ci'])) {
+  $ciAnterior = trim((string) ($_POST['CiPersona'] ?? ''));
+  if ($controller->actualizarIdentificacion($_POST)) {
+    $destino = 'VistaPersona.php?datPer=' . rawurlencode(trim((string) ($_POST['NuevaCi'] ?? ''))) . '&ciActualizada=1';
+    if (!empty($_POST['buscarActual'])) $destino .= '&buscarPersona=' . rawurlencode($_POST['buscarActual']);
+    header('Location: ' . $destino);
+    exit;
+  }
+  $errorPersona = $controller->obtenerError() ?: 'No se pudo actualizar el CI de la persona.';
+  if ($ciAnterior !== '') {
+    $_GET['datPer'] = $ciAnterior;
+    if (!empty($_POST['buscarActual'])) $_GET['buscarPersona'] = $_POST['buscarActual'];
+  }
 }
 $persona = null;
 if (isset($_GET['datPer'])) {
   $persona = $controller->buscarPersona($_GET['datPer']);
+}
+$terminoBusqueda = isset($_GET['buscarPersona']) && is_string($_GET['buscarPersona'])
+  ? preg_replace('/\s+/u', ' ', trim($_GET['buscarPersona'])) : '';
+$resultadosBusqueda = $terminoBusqueda !== '' ? $controller->buscarPersonas($terminoBusqueda, 20) : [];
+if (isset($_GET['actualizada'])) {
+  if ($_GET['actualizada'] === '1') $mensajePersona = '<strong>Datos de la persona actualizados correctamente.</strong>';
+  else $errorPersona = 'No se pudieron actualizar los datos de la persona.';
+}
+if (isset($_GET['ciActualizada']) && $_GET['ciActualizada'] === '1') {
+  $mensajePersona = '<strong>CI actualizado correctamente.</strong> Nuevo CI: ' . htmlspecialchars((string) ($_GET['datPer'] ?? ''), ENT_QUOTES, 'UTF-8') . '.';
 }
 
 ?>
@@ -37,8 +99,10 @@ if (isset($_GET['datPer'])) {
   <link rel="shortcut icon" href="../assets/images/Icono.png">
   <link rel="stylesheet" type="text/css" href="../assets/vendor/font-awesome/css/all.min.css">
   <link rel="stylesheet" type="text/css" href="../assets/vendor/bootstrap-icons/bootstrap-icons.css">
-  <link rel="stylesheet" type="text/css" href="../assets/css/style.css">
+  <link rel="stylesheet" type="text/css" href="../assets/css/style.css?v=<?php echo filemtime(__DIR__ . '/../assets/css/style.css'); ?>">
+  <link rel="stylesheet" type="text/css" href="../assets/css/logo-cabecera.css?v=<?= filemtime(__DIR__ . '/../assets/css/logo-cabecera.css') ?>">
   <script src="../assets/js/jquery-3.6.4.min.js"></script>
+  <link rel="stylesheet" href="../assets/css/persona-registro.css?v=<?= filemtime(__DIR__ . '/../assets/css/persona-registro.css') ?>">
 </head>
 
 <body>
@@ -46,8 +110,8 @@ if (isset($_GET['datPer'])) {
     <nav class="navbar navbar-expand-lg">
       <div class="container">
         <a class="navbar-brand" href="VistaPersonal.php">
-          <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png" alt="logo">
-          <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png" alt="logo">
+          <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo.png') ?>" alt="logo">
+          <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo-light.png') ?>" alt="logo">
         </a>
 
         <ul class="nav flex-nowrap align-items-center ms-sm-3 list-unstyled">
@@ -59,13 +123,13 @@ if (isset($_GET['datPer'])) {
 
           <li class="nav-item ms-2 dropdown">
             <a class="nav-link btn icon-md p-0" href="#" id="profileDropdown" role="button" data-bs-auto-close="outside" data-bs-display="static" data-bs-toggle="dropdown" aria-expanded="false">
-              <img class="avatar-img rounded border border-white border-3" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}"; ?>" alt="">
+              <img class="avatar-img rounded border border-white border-3" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}?v=" . time(); ?>" alt="">
             </a>
             <ul class="dropdown-menu dropdown-animation dropdown-menu-end pt-3 small me-md-n3" aria-labelledby="profileDropdown">
               <li class="px-3">
                 <div class="d-flex align-items-center position-relative">
                   <div class="avatar me-3">
-                    <img class="avatar-img rounded-circle" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}"; ?>" alt="avatar">
+                    <img class="avatar-img rounded-circle" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}?v=" . time(); ?>" alt="avatar">
                   </div>
                   <div>
                     <a class="h6 stretched-link" href="#"><?php echo $usuario['Nombre'] . " " . $usuario['Paterno'] . " " . $usuario['Materno']; ?></a>
@@ -115,7 +179,7 @@ if (isset($_GET['datPer'])) {
 
 
   <main>
-    <div class="container">
+    <div class="container personal-dashboard-container">
       <div class="row g-4">
         <div class="col-lg-3">
           <div class="d-flex align-items-center d-lg-none">
@@ -129,20 +193,20 @@ if (isset($_GET['datPer'])) {
             <div class="offcanvas offcanvas-start" tabindex="-1" id="offcanvasSideNavbar">
               <div class="offcanvas-header">
                 <a class="navbar-brand" href="#">
-                  <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png" alt="logo">
-                  <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png" alt="logo">
+                  <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo.png') ?>" alt="logo">
+                  <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo-light.png') ?>" alt="logo">
                 </a>
                 <button type="button" class="btn-close text-reset ms-auto" data-bs-dismiss="offcanvas" aria-label="Close"></button>
               </div>
 
               <div class="offcanvas-body d-block px-2 px-lg-0">
                 <div class="card overflow-hidden">
-                  <div class="h-50px" style="background-image:url(<?php echo ($usuario['FondoPer'] == 'Ninguno' || empty($usuario['FondoPer'])) ? '../assets/images/fondo/Ninguno.jpg' : "../assets/images/fondo/{$usuario['FondoPer']}"; ?>); background-position: center; background-size: cover; background-repeat: no-repeat;">
+                  <div class="h-50px" style="background-image:url(<?php echo ($usuario['FondoPer'] == 'Ninguno' || empty($usuario['FondoPer'])) ? '../assets/images/fondo/Ninguno.jpg' : "../assets/images/fondo/{$usuario['FondoPer']}?v=" . time(); ?>); background-position: center; background-size: cover; background-repeat: no-repeat;">
                   </div>
                   <div class="card-body pt-0">
                     <div class="text-center">
                       <div class="avatar avatar-lg mt-n5 mb-3">
-                        <img class="avatar-img rounded border border-white border-3" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}"; ?>" alt="">
+                        <img class="avatar-img rounded border border-white border-3" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}?v=" . time(); ?>" alt="">
                       </div>
                       <h5 class="mb-0"> <a href="PerfilAdmin.php"><?php echo $usuario['Nombre'] . " " . $usuario['Paterno'] . " " . $usuario['Materno']; ?></a> </h5>
                       <small><?php echo $usuario['DescripCar']; ?></small>
@@ -151,34 +215,7 @@ if (isset($_GET['datPer'])) {
 
                     <hr>
 
-                    <ul class="nav nav-link-secondary flex-column fw-bold gap-2">
-                      <li class="nav-item">
-                        <a class="nav-link" href="VistaPersonal.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/mensaje.png" alt=""><span>Inicio </span></a>
-                      </li>
-                      <li class="nav-item">
-                        <a class="nav-link active" href="VistaPersona.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/nuevo.png" alt=""><span>Persona </span></a>
-                      </li>
-                      <li class="nav-item">
-                        <a class="nav-link" href="VistaReservas.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/instrucciones.png" alt=""><span>Celebración </span></a>
-                      </li>
-                      <?php if ($usuario['DescripCar'] == 'Párroco') { ?>
-                        <li class="nav-item">
-                          <a class="nav-link" href="VistaGesPersonal.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/seguro.png" alt=""><span>Personal</span></a>
-                        </li>
-                        <li class="nav-item">
-                          <a class="nav-link" href="VistaCoordinadorAdmin.php"> <span>🔥 ⚪ Coordinador</span></a>
-                        </li>
-                      <?php } ?>
-                      <li class="nav-item">
-                        <a class="nav-link" href="VistaSolicitante.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/contrato.png" alt=""><span>Certificado </span></a>
-                      </li>
-                      <?php if ($usuario['DescripCar'] != "Personal") { ?>
-                        <li class="nav-item">
-                          <a class="nav-link" href="VistaEmitidos.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/Emitido.png" alt=""><span>Certificado Emitido </span></a>
-                        </li>
-                      <?php } ?>
-
-                    </ul>
+                    <?php require_once __DIR__ . '/../Controlador/controladorAcceso.php'; ControladorAcceso::renderMenu(); ?>
                   </div>
                   <div class="card-footer text-center py-2">
                     <a class="btn btn-link btn-sm" href="PerfilAdmin.php">Ver mi Perfil</a>
@@ -190,23 +227,153 @@ if (isset($_GET['datPer'])) {
           </nav>
         </div>
 
-        <div class="col-md-8 col-lg-6 vstack gap-4">
+        <div class="col-md-8 col-lg-9 vstack gap-4">
+          <?php if ($mensajePersona): ?>
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+              <?php echo $mensajePersona; ?>
+              <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+          <?php endif; ?>
+          <?php if ($errorPersona): ?>
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+              <strong>Error:</strong> <?php echo htmlspecialchars($errorPersona); ?>
+              <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+          <?php endif; ?>
           <div class="card h-100">
-            <div class="card-header d-sm-flex align-items-center text-center justify-content-sm-between border-0 pb-0">
+            <div class="card-header d-lg-flex align-items-start text-center justify-content-lg-between border-0 pb-0 gap-3">
               <h1 class="h4 card-title">Datos de Persona</h1>
-              <form method="GET" class="mb-3 d-flex align-items-end">
-                <div class="form-group mb-0 me-2">
-                  <input type="text" class="form-control" name="datPer" placeholder="CI Persona" required>
+              <form method="GET" class="persona-buscador mb-3">
+                <div class="d-flex align-items-center gap-2">
+                  <div class="form-group mb-0 flex-grow-1">
+                    <input type="search" class="form-control" name="buscarPersona" value="<?php echo htmlspecialchars($terminoBusqueda, ENT_QUOTES, 'UTF-8'); ?>" placeholder="Buscar por CI, nombre o apellido" aria-label="Buscar persona" required>
+                  </div>
+                  <button type="submit" class="btn btn-primary-soft" data-bs-toggle="tooltip" data-bs-placement="top" title="Buscar"><i class="bi bi-search"></i></button>
+                  <button type="button" class="btn btn-primary-soft" data-bs-toggle="modal" data-bs-target="#MostrarModal" title="Registrar nueva persona"><i class="bi bi-plus-circle"></i></button>
                 </div>
-                <button type="submit" class="btn btn-primary-soft me-2" data-bs-toggle="tooltip" data-bs-placement="top" title="Buscar"><i class="bi bi-search"></i></button>
-                <button type="button" class="btn btn-primary-soft me-2" data-bs-toggle="modal" data-bs-target="#MostrarModal"><i class="bi bi-plus-circle"></i></button>
+                <small class="text-muted d-block text-start mt-1">Puede buscar por CI, nombre, apellido paterno o materno.</small>
               </form>
             </div>
 
             <div class="card-body">
+              <?php if ($terminoBusqueda !== ''): ?>
+                <section class="persona-resultados mb-4" aria-labelledby="tituloResultadosPersona">
+                  <div class="persona-resultados-cabecera">
+                    <h2 class="h6 mb-0" id="tituloResultadosPersona">Personas encontradas</h2>
+                    <span class="badge bg-primary-soft text-primary"><?php echo count($resultadosBusqueda); ?> <?php echo count($resultadosBusqueda) === 1 ? 'resultado' : 'resultados'; ?></span>
+                  </div>
+                  <?php if ($resultadosBusqueda): ?>
+                    <div class="table-responsive">
+                      <table class="table align-middle mb-0 persona-resultados-tabla">
+                        <thead><tr><th>Nombre completo</th><th>Año de nacimiento</th><th>CI / Documento</th><th class="text-center">Acciones</th></tr></thead>
+                        <tbody>
+                          <?php foreach ($resultadosBusqueda as $resultado):
+                            $nombreCompleto = trim(implode(' ', array_filter([$resultado['Nombre'], $resultado['ApPaterno'], $resultado['ApMaterno']])));
+                            $documentoMostrar = trim((string) ($resultado['NumeroDocumento'] ?? '')) !== '' ? $resultado['NumeroDocumento'] : $resultado['CiPersona'];
+                            $anioNacimiento = !empty($resultado['FechaNac']) ? substr($resultado['FechaNac'], 0, 4) : '—';
+                            $esPersonaSeleccionada = $persona && (string) $persona['CiPersona'] === (string) $resultado['CiPersona'];
+                          ?>
+                            <tr class="<?php echo $esPersonaSeleccionada ? 'persona-fila-activa' : ''; ?>"<?php echo $esPersonaSeleccionada ? ' aria-current="true"' : ''; ?>>
+                              <td class="fw-semibold"><?php echo htmlspecialchars($nombreCompleto, ENT_QUOTES, 'UTF-8'); ?></td>
+                              <td><?php echo htmlspecialchars($anioNacimiento, ENT_QUOTES, 'UTF-8'); ?></td>
+                              <td><?php echo htmlspecialchars($documentoMostrar, ENT_QUOTES, 'UTF-8'); ?></td>
+                              <td>
+                                <div class="persona-acciones justify-content-center">
+                                  <a class="btn persona-accion persona-accion-ver" href="VistaPersona.php?datPer=<?php echo rawurlencode($resultado['CiPersona']); ?>&amp;buscarPersona=<?php echo rawurlencode($terminoBusqueda); ?>" data-bs-toggle="tooltip" title="Ver y actualizar" aria-label="Ver y actualizar"><i class="bi bi-eye-fill"></i></a>
+                                  <button type="button" class="btn persona-accion persona-accion-seguimiento" data-seguimiento-ci="<?php echo htmlspecialchars($resultado['CiPersona'], ENT_QUOTES, 'UTF-8'); ?>" data-bs-toggle="tooltip" title="Seguimiento pastoral" aria-label="Seguimiento pastoral"><i class="bi bi-clipboard-pulse"></i></button>
+                                  <a class="btn persona-accion persona-accion-reserva" href="VistaReservas.php?reservante=<?php echo rawurlencode($resultado['CiPersona']); ?>" data-bs-toggle="tooltip" title="Crear reserva" aria-label="Crear reserva"><i class="bi bi-calendar-plus"></i></a>
+                                  <a class="btn persona-accion persona-accion-certificado" href="VistaSolicitante.php?ciPersonaSeleccionada=<?php echo rawurlencode($resultado['CiPersona']); ?>" data-bs-toggle="tooltip" title="Emitir certificado" aria-label="Emitir certificado"><i class="bi bi-file-earmark-text"></i></a>
+                                </div>
+                              </td>
+                            </tr>
+                          <?php endforeach; ?>
+                        </tbody>
+                      </table>
+                    </div>
+                    <div class="persona-resultados-pie">Mostrando <?php echo count($resultadosBusqueda); ?> <?php echo count($resultadosBusqueda) === 1 ? 'persona' : 'personas'; ?></div>
+                  <?php else: ?>
+                    <div class="p-4 text-center text-muted">No se encontraron personas.</div>
+                  <?php endif; ?>
+                </section>
+              <?php endif; ?>
               <?php if ($persona): ?>
+                <?php
+                  $procesos = $persona['ProcesosPastorales'] ?? ['estadoActual' => 'Registrado', 'reservas' => [], 'catequesis' => [], 'sacramentos' => []];
+                  $estadoActual = $procesos['estadoActual'] ?? 'Registrado';
+                  $clasesEstado = ['Registrado' => 'secondary', 'Reservado' => 'info', 'Inscrito' => 'primary', 'Realizado' => 'warning', 'Certificado emitido' => 'success'];
+                  $claseEstado = $clasesEstado[$estadoActual] ?? 'secondary';
+                  $sacramentoSolicitado = $persona['SacramentoSolicita'] ?? '';
+                  $tabReserva = ['Bautizo' => 'bautizo', 'Reserva de Bautizo' => 'bautizo', 'Matrimonio' => 'matrimonio', 'Reserva de Matrimonio' => 'matrimonio', 'Reserva de misa' => 'misa'][$sacramentoSolicitado] ?? '';
+                ?>
+                <div class="card border mb-4"><div class="card-body">
+                  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <div><h6 class="mb-1">Seguimiento pastoral</h6>
+                      <span class="badge bg-<?php echo $claseEstado; ?>"><?php echo htmlspecialchars($estadoActual); ?></span>
+                      <?php if ($sacramentoSolicitado !== ''): ?><span class="badge bg-primary-soft text-primary ms-1">Solicita: <?php echo htmlspecialchars($sacramentoSolicitado); ?></span><?php endif; ?>
+                    </div>
+                    <div class="d-flex flex-wrap gap-2">
+                      <?php if ($tabReserva !== ''): ?><a class="btn btn-sm btn-outline-primary" href="VistaReservas.php?tab=<?php echo rawurlencode($tabReserva); ?>&amp;reservante=<?php echo rawurlencode($persona['CiPersona']); ?>"><i class="bi bi-calendar-plus me-1"></i>Ir a reserva</a><?php endif; ?>
+                    </div>
+                  </div>
+                  <div class="row g-3 mt-1 small">
+                    <div class="col-md-4"><strong>Reservas</strong>
+                      <?php if (empty($procesos['reservas'])): ?><div class="text-muted">Sin reservas</div>
+                      <?php else: foreach (array_slice($procesos['reservas'], 0, 3) as $reserva): ?><div><?php echo htmlspecialchars($reserva['TipoCel']); ?>: <?php echo htmlspecialchars($reserva['EstadoRes'] ?: 'Registrado'); ?> <span class="text-muted">(<?php echo htmlspecialchars($reserva['FechaReal']); ?>)</span></div><?php endforeach; endif; ?>
+                    </div>
+                    <div class="col-md-4"><strong>Catequesis</strong>
+                      <?php if (empty($procesos['catequesis'])): ?><div class="text-muted">Sin inscripción</div>
+                      <?php else: foreach (array_slice($procesos['catequesis'], 0, 3) as $catequesis): ?><div><?php echo htmlspecialchars($catequesis['Sacramento']); ?>: <?php echo $catequesis['IdInscripcion'] ? 'Inscrito' : htmlspecialchars($catequesis['EstadoCel']); ?></div><?php endforeach; endif; ?>
+                    </div>
+                    <div class="col-md-4"><strong>Sacramentos y certificados</strong>
+                      <?php if (empty($procesos['sacramentos'])): ?><div class="text-muted">Sin sacramentos registrados</div>
+                      <?php else: foreach (array_slice($procesos['sacramentos'], 0, 3) as $sacramento): ?><div><?php echo htmlspecialchars($sacramento['DescripSac']); ?>: <?php echo htmlspecialchars($sacramento['EstadoProceso']); ?></div><?php endforeach; endif; ?>
+                      <?php if ($sacramentoSolicitado === 'Primera Comunión'): ?><div class="text-muted">Primera Comunión no genera certificado.</div><?php endif; ?>
+                    </div>
+                  </div>
+                </div></div>
+                <?php $identificacionProvisional = $controller->identificacionProvisional($persona); ?>
+                <?php if ($identificacionProvisional['puede']): ?>
+                  <?php
+                    $documentoActual = trim((string) ($persona['NumeroDocumento'] ?? '')) !== '' ? $persona['NumeroDocumento'] : $persona['CiPersona'];
+                  ?>
+                  <div class="card border border-warning-subtle bg-warning-subtle mb-4">
+                    <div class="card-body">
+                      <h6 class="mb-1"><i class="bi bi-person-vcard me-2"></i>Actualizar el CI registrado</h6>
+                      <?php if ($identificacionProvisional['motivo'] === 'partida'): ?>
+                        <p class="small mb-3">Esta persona fue registrada con la partida de su certificado de nacimiento (<strong><?php echo htmlspecialchars($identificacionProvisional['partida'], ENT_QUOTES, 'UTF-8'); ?></strong>) porque todavía no contaba con CI. Cuando ya cuente con su carnet, registre aquí el número definitivo.</p>
+                      <?php else: ?>
+                        <p class="small mb-3">Esta persona fue registrada sin documento de identidad. Cuando ya cuente con su CI, registre aquí el número definitivo.</p>
+                      <?php endif; ?>
+                      <form method="POST" action="" class="row g-3 align-items-end" data-cambiar-ci>
+                        <input type="hidden" name="cambiar_ci" value="1">
+                        <input type="hidden" name="CiPersona" value="<?php echo htmlspecialchars($persona['CiPersona'], ENT_QUOTES, 'UTF-8'); ?>">
+                        <input type="hidden" name="buscarActual" value="<?php echo htmlspecialchars($terminoBusqueda, ENT_QUOTES, 'UTF-8'); ?>">
+                        <div class="col-sm-6 col-lg-4 form-group">
+                          <label class="form-label">Documento actual:</label>
+                          <input type="text" class="form-control" value="<?php echo htmlspecialchars((string) $documentoActual, ENT_QUOTES, 'UTF-8'); ?>" readonly data-ci-actual>
+                        </div>
+                        <div class="col-sm-6 col-lg-4 form-group">
+                          <label class="form-label" for="NuevaCi">Nuevo CI:</label>
+                          <input type="text" class="form-control" id="NuevaCi" name="NuevaCi" placeholder="Número de carnet" required minlength="4" maxlength="15" pattern="[A-Za-z0-9.\-]{4,15}" autocomplete="off">
+                        </div>
+                        <div class="col-sm-6 col-lg-4">
+                          <button type="submit" class="btn btn-success-soft">Guardar CI definitivo</button>
+                        </div>
+                        <div class="col-12 d-none" data-ci-confirmacion>
+                          <div class="alert alert-warning mb-0" role="alert">
+                            <span data-ci-mensaje></span>
+                            <button type="button" class="btn btn-sm btn-warning ms-2" data-ci-aceptar>Sí, cambiar</button>
+                            <button type="button" class="btn btn-sm btn-light ms-1" data-ci-cancelar>Cancelar</button>
+                          </div>
+                        </div>
+                      </form>
+                      <p class="small text-muted mt-3 mb-0">Al guardar el CI se actualizan también sus reservas, solicitudes y certificados; el certificado de nacimiento se conserva.</p>
+                    </div>
+                  </div>
+                <?php endif; ?>
                 <form method="POST" action="" class="row g-3">
                   <input type="hidden" name="CiPersona" value="<?php echo $persona['CiPersona']; ?>">
+                  <input type="hidden" name="buscarActual" value="<?php echo htmlspecialchars($terminoBusqueda, ENT_QUOTES, 'UTF-8'); ?>">
 
                   <div class="col-sm-6 col-lg-4 form-group">
                     <label class="form-label">Nombres</label>
@@ -239,11 +406,11 @@ if (isset($_GET['datPer'])) {
                   </div>
                   <div class="col-sm-6 col-lg-6 form-group">
                     <label class="form-label">Dirección:</label>
-                    <input type="text" class="form-control" id="Direccion" name="Direccion" value="<?php echo $persona['Direccion']; ?>">
+                    <input type="text" class="form-control" id="Direccion" name="Direccion" value="<?php echo $persona['Direccion']; ?>" autocomplete="new-password">
                   </div>
                   <div class="col-sm-6 col-lg-4 form-group">
                     <label class="form-label">Contacto:</label>
-                    <input type="text" class="form-control" id="Contacto" name="Contacto" value="<?php echo $persona['Contacto']; ?>">
+                    <input type="text" class="form-control" id="Contacto" name="Contacto" value="<?php echo $persona['Contacto']; ?>" autocomplete="new-password">
                   </div>
                   <div class="col-sm-6 col-lg-4 form-group">
                     <label class="form-label">Estado Civil:</label>
@@ -261,12 +428,16 @@ if (isset($_GET['datPer'])) {
                       <option value="Viuda" <?php if ($persona['Estado_per'] == "Viuda") echo 'selected'; ?>>Viuda</option>
                     </select>
                   </div>
+                                    <div class="col-sm-6 col-lg-4 form-group">
+                    <label class="form-label">Correo electrónico:</label>
+                    <input type="email" class="form-control" id="Correo" name="Correo" value="<?php echo $persona['Correo'] ?? ''; ?>" placeholder="Correo electrónico (opcional)" autocomplete="new-password">
+                  </div>
 
                   <br>
                   <button type="submit" name="actualizar" class="btn btn-success-soft">Actualizar</button>
                 </form>
               <?php endif; ?>
-              <?php if (!$persona): ?>
+              <?php if (!$persona && isset($_GET['datPer'])): ?>
                 <div class="my-sm-5 py-sm-5 text-center">
                   <i class="display-1 text-body-secondary bi bi-calendar2-event"></i>
                   <h4 class="mt-2 mb-3 text-body">Persona no encontrada</h4>
@@ -279,74 +450,42 @@ if (isset($_GET['datPer'])) {
       </div>
     </div>
   </main>
-
-
-  <div class="modal fade modal-xl" id="MostrarModal" tabindex="-1" aria-labelledby="MostrarModal" aria-hidden="true">
-    <div class="modal-dialog">
+  <div class="modal fade persona-modal-ampliado" id="MostrarModal" tabindex="-1" aria-labelledby="addModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
       <div class="modal-content">
         <div class="modal-header">
           <h5 class="modal-title" id="addModalLabel">Agregar Nueva Persona</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
         </div>
         <div class="modal-body">
-          <form method="POST" class="row g-3">
-            <div class="form-group col-sm-1 col-lg-2">
-              <label for="CiPersona">CiPersona:</label>
-              <input type="text" class="form-control" name="CiPersona" placeholder="CI Persona" required>
-            </div>
-            <div class="form-group col-sm-2 col-lg-3">
-              <label for="Nombre">Nombre completo:</label>
-              <input type="text" class="form-control" name="Nombre" placeholder="Nombre Completo" required>
-            </div>
-            <div class="form-group col-sm-2 col-lg-2">
-              <label for="ApPaterno">Apellido Paterno:</label>
-              <input type="text" class="form-control" name="ApPaterno" placeholder="Apellido Paterno" required>
-            </div>
-            <div class="form-group col-sm-2 col-lg-2">
-              <label for="ApMaterno">Apellido Materno:</label>
-              <input type="text" class="form-control" name="ApMaterno" placeholder="Apellido Materno">
-            </div>
-            <div class="form-group col-sm-2 col-lg-2">
-              <label class="form-label">Sexo:</label>
-              <div>
-                <input type="radio" name="Sexo" value="Varon" checked>
-                <label for="varon">Varon</label>
-                &nbsp;&nbsp;&nbsp;
-                <input type="radio" name="Sexo" value="Mujer">
-                <label for="mujer">Mujer</label>
-              </div>
-            </div>
-            <br>
-            <div class="form-group col-lg-2">
-              <label for="FechaNac">Fecha de Nacimiento:</label>
-              <input type="date" class="form-control" name="FechaNac" id="FechaNacB">
-            </div>
-            <div class="form-group col-lg-4">
-              <label for="Direccion">Dirección:</label>
-              <input type="text" class="form-control" name="Direccion" placeholder="Dirección">
-            </div>
-            <div class="form-group col-lg-3">
-              <label for="Contacto">Contacto:</label>
-              <input type="text" class="form-control" name="Contacto" placeholder="Número de contacto">
-            </div>
-            <div class="form-group col-lg-3">
-              <label for="Estado_per">Estado Civil:</label>
-              <select name="Estado_per" class="form-control" required>
-                <option value="Soltero">Soltero</option>
-                <option value="Soltera">Soltera</option>
-                <option value="Casado">Casado</option>
-                <option value="Casada">Casada</option>
-                <option value="Viudo">Viudo</option>
-                <option value="Viuda">Viuda</option>
-              </select>
-            </div><br>
-            <button type="submit" name="crear" class="btn btn-success-soft">Registrar</button>
-          </form>
+          <?php renderFormularioPersonaAmpliado('crear', 'Registrar persona'); ?>
         </div>
       </div>
     </div>
   </div>
 
+  <div class="modal fade" id="ModalSeguimientoPastoral" tabindex="-1" aria-labelledby="tituloSeguimientoPastoral" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <div><h5 class="modal-title" id="tituloSeguimientoPastoral">Seguimiento pastoral</h5><div class="small text-muted" data-seguimiento-persona></div></div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+          <div class="text-center py-4" data-seguimiento-cargando><span class="spinner-border spinner-border-sm text-primary me-2"></span>Consultando información...</div>
+          <div class="d-none" data-seguimiento-contenido>
+            <div class="d-flex flex-wrap align-items-center gap-2 mb-3"><strong>Estado actual:</strong><span class="badge bg-secondary" data-seguimiento-estado>Registrado</span><span class="badge bg-primary-soft text-primary d-none" data-seguimiento-solicitud></span></div>
+            <div class="row g-3">
+              <div class="col-md-4"><div class="seguimiento-bloque"><h6><i class="bi bi-calendar-check me-2"></i>Reservas</h6><div data-seguimiento-reservas></div></div></div>
+              <div class="col-md-4"><div class="seguimiento-bloque"><h6><i class="bi bi-people me-2"></i>Catequesis</h6><div data-seguimiento-catequesis></div></div></div>
+              <div class="col-md-4"><div class="seguimiento-bloque"><h6><i class="bi bi-file-earmark-check me-2"></i>Sacramentos y certificados</h6><div data-seguimiento-sacramentos></div></div></div>
+            </div>
+          </div>
+          <div class="alert alert-danger d-none mb-0" data-seguimiento-error></div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <script>
     $(document).ready(function() {
@@ -384,11 +523,50 @@ if (isset($_GET['datPer'])) {
         const yearB = maxDateB.getFullYear();
         const monthB = String(maxDateB.getMonth() + 1).padStart(2, '0');
         const dayB = String(maxDateB.getDate()).padStart(2, '0');
-        document.getElementById('FechaNacB').setAttribute('max', `${yearB}-${monthB}-${dayB}`);
+        const fechaNacB = document.getElementById('FechaNacB');
+        if (fechaNacB) fechaNacB.setAttribute('max', `${yearB}-${monthB}-${dayB}`);
     </script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      document.querySelectorAll('form[data-cambiar-ci]').forEach(function (form) {
+        var campo = form.querySelector('input[name="NuevaCi"]');
+        var caja = form.querySelector('[data-ci-confirmacion]');
+        var texto = form.querySelector('[data-ci-mensaje]');
+        var actual = form.querySelector('[data-ci-actual]');
+        var aceptar = form.querySelector('[data-ci-aceptar]');
+        var cancelar = form.querySelector('[data-ci-cancelar]');
+        if (!campo || !caja || !actual || !aceptar || !cancelar) return;
+        var confirmado = false;
+
+        form.addEventListener('submit', function (evento) {
+          if (confirmado) return;
+          evento.preventDefault();
+          if (!form.reportValidity()) return;
+          texto.textContent = '¿Confirmar el cambio de CI de ' + actual.value + ' a ' + campo.value.trim() + '?';
+          caja.classList.remove('d-none');
+          campo.readOnly = true;
+          aceptar.focus();
+        });
+
+        aceptar.addEventListener('click', function () {
+          confirmado = true;
+          form.submit();
+        });
+
+        cancelar.addEventListener('click', function () {
+          caja.classList.add('d-none');
+          campo.readOnly = false;
+          campo.focus();
+        });
+      });
+    });
+  </script>
+
   <script src="../assets/vendor/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
   <script src="../assets/js/functions.js"></script>
   <script src="../assets/js/tema.js"></script>
+  <script src="../assets/js/persona-registro.js?v=<?= filemtime(__DIR__ . '/../assets/js/persona-registro.js') ?>"></script>
+  <script src="../assets/js/persona-busqueda.js?v=<?= filemtime(__DIR__ . '/../assets/js/persona-busqueda.js') ?>"></script>
 </body>
 
 </html>

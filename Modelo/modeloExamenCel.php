@@ -18,10 +18,10 @@ class CelebranteExamen {
                 p.Nombre, p.ApPaterno, p.ApMaterno,
                 cx.NotaExamen1, cx.NotaExamen2, cx.NotaExamen3, cx.NotaExamen4,
                 (cx.NotaExamen1 + cx.NotaExamen2 + cx.NotaExamen3 + cx.NotaExamen4) / 4 as Promedio
-            FROM celebrante c
-            INNER JOIN persona p ON c.CiCel = p.CiPersona
+            FROM `celebrante` c
+            INNER JOIN `persona` p ON c.CiCel = p.CiPersona
             INNER JOIN inscripcion i ON c.CiCel = i.CiCel
-            INNER JOIN CeleExamen cx ON i.IdInscripcion = cx.IdInscripcion
+            INNER JOIN `celeexamen` cx ON i.IdInscripcion = cx.IdInscripcion
             WHERE c.Sacramento = ? AND i.IdGrupo = ?";
 
         $stmt = $this->conn->prepare($sql);
@@ -40,7 +40,7 @@ class CelebranteExamen {
     // Asignar o actualizar una nota de examen
     public function actualizarNota($idCelEx, $numNota, $nota) {
         $campoNota = "NotaExamen" . $numNota;
-        $sql = "UPDATE CeleExamen SET $campoNota = ? WHERE IdCelEx = ?";
+        $sql = "UPDATE `celeexamen` SET $campoNota = ? WHERE IdCelEx = ?";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param("ii", $nota, $idCelEx);
         return $stmt->execute();
@@ -48,7 +48,7 @@ class CelebranteExamen {
 
     // Obtener los exámenes registrados
     public function getExamenes() {
-        $sql = "SELECT * FROM Examen";
+        $sql = "SELECT * FROM `examen`";
         $result = $this->conn->query($sql);
 
         $examenes = array();

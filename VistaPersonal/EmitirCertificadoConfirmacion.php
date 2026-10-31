@@ -8,8 +8,16 @@ $mensaje = '';
 if (isset($_GET['CodIns'])) {
     $codIns = $_GET['CodIns'];
     $certificadoData = $controller->VerCertificadoConfirmacion($codIns);
-    
+
     if ($certificadoData) {
+        $certificadoData['NombrePadre'] = trim((string) ($certificadoData['NombrePadreManual'] ?? '')) !== ''
+            ? $certificadoData['NombrePadreManual'] : ($certificadoData['NombrePadre'] ?? '');
+        $certificadoData['NombreMadre'] = trim((string) ($certificadoData['NombreMadreManual'] ?? '')) !== ''
+            ? $certificadoData['NombreMadreManual'] : ($certificadoData['NombreMadre'] ?? '');
+        $certificadoData['NombrePadrino'] = trim((string) ($certificadoData['NombrePadrinoManual'] ?? '')) !== ''
+            ? $certificadoData['NombrePadrinoManual'] : ($certificadoData['NombrePadrino'] ?? '');
+        $certificadoData['NombreMadrina'] = trim((string) ($certificadoData['NombreMadrinaManual'] ?? '')) !== ''
+            ? $certificadoData['NombreMadrinaManual'] : ($certificadoData['NombreMadrina'] ?? '');
         $pdf = new FPDF('P', 'mm', array(150, 150));
         $pdf->AddPage();
         
@@ -30,9 +38,6 @@ if (isset($_GET['CodIns'])) {
 
         $pdf->Cell($offsetX, 10, 'Fecha Realizado:', 0, 0);
         $pdf->Cell(0, 10, ($certificadoData['FechaReal']), 0, 1);
-
-        $pdf->Cell($offsetX, 10, 'Hora Realizado:', 0, 0);
-        $pdf->Cell(0, 10, ($certificadoData['HoraReal']), 0, 1);
 
         $pdf->Output('I', $certificadoData['Celebrante'].'- Certificado_Confirmacion.pdf');
         exit();

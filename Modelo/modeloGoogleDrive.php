@@ -10,12 +10,18 @@ class ModeloGoogleDrive {
 
     public function __construct() {
         $config = GoogleDriveConfig::getInstance();
-        $this->service = new Drive($config->getClient());
+        $cliente = $config ? $config->getClient() : null;
+        $this->service = ($cliente && class_exists('Google\Service\Drive')) ? new Drive($cliente) : null;
     }
 
     public function estaConectado() {
         $config = GoogleDriveConfig::getInstance();
         return $config->isConnected();
+    }
+
+    public function obtenerErrorConexion() {
+        $config = GoogleDriveConfig::getInstance();
+        return $config->getTokenError();
     }
 
     public function obtenerUrlConexion() {
@@ -44,11 +50,15 @@ class ModeloGoogleDrive {
         return $file->getId();
     }
 
-    public function subirPDF($pdfContent, $fileName) {
+    public function subirPDF($pdfContent, $fileName, $parentId = null) {
         $fileMetadata = new DriveFile([
             'name' => $fileName,
             'mimeType' => 'application/pdf'
         ]);
+
+        if ($parentId) {
+            $fileMetadata->setParents([$parentId]);
+        }
 
         $file = $this->service->files->create($fileMetadata, [
             'data' => $pdfContent,

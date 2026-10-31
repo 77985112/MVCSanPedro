@@ -12,8 +12,8 @@ class Modelo {
     public function obtenerCatequistasPorGrupo($IdGrupo) {
         $sql = "SELECT concat (p.Nombre,' ', p.ApPaterno,' ', p.ApMaterno) AS NombreCompleto, a.RolCat, c.CiCat, c.ImagenCat
                 FROM catequista c
-                INNER JOIN persona p ON c.CiCat = p.CiPersona 
-                INNER JOIN asignacion a ON c.CiCat = a.CiCat
+                INNER JOIN `persona` p ON c.CiCat = p.CiPersona 
+                INNER JOIN `asignacion` a ON c.CiCat = a.CiCat
                 WHERE a.IdGrupo = ?";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param("i", $IdGrupo);
@@ -24,11 +24,11 @@ class Modelo {
 
     public function obtenerCelebrantesPorGrupo($IdGrupo) {
         $sql = "SELECT concat (p.Nombre,' ', p.ApPaterno,' ', p.ApMaterno) AS NombreCompleto, tins.DescripItem, ce.PerfilCel, ce.CiCel
-                FROM celebrante ce
-                INNER JOIN persona p ON ce.CiCel = p.CiPersona
+                FROM `celebrante` ce
+                INNER JOIN `persona` p ON ce.CiCel = p.CiPersona
                 INNER JOIN inscripcion ins ON ce.CiCel = ins.CiCel
-                INNER JOIN detalletipoins dtins ON dtins.IdInscripcion = ins.IdInscripcion
-                INNER JOIN TipoIns tins ON tins.CodTipoItem = dtins.CodTipoItem 
+                INNER JOIN `detalletipoins` dtins ON dtins.IdInscripcion = ins.IdInscripcion
+                INNER JOIN `tipoins` tins ON tins.CodTipoItem = dtins.CodTipoItem 
                 WHERE ins.IdGrupo = ?";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param("i", $IdGrupo);
@@ -48,7 +48,7 @@ class Modelo {
     public function obtenerAsistenciasApoderados($IdInscripcion) {
         $sql = "SELECT r.FechaReu, r.HoraReu, a.DetalleAsis, a.MontoAsis 
                 FROM asistenciaapoderado a
-                INNER JOIN ReunionCel r ON a.IdReunion = r.IdReunion
+                INNER JOIN `reunioncel` r ON a.IdReunion = r.IdReunion
                 WHERE a.IdInscripcion = ?";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param("i", $IdInscripcion);
@@ -59,7 +59,7 @@ class Modelo {
     public function obtenerApoderadosYPadrinos($IdInscripcion) {
         $sql = "SELECT p.Nombre, p.ApPaterno, p.ApMaterno, f.Parentesco, f.RolFam 
                 FROM insfamiliar f
-                INNER JOIN persona p ON f.CiFamiliar = p.CiPersona
+                INNER JOIN `persona` p ON f.CiFamiliar = p.CiPersona
                 WHERE f.IdInscripcion = ?";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param("i", $IdInscripcion);
@@ -69,7 +69,7 @@ class Modelo {
 
     public function obtenerDocumentosPresentados($IdInscripcion) {
         $sql = "SELECT NumeroDoc, DetalleDoc, LibroDoc, PaginaDoc, PartidaDoc, ParroquiaDoc, FechaPres 
-                FROM Documento 
+                FROM `documento` 
                 WHERE IdInscripcion = ?";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param("i", $IdInscripcion);

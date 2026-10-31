@@ -36,7 +36,7 @@ function getActiveNotifications($conn)
     $sql = "SELECT n.idNotificacion, n.TituloNot, n.DetalleNot, n.FechaNotFin, CONCAT(p.Nombre, ' ', p.ApPaterno) AS datoscat 
             FROM notificaciones n 
             INNER JOIN catequista c ON n.CiNotificador = c.CiCat 
-            INNER JOIN persona p ON c.CiCat = p.CiPersona 
+            INNER JOIN `persona` p ON c.CiCat = p.CiPersona 
             WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ?
             ORDER BY n.FechaNotFin ASC";
 
@@ -67,19 +67,24 @@ $activeNotifications = getActiveNotifications($conn);
     <link rel="stylesheet" type="text/css" href="../assets/vendor/font-awesome/css/all.min.css">
     <link rel="stylesheet" type="text/css" href="../assets/vendor/bootstrap-icons/bootstrap-icons.css">
     <link rel="stylesheet" type="text/css" href="../assets/css/style.css">
+    <link rel="stylesheet" type="text/css" href="../assets/css/logo-cabecera.css?v=<?= filemtime(__DIR__ . '/../assets/css/logo-cabecera.css') ?>">
     <script src="../assets/js/jquery-3.6.4.min.js"></script>
 
 </head>
 
 <body class="sidebar-start-enabled">
+    <script>
+        if (window.innerWidth < 992) {
+            document.body.classList.remove('sidebar-start-enabled');
+        }
+    </script>
     <header class="navbar-light fixed-top header-static bg-mode">
         <nav class="navbar navbar-expand-lg">
-            <button class="btn text-secondary py-0 me-3 sidebar-start-toggle"><i
-                    class="bi bi-justify-left fs-3 lh-0"></i></button>
+            <button class="btn text-secondary py-0 me-3 sidebar-start-toggle d-none d-lg-flex align-items-center"><i class="bi bi-justify-left fs-3 lh-0"></i></button>
             <div class="container">
                 <a class="navbar-brand" href="VistaCoordinador.php">
-                    <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png" alt="logo">
-                    <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png" alt="logo">
+                    <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo.png') ?>" alt="logo">
+                    <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo-light.png') ?>" alt="logo">
                 </a>
 
                 <ul class="nav flex-nowrap align-items-center ms-sm-3 list-unstyled">
@@ -127,7 +132,7 @@ $activeNotifications = getActiveNotifications($conn);
                             data-bs-auto-close="outside" data-bs-display="static" data-bs-toggle="dropdown"
                             aria-expanded="false">
                             <img class="avatar-img rounded border border-white border-3"
-                                src="<?php echo ($Catequista['ImagenCat'] == 'Ninguno' || empty($Catequista['ImagenCat'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$Catequista['ImagenCat']}"; ?>"
+                                src="<?php echo ($Catequista['ImagenCat'] == 'Ninguno' || empty($Catequista['ImagenCat'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$Catequista['ImagenCat']}?v=" . time(); ?>"
                                 alt="">
                         </a>
                         <ul class="dropdown-menu dropdown-animation dropdown-menu-end pt-3 small me-md-n3"
@@ -136,13 +141,13 @@ $activeNotifications = getActiveNotifications($conn);
                                 <div class="d-flex align-items-center position-relative">
                                     <div class="avatar me-3">
                                         <img class="avatar-img rounded-circle"
-                                            src="<?php echo ($Catequista['ImagenCat'] == 'Ninguno' || empty($Catequista['ImagenCat'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$Catequista['ImagenCat']}"; ?>"
+                                            src="<?php echo ($Catequista['ImagenCat'] == 'Ninguno' || empty($Catequista['ImagenCat'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$Catequista['ImagenCat']}?v=" . time(); ?>"
                                             alt="avatar">
                                     </div>
                                     <div>
                                         <a class="h6 stretched-link"
                                             href="#"><?php echo $Catequista['Nombre'] . " " . $Catequista['ApPaterno'] . " " . $Catequista['ApMaterno']; ?></a>
-                                        <p class="small m-0"><?php echo $Catequista['RolCat']; ?> <i
+                                        <p class="small m-0"><?php echo $Catequista['RolCat'] === 'Coordinador' ? 'Coordinadores' : $Catequista['RolCat']; ?> <i
                                                 class="bi bi-patch-check-fill text-success small"></i></p>
                                     </div>
                                 </div>
@@ -214,10 +219,19 @@ $activeNotifications = getActiveNotifications($conn);
 
     <main>
         <div class="container-fluid">
+            <div class="d-flex align-items-center d-lg-none mb-2">
+                <button class="border-0 bg-transparent p-0 d-flex align-items-center sidebar-start-toggle-mobile" type="button" aria-label="Otras opciones">
+                    <span class="btn btn-primary"><i class="fa-solid fa-sliders-h"></i></span>
+                    <span class="h6 mb-0 fw-bold ms-2 text-nowrap">Otras Opciones</span>
+                </button>
+            </div>
             <div class="row justify-content-between g-0">
 
                 <div class="col-md-2 col-lg-3 col-xxl-4 mt-n4">
                     <div class="nav-sidenav p-4 bg-mode h-100 custom-scrollbar">
+                        <div class="d-flex justify-content-end d-lg-none mb-2">
+                            <button class="btn btn-light btn-sm sidebar-start-close" type="button" aria-label="Cerrar menú"><i class="bi bi-x-lg"></i></button>
+                        </div>
                         <ul class="nav nav-link-secondary flex-column fw-bold gap-2">
                             <h6
                                 class="nav-text badge bg-primary text-white mt-2 me-2 border border-white border-3 rounded">
@@ -249,7 +263,6 @@ $activeNotifications = getActiveNotifications($conn);
                             <li class="nav-item">
                                 <a class="nav-link" href="VistaPersona.php"> <i class="<bi bi-person-vcard nav-icon"></i> <span class="nav-text">Persona </span></a>
                             </li>
-                            <h6 class="nav-text badge bg-primary text-white mt-2 me-2 border border-white border-3 rounded"> <i class="bi bi-caret-down-fill"></i>&nbsp;&nbsp; Personal</h6>
                             <li class="nav-item">
                                 <a class="nav-link" href="Configuracion.php"> <i class="bi bi-gear-wide-connected nav-icon"></i> <span class="nav-text">Configuración </span></a>
                             </li>
@@ -339,7 +352,7 @@ $activeNotifications = getActiveNotifications($conn);
                                         value="<?php echo htmlspecialchars($catequistaCoor['CiCat']); ?>">
                                     <div class="avatar avatar-xs">
                                         <img class="avatar-img rounded-circle"
-                                            src="<?php echo ($catequistaCoor['ImagenCat'] == 'Ninguno' || empty($catequistaCoor['ImagenCat'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$catequistaCoor['ImagenCat']}"; ?>"
+                                            src="<?php echo ($catequistaCoor['ImagenCat'] == 'Ninguno' || empty($catequistaCoor['ImagenCat'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$catequistaCoor['ImagenCat']}?v=" . time(); ?>"
                                             alt="">
                                     </div>
                                     <div class="overflow-hidden contact-name">
@@ -367,7 +380,7 @@ $activeNotifications = getActiveNotifications($conn);
                                             <?php foreach ($catsacramento as $catSac): ?>
                                             <li class="avatar avatar-xxs">
                                                 <img class="avatar-img rounded-circle"
-                                                    src="<?php echo ($catSac['ImagenCat'] == 'Ninguno' || empty($catSac['ImagenCat'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$catSac['ImagenCat']}"; ?>"
+                                                    src="<?php echo ($catSac['ImagenCat'] == 'Ninguno' || empty($catSac['ImagenCat'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$catSac['ImagenCat']}?v=" . time(); ?>"
                                                     alt="avatar">
                                             </li>
                                             <?php endforeach; ?>
@@ -438,6 +451,22 @@ $activeNotifications = getActiveNotifications($conn);
     <script src="../assets/vendor/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="../assets/js/functions.js"></script>
     <script src="../assets/js/tema.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        var abrir = document.querySelector('.sidebar-start-toggle-mobile');
+        var cerrar = document.querySelector('.sidebar-start-close');
+        if (abrir) {
+            abrir.addEventListener('click', function() {
+                document.body.classList.add('sidebar-start-enabled');
+            });
+        }
+        if (cerrar) {
+            cerrar.addEventListener('click', function() {
+                document.body.classList.remove('sidebar-start-enabled');
+            });
+        }
+    });
+</script>
 </body>
 
 </html>

@@ -1,0 +1,67 @@
+/* Tamano del logo compartido por la pagina publica y los paneles internos. */
+:root {
+    --sp-logo-height: 64px;
+    --sp-header-height: 72px;
+}
+
+header.navbar-light {
+    height: var(--sp-header-height);
+}
+
+header .navbar-brand {
+    padding-top: 4px;
+    padding-bottom: 4px;
+}
+
+header .navbar-brand .navbar-brand-item {
+    height: var(--sp-logo-height);
+    width: auto;
+}
+
+header.fixed-top + main {
+    padding-top: calc(1.5rem + var(--sp-header-height));
+}
+
+.nav-sidenav,
+.sidebar-end {
+    margin-top: var(--sp-header-height);
+}
+
+@media (max-width: 991.98px) {
+    header .navbar > .container {
+        flex: 1;
+        min-width: 0;
+    }
+}
+
+@media (max-width: 575.98px) {
+    :root {
+        --sp-logo-height: 52px;
+        --sp-header-height: 60px;
+    }
+
+    header .navbar-brand {
+        margin-right: 8px;
+    }
+
+    header .navbar > .btn {
+        flex: 0 0 32px;
+        width: 32px;
+        min-height: 40px;
+        padding-left: 0;
+        padding-right: 0;
+        margin-right: 0 !important;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    header .navbar > .btn ~ .container {
+        padding-left: 8px;
+        padding-right: 8px;
+    }
+
+    header .navbar > .btn ~ .container > .nav > .nav-item {
+        margin-left: 4px !important;
+    }
+}

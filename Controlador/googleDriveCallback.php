@@ -24,10 +24,10 @@ try {
 
     $config->saveToken($token);
 
-    header("Location: ../VistaPersonal/VistaPersonal.php?drive=conectado");
+    header("Location: ../VistaPersonal/VistaEmitidos.php?drive=conectado#respaldo-drive");
     exit();
 
-} catch (Exception $e) {
-    header("Location: ../VistaPersonal/VistaPersonal.php?drive=error&msg=" . urlencode($e->getMessage()));
+} catch (Throwable $e) {
+    header("Location: ../VistaPersonal/VistaEmitidos.php?drive=error&msg=" . urlencode($e->getMessage()) . "#respaldo-drive");
     exit();
 }

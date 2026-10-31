@@ -16,7 +16,9 @@ session_start();
     <link rel="stylesheet" type="text/css" href="../assets/vendor/tiny-slider/dist/tiny-slider.css">
     <link rel="stylesheet" type="text/css" href="../assets/vendor/plyr/plyr.css">
     <link rel="stylesheet" type="text/css" href="../assets/css/style.css">
-    <link rel="stylesheet" type="text/css" href="../assets/css/Index.css">
+    <link rel="stylesheet" type="text/css" href="../assets/css/logo-cabecera.css?v=<?= filemtime(__DIR__ . '/../assets/css/logo-cabecera.css') ?>">
+    <link rel="stylesheet" type="text/css" href="../assets/css/Index.css?v=<?= filemtime(__DIR__ . '/../assets/css/Index.css') ?>">
+    <link rel="stylesheet" type="text/css" href="../assets/css/todos-sacramentos.css?v=<?= filemtime(__DIR__ . '/../assets/css/todos-sacramentos.css') ?>">
     <style>
         .bg-mode {
             background-color: #ffffff;
@@ -32,12 +34,12 @@ session_start();
 
 <body data-bs-theme="light">
 
-    <header class="navbar-light fixed-top header-static bg-mode">
+    <header class="navbar-light fixed-top header-static bg-mode cabecera-publica">
         <nav class="navbar navbar-expand-lg">
             <div class="container">
                 <a class="navbar-brand" href="../index.php">
-                    <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png" alt="logo">
-                    <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png" alt="logo">
+                    <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo.png') ?>" alt="logo">
+                    <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo-light.png') ?>" alt="logo">
                 </a>
                 <button class="navbar-toggler ms-auto icon-md btn btn-light p-0" type="button" data-bs-toggle="collapse"
                     data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" aria-expanded="false"
@@ -70,7 +72,7 @@ session_start();
                         </li>
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle" href="#" id="NosotrosMenu" data-bs-toggle="dropdown"
-                                aria-haspopup="true" aria-expanded="false">Conócenos</a>
+                                aria-haspopup="true" aria-expanded="false">Nosotros</a>
                             <ul class="dropdown-menu" aria-labelledby="NosotrosMenu">
                                 <li> <a class="dropdown-item" href="srcNosotrosParroquia.php">Parroquia</a></li>
                                 <li> <a class="dropdown-item" href="srcNosotrosComunion.php">Primera Comunión</a></li>
@@ -79,15 +81,15 @@ session_start();
                         </li>
                     </ul>
                 </div>
-                <div class="ms-3 ms-lg-auto me-2" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Ingresar">
-                    <button type="button" class="btn btn-primary-soft" data-bs-toggle="modal"
+                <div class="cabecera-acceso">
+                    <button type="button" class="btn cabecera-ingresar" aria-label="Iniciar sesión" data-bs-toggle="modal"
                         data-bs-target="#exampleModal">
-                        <i class="bi bi-person-fill"></i>
+                        <i class="bi bi-person" aria-hidden="true"></i><span>Ingresar</span>
                     </button>
                 </div>
-                <div class="ms-3 ms-lg-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Contactos">
-                    <a type="button" href="srcContacto.php" class="btn btn-primary-soft">
-                        <i class="bi bi-chat-left-dots"></i>
+                <div class="cabecera-contacto">
+                    <a type="button" href="srcContacto.php" class="btn cabecera-mensajes" aria-label="Contactos">
+                        <i class="bi bi-chat-left-dots" aria-hidden="true"></i><span>Contactos</span>
                     </a>
                 </div>
             </div>
@@ -95,25 +97,26 @@ session_start();
     </header>
 
 
-    <main>
-        <div>
-            <div class="container mt-5">
-                <div class="col-lg-12 mb-4">
-                    <div class="card">
-                        <div class="card-body">
-                            <h2 class="col-lg-12 text-center">¿Que son los sacramentos?</h2>
+    <main class="sacramentos-pagina">
+        <div class="container-fluid px-0">
+            <div class="sacramentos-intro">
+                            <h1>¿Qué son los sacramentos?</h1>
                             <p>Los <strong>siete sacramentos</strong> de la Iglesia católica son <strong>bautismo</strong>, <strong>eucaristía</strong>, <strong>confirmación</strong>, <strong>matrimonio</strong>, <strong>orden sacerdotal</strong>, <strong>reconciliación</strong> y <strong>unción de los enfermos</strong>. Estos sacramentos son reconocidos también por la Iglesia ortodoxa y la Iglesia copta.</p>
                             <p>Se entiende por sacramento un signo sensible y eficaz de la gracia divina, y un medio para alcanzar la santidad. Se dice que los sacramentos son eficaces, pues en ellos se hace realidad lo que significan. En efecto, para los creyentes, los sacramentos comunican la presencia real (pero invisible) de Dios a través de un signo visible.</p>
                             <p>Para la Iglesia, los sacramentos fueron instituidos por Jesucristo. Los argumentos se encuentran en diferentes pasajes de los evangelios y en las cartas de los Apóstoles, en la Biblia. A continuación, veamos en qué consiste cada sacramento, su significado, sus símbolos y fundamentos bíblicos.</p>
-                        </div>
-                    </div>
-                </div>
-                <div class="row">
-                    <div class="col-lg-6 mb-4">
+            </div>
+
+            <section class="sacramentos-carrusel" data-carrusel-sacramentos aria-label="Los siete sacramentos">
+                <p class="sacramentos-etiqueta">Conoce cada sacramento</p>
+                <button type="button" class="sacramentos-control sacramentos-control-anterior" data-carrusel-anterior aria-label="Ver sacramento anterior"><i class="bi bi-chevron-left" aria-hidden="true"></i></button>
+                <button type="button" class="sacramentos-control sacramentos-control-siguiente" data-carrusel-siguiente aria-label="Ver sacramento siguiente"><i class="bi bi-chevron-right" aria-hidden="true"></i></button>
+
+                <div class="sacramentos-pista" aria-live="polite">
+                    <article class="sacramento-slide" data-categoria="Sacramento de iniciación" data-icono="bi-droplet">
                         <div class="card">
                             <div class="card-body">
-                                <h5 class="card-title">1. Bautismo</h5>
-                                <img alt="7 sacramentos" src="../assets/images/post/Sacramentos/bautismo.jpg">
+                                <h2 class="card-title">Bautismo</h2>
+                                <img alt="Celebración del Bautismo" src="../assets/images/post/Sacramentos/bautismo.jpg">
                                 <p class="card-text">Bautismo de un bebé. La fotografía documenta el momento en que se derrama el agua sobre su cabeza, en señal de su nacimiento espiritual a la vida cristiana. </p>
                                 <p>El bautismo es un sacramento de iniciación en el cual el contrayente recibe el Espíritu Santo, inicia el seguimiento del evangelio y se integra a la Iglesia. El ministro suele ser un obispo, sacerdote o diácono. Sin embargo, en caso de peligro de muerte, cualquier bautizado puede administrar un <em>bautismo de emergencia</em>. El bautismo está dirigido tanto a niños como a adultos.</p>
                                 <h3>Significado del bautismo</h3>
@@ -127,13 +130,13 @@ session_start();
                                 <p>Los evangelios señalan también que Jesús encomendó a los apóstoles bautizar: “Vayan, pues, y hagan discípulos a todas las gentes bautizándolas en el nombre del Padre y del Hijo y del Espíritu Santo” (Mateo 28, 19). Otras referencias son: Marcos 16, 16 y Juan 3, 5; los Hechos de los Apóstoles y las cartas pastorales de Pablo y Pedro.</p>
                             </div>
                         </div>
-                    </div>
+                    </article>
 
-                    <div class="col-lg-6 mb-4">
+                    <article class="sacramento-slide" data-categoria="Sacramento de iniciación" data-icono="bi-cup-hot">
                         <div class="card">
                             <div class="card-body">
-                                <h5 class="card-title">2. Eucaristía</h5>
-                                <img alt="7 sacramentos" src="../assets/images/post/Sacramentos/comunion.jpg">
+                                <h2 class="card-title">Eucaristía</h2>
+                                <img alt="Celebración de la Eucaristía" src="../assets/images/post/Sacramentos/comunion.jpg">
                                 <p class="card-text">Eucaristía. La fotografía documenta el momento en que el sacerdote se prepara para llevar a cabo la consagración del pan y el vino, los cuales se encuentran en el copón y el cáliz respectivamente. </p>
                                 <p>La eucaristía consiste en el memorial de la vida, pasión, muerte y resurrección de Jesús, por medio del ofrecimiento (consagración) del pan y el vino a Dios. También recibe el nombre de comunión. Asimismo, la ceremonia en que se recibe el pan y el vino por primera vez se llama <strong>Primera Comunión</strong>. El ministro de la eucaristía es el sacerdote. El sacramento va dirigido a toda la comunidad de fieles. Los bautizados y preparados pueden consumir el pan en forma de hostia.</p>
                                 <h3>Significado de la eucaristía</h3>
@@ -144,13 +147,13 @@ session_start();
                                 <p>El fundamento bíblico de la eucaristía se encuentra en las narraciones evangélicas de la Última Cena. Según los evangelistas, Jesús tomó el pan y el vino, los bendijo y los repartió como signo de su cuerpo y sangre. Hecho esto, les pidió repetir este gesto en su memoria (ver Mateo 26, 17-30; Marcos 14:12-25; Juan 13, 1-15; Lucas 22, 7-20). Otras referencias son: Juan 6, 30-35; Juan 6, 48-58; Primera Carta a los Corintios 10, 16 y 11, 23-29.</p>
                             </div>
                         </div>
-                    </div>
+                    </article>
 
-                    <div class="col-lg-6 mb-4">
+                    <article class="sacramento-slide" data-categoria="Sacramento de iniciación" data-icono="bi-fire">
                         <div class="card">
                             <div class="card-body">
-                                <h5 class="card-title">3. Confirmación</h5>
-                                <img alt="7 sacramentos" src="../assets/images/post/Sacramentos/confirmacion.jpg">
+                                <h2 class="card-title">Confirmación</h2>
+                                <img alt="Celebración de la Confirmación" src="../assets/images/post/Sacramentos/confirmacion.jpg">
                                 <p class="card-text">Ceremonia de confirmación. El obispo unge el Santo Crisma en la frente del joven confirmando, mientras su padrino coloca su mano derecha sobre su hombro, como símbolo de apoyo y orientación en la fe. </p>
                                 <p>La confirmación es un sacramento de iniciación que consiste en la renovación de las promesas bautismales. Entre ellas, el rechazo del pecado, el seguimiento del evangelio y el compromiso con la Iglesia. El ministro es el obispo, quien pueden delegar la función en un sacerdote. El sujeto puede ser cualquier persona bautizada que haya tomado la primera comunión.</p>
                                 <h3>Significado de la confirmación</h3>
@@ -163,13 +166,13 @@ session_start();
                                 <p>Al final de cincuenta días, el Espíritu Santo se derramó sobre ellos, fortaleció su fe, los colmó de dones y los envió a predicar el Evangelio. Otras referencias son: Hechos de los Apóstoles 19, 1-6. Segunda Carta a los Corintios 1, 21-22. Efesios 1, 13. Hebreos 6, 1-2.</p>
                             </div>
                         </div>
-                    </div>
+                    </article>
 
-                    <div class="col-lg-6 mb-4">
+                    <article class="sacramento-slide" data-categoria="Sacramento de servicio" data-icono="bi-hearts">
                         <div class="card">
                             <div class="card-body">
-                                <h5 class="card-title">4. Matrimonio</h5>
-                                <img alt="7 sacramentos" src="../assets/images/post/Sacramentos/matrimonio.jpg">
+                                <h2 class="card-title">Matrimonio</h2>
+                                <img alt="Celebración del Matrimonio" src="../assets/images/post/Sacramentos/matrimonio.jpg">
                                 <p class="card-text">El matrimonio es un sacramento de servicio que consiste en la unión entre el hombre y la mujer ante Dios, con el propósito de fundar una familia cristiana. Cualquier persona confirmada y soltera puede contraer matrimonio eclesiástico. Si un miembro de la pareja no es católico, se puede solicitar un permiso especial, el cual es otorgado por el obispo y recibe el nombre de <em>dispensa</em>.</p>
                                 <h3>Significado del matrimonio</h3>
                                 <p>El matrimonio simboliza el amor y la entrega mutua de la pareja en un proyecto de vida común, basado en la fidelidad y el servicio. La familia que se constituye por el matrimonio representa la unidad primordial de la Iglesia y la sociedad, ya que en ella se enseñan y multiplican los valores de convivencia.</p>
@@ -180,13 +183,13 @@ session_start();
                                 <p>El fundamento bíblico del sacramento del matrimonio se encuentra en el libro del Génesis (capítulos 1 y 2), donde se habla de la formación de la primera pareja, Adán y Eva. El evangelio también sustenta el sacramento del matrimonio. Allí, Jesús refrenda el vínculo sagrado entre hombre y mujer, y se pronuncia en contra del acta de repudio (Mateo 5, 31-32; Mateo 19, 1-12; Marcos 10, 1-12; Lucas 16, 18).</p>
                             </div>
                         </div>
-                    </div>
+                    </article>
 
-                    <div class="col-lg-6 mb-4">
+                    <article class="sacramento-slide" data-categoria="Sacramento de servicio" data-icono="bi-person-badge">
                         <div class="card">
                             <div class="card-body">
-                                <h5 class="card-title">5. Orden sacerdotal</h5>
-                                <img alt="7 sacramentos" src="../assets/images/post/Sacramentos/Orden.jpg">
+                                <h2 class="card-title">Orden sacerdotal</h2>
+                                <img alt="Celebración del Orden sacerdotal" src="../assets/images/post/Sacramentos/Orden.jpg">
                                 <p class="card-text">Ordenación sacerdotal. En el centro y sobre la alfombra, se encuentran los aspirantes a sacerdotes en posición de postración, en señal de entrega absoluta y humildad. Fotografía original de la Oficina de Información del Opus Dei.</p>
                                 <p>El orden sacerdotal es un sacramento de servicio por medio del cual un aspirante (varón bautizado) se convierte en presbítero (sacerdote) al servicio de la Iglesia. Sus funciones principales son evangelizar y administrar los sacramentos. El ministro que impone el orden sacerdotal es el obispo. El sujeto que puede recibirla es el varón varón soltero, bautizado y confirmado.</p>
                                 <h3>Significado del orden sacerdotal</h3>
@@ -198,13 +201,13 @@ session_start();
                                 <p>Otras referencias son: Lucas 10, 16. Hechos de los Apóstoles 6, 6. Hechos de los Apóstoles 15, 2-6. Hechos de los Apóstoles 20, 17. Hechos de los Apóstoles 21, 18. Primera Carta de Timoteo 4, 14. Carta a Tito 1, 5.</p>
                             </div>
                         </div>
-                    </div>
+                    </article>
 
-                    <div class="col-lg-6 mb-4">
+                    <article class="sacramento-slide" data-categoria="Sacramento de curación" data-icono="bi-peace">
                         <div class="card">
                             <div class="card-body">
-                                <h5 class="card-title">6. Reconciliación</h5>
-                                <img alt="7 sacramentos" src="../assets/images/post/Sacramentos/Penitencia.jpg">
+                                <h2 class="card-title">Reconciliación</h2>
+                                <img alt="Celebración de la Reconciliación" src="../assets/images/post/Sacramentos/Penitencia.jpg">
                                 <p class="card-text">Sacramento de la reconciliación, celebrado en un espacio al aire libre. La estola morada representa la función que cumple el sacerdote para otorgar el perdón en nombre de Dios. </p>
                                 <p>La reconciliación es un sacramento de curación que consiste en confesar los pecados y recibir el perdón de Dios a través del sacerdote. También recibe el nombre de confesión o penitencia, aunque este último ya no se usa. El ministro es el sacerdote común. En caso extraordinario y según la gravedad, puede ser el obispo o el Papa. El sacramento está destinado a todo bautizado que se sienta en falta (pecado).</p>
                                 <h3>Significado de la reconciliación</h3>
@@ -225,13 +228,13 @@ session_start();
                                 <p>Otras referencias se pueden encontrar en: Mateo 18, 18. Lucas 15, 18-19. Juan 20, 21-23. Hechos de los Apóstoles 19, 18. Primera Carta a los Corintios 5, 3-5. Segunda Carta a los Corintios 2, 6-11. Carta a los Corintios 5, 18-20. Carta de Santiago 5, 16. Primera Carta de Juan 1, 8-9.</p>
                             </div>
                         </div>
-                    </div>
+                    </article>
 
-                    <div class="col-lg-6 mb-4">
+                    <article class="sacramento-slide" data-categoria="Sacramento de curación" data-icono="bi-bandaid">
                         <div class="card">
                             <div class="card-body">
-                                <h5 class="card-title">7. Unción de los enfermos</h5>
-                                <img alt="7 sacramentos" src="../assets/images/post/Sacramentos/Extremauncion.jpg">
+                                <h2 class="card-title">Unción de los enfermos</h2>
+                                <img alt="Celebración de la Unción de los enfermos" src="../assets/images/post/Sacramentos/Extremauncion.jpg">
                                 <p class="card-text">Escena de unción de los enfermos (antiguamente extrema unción). El sacerdote es acompañado por un joven acólito que lo asiste en su servicio.</p>
                                 <p>La unción de los enfermos es un sacramento de curación que consiste en transmitir la gracia de Dios, el consuelo y la fortaleza a las personas enfermas de gravedad (no necesariamente en peligro de muerte). El ministro es el sacerdote. El sacramento está dirigido a cualquier persona bautizada que se encuentre enferma, incapacitada o en peligro de muerte.</p>
                                 <h3>Significado de la unción de los enfermos</h3>
@@ -243,49 +246,83 @@ session_start();
                                 <p>Por otra parte, la Carta de Santiago instruye sobre asistir a los enfermos para llevar sanidad física y/o espiritual, signos de la gracia divina (Santiago 5,14-15). Otras referencias son: Hechos de los Apóstoles 9, 17-18; Primera Carta a los Corintios 12, 9.</p>
                             </div>
                         </div>
-                    </div>
+                    </article>
                 </div>
-            </div>
+
+                <div class="sacramentos-progreso" aria-label="Posición del carrusel">
+                    <button type="button" class="sacramentos-punto" aria-label="Ver Bautismo"></button>
+                    <button type="button" class="sacramentos-punto" aria-label="Ver Eucaristía"></button>
+                    <button type="button" class="sacramentos-punto" aria-label="Ver Confirmación"></button>
+                    <button type="button" class="sacramentos-punto" aria-label="Ver Matrimonio"></button>
+                    <button type="button" class="sacramentos-punto" aria-label="Ver Orden sacerdotal"></button>
+                    <button type="button" class="sacramentos-punto" aria-label="Ver Reconciliación"></button>
+                    <button type="button" class="sacramentos-punto" aria-label="Ver Unción de los enfermos"></button>
+                </div>
+
+                <div class="sacramentos-pestanas" role="tablist" aria-label="Seleccionar sacramento">
+                    <button type="button" class="sacramentos-pestana" role="tab"><i class="bi bi-droplet" aria-hidden="true"></i><span>Bautismo</span></button>
+                    <button type="button" class="sacramentos-pestana" role="tab"><i class="bi bi-cup-hot" aria-hidden="true"></i><span>Eucaristía</span></button>
+                    <button type="button" class="sacramentos-pestana" role="tab"><i class="bi bi-fire" aria-hidden="true"></i><span>Confirmación</span></button>
+                    <button type="button" class="sacramentos-pestana" role="tab"><i class="bi bi-hearts" aria-hidden="true"></i><span>Matrimonio</span></button>
+                    <button type="button" class="sacramentos-pestana" role="tab"><i class="bi bi-person-badge" aria-hidden="true"></i><span>Orden sacerdotal</span></button>
+                    <button type="button" class="sacramentos-pestana" role="tab"><i class="bi bi-peace" aria-hidden="true"></i><span>Reconciliación</span></button>
+                    <button type="button" class="sacramentos-pestana" role="tab"><i class="bi bi-bandaid" aria-hidden="true"></i><span>Unción de los enfermos</span></button>
+                </div>
+            </section>
         </div>
     </main>
 
-    <div class="modal fade" id="exampleModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-sm">
+    <div class="modal fade login-modal" id="exampleModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-describedby="login-description" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
             <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="exampleModalLabel">Ingrese sus datos</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <?php
-                if (isset($_SESSION['usuario']) || isset($_SESSION['CiPersona'])) {
-                    echo '<h2 class="mb-48 text-center">Oops..</h2>';
-                    echo '<h6 class="mb-48 text-center">Ya tienes una sesion activa</h6><br>';
-                    echo '<a href="logout.php" class="btn btn-lg btn-danger-soft"> Cerrar Session</a>';
-                } else {
-                ?>
-                    <div class="modal-body">
-                        <form action="../Controlador/controladorLogin.php" method="POST" class="form-validator"
-                            id="login-form">
-                            <div class="mb-3 position-relative input-group-lg">
-                                <input type="text" class="form-control" placeholder="Usuario" id="username"
-                                    name="username">
-                            </div>
-                            <div class="mb-3">
-                                <div class="input-group input-group-lg">
-                                    <input class="form-control fakepassword" type="password" id="password"
-                                        name="password" placeholder="Contraseña">
-                                    <span class="input-group-text p-0">
-                                        <i class="fakepasswordicon fa-solid fa-eye-slash cursor-pointer p-2 w-40px"></i>
-                                    </span>
+                <button type="button" class="login-close" data-bs-dismiss="modal" aria-label="Cerrar inicio de sesión">
+                    <i class="bi bi-x-lg" aria-hidden="true"></i>
+                </button>
+                <div class="modal-body login-panel">
+                    <img class="login-logo" src="../assets/images/logo/logParroSP.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo/logParroSP.png') ?>" alt="Parroquia San Pedro">
+                    <div class="login-divider" aria-hidden="true"><span></span></div>
+                    <h2 class="modal-title login-title" id="exampleModalLabel">INICIAR SESIÓN</h2>
+                    <?php if (isset($_SESSION['usuario']) || isset($_SESSION['CiPersona'])) { ?>
+                        <p class="login-description" id="login-description">Ya tienes una sesión activa.</p>
+                        <a href="../logout.php" class="login-submit login-session-exit">
+                            Cerrar sesión <i class="bi bi-box-arrow-right" aria-hidden="true"></i>
+                        </a>
+                    <?php } else { ?>
+                        <p class="login-description" id="login-description">Ingresa tus datos para continuar.</p>
+                        <form action="../Controlador/controladorLogin.php" method="POST" class="form-validator" id="login-form">
+                            <div class="login-field">
+                                <label for="username" class="login-label">Usuario</label>
+                                <div class="login-input-wrap">
+                                    <i class="bi bi-person login-field-icon" aria-hidden="true"></i>
+                                    <input type="text" class="form-control login-input" placeholder="Escribe tu usuario" id="username" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" required>
                                 </div>
                             </div>
-                            <div class="d-grid">
-                                <button type="submit" class="btn btn-lg btn-primary-soft">Ingresar</button>
+                            <?php if (($_GET['error_login'] ?? '') === 'usuario'): ?>
+                                <p class="login-field-error" role="alert"><i class="bi bi-exclamation-circle-fill" aria-hidden="true"></i> Usuario incorrecto.</p>
+                            <?php endif; ?>
+                            <div class="login-field">
+                                <label for="password" class="login-label">Contraseña</label>
+                                <div class="login-input-wrap">
+                                    <i class="bi bi-lock login-field-icon" aria-hidden="true"></i>
+                                    <input type="password" class="form-control login-input login-password" placeholder="Escribe tu contraseña" id="password" name="password" autocomplete="current-password" required>
+                                    <button type="button" class="login-password-toggle" aria-label="Mostrar contraseña" aria-controls="password" aria-pressed="false">
+                                        <i class="bi bi-eye-slash" aria-hidden="true"></i>
+                                    </button>
+                                </div>
                             </div>
+                            <?php if (($_GET['error_login'] ?? '') === 'contrasena'): ?>
+                                <p class="login-field-error" role="alert"><i class="bi bi-exclamation-circle-fill" aria-hidden="true"></i> Contraseña incorrecta.</p>
+                            <?php endif; ?>
+                            <button type="submit" class="login-submit">
+                                Ingresar <i class="bi bi-arrow-right" aria-hidden="true"></i>
+                            </button>
                         </form>
+                    <?php } ?>
+                    <div class="login-footer">
+                        <div class="login-divider login-divider-small" aria-hidden="true"><span></span></div>
+                        <p>Parroquia San Pedro de Sacaba</p>
                     </div>
-                <?php }
-                ?>
+                </div>
             </div>
         </div>
     </div>
@@ -308,49 +345,6 @@ session_start();
         </div>
     </footer>
     <script>
-        document.addEventListener("DOMContentLoaded", function() {
-            var loginForm = document.getElementById("login-form");
-            var forgotPasswordForm = document.getElementById("forgot-password-form");
-            var forgotPasswordLink = document.getElementById("forgot-password-link");
-            var backToLoginLink = document.getElementById("back-to-login-link");
-            var forgotPasswordBlock = document.getElementById("forgot-password-block");
-
-            forgotPasswordLink.addEventListener("click", function(e) {
-                e.preventDefault();
-                loginForm.style.display = "none";
-                Menu.style.display = "None"
-                Menu1.style.display = "None"
-                forgotPasswordBlock.style.display = "block";
-            });
-
-            backToLoginLink.addEventListener("click", function(e) {
-                e.preventDefault();
-                loginForm.style.display = "block";
-                Menu.style.display = "block"
-                Menu1.style.display = "block"
-                forgotPasswordBlock.style.display = "none";
-            });
-        });
-
-
-        const showVideoButton = document.getElementById('showVideoButton');
-        const videoContainer = document.getElementById('videoContainer');
-        const closeVideoButton = document.getElementById('closeVideoButton');
-        const videoPlayer = document.getElementById('videoPlayer');
-
-        showVideoButton.addEventListener('click', function() {
-            videoContainer.style.display = 'block';
-            showVideoButton.style.display = 'none';
-            videoPlayer.play();
-        });
-
-        closeVideoButton.addEventListener('click', function() {
-            videoContainer.style.display = 'none';
-            showVideoButton.style.display = 'block';
-            videoPlayer.pause();
-        });
-
-
         document.addEventListener('DOMContentLoaded', function() {
             document.documentElement.setAttribute('data-bs-theme', 'light');
 
@@ -371,6 +365,31 @@ session_start();
     <script src="../assets/vendor/tiny-slider/dist/tiny-slider.js"></script>
     <script src="../assets/js/functions.js"></script>
     <script src="../assets/js/tema.js"></script>
+    <script src="../assets/js/acceso.js?v=<?= filemtime(__DIR__ . '/../assets/js/acceso.js') ?>" defer></script>
+    <script src="../assets/js/todos-sacramentos.js?v=<?= filemtime(__DIR__ . '/../assets/js/todos-sacramentos.js') ?>" defer></script>
+<?php if (isset($_GET['error_login'])): ?>
+<script>
+    (function () {
+        var formulario = document.getElementById('login-form');
+        var modalEl = formulario ? formulario.closest('.modal') : null;
+        if (!modalEl) { return; }
+        if (window.bootstrap) {
+            bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        }
+        // El aviso se ve solo en este primer intento fallido: se elimina al
+        // cerrar el modal y se limpia el parámetro de la URL.
+        modalEl.addEventListener('hidden.bs.modal', function () {
+            var avisos = modalEl.querySelectorAll('.login-field-error');
+            for (var i = 0; i < avisos.length; i++) { avisos[i].remove(); }
+        });
+        if (window.history && window.history.replaceState) {
+            var url = new URL(window.location.href);
+            url.searchParams.delete('error_login');
+            window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+        }
+    })();
+</script>
+<?php endif; ?>
 </body>
 
 </html>

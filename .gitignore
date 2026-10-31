@@ -22,6 +22,10 @@
 !/assets/images/fondo/Ninguno.jpg
 /assets/images/events/ACT*
 
+# Documentos digitales adjuntos a los certificados.
+/assets/documentos_presentados/*
+!/assets/documentos_presentados/.htaccess
+
 # Pruebas e informes antiguos que contienen datos de la instalación local.
 /tests/unit/TestLogin.php
 /tests/unit/TestCoordinador.php
@@ -58,3 +62,26 @@ google-drive-token*.json*
 /fpdf/changelog.htm
 /fpdf/install.txt
 /fpdf/fpdf.css
+
+# Playwright
+node_modules/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/
+
+# Ejecuciones de pruebas guardadas solo en este equipo: las trazas de Playwright
+# guardan DOM, solicitudes y capturas del panel con datos reales.
+/test-results-a04/
+/test-results-retry/
+/test-results-verify/
+/playwright-report-a04/
+
+# Indice local del arbol de archivos, generado por una herramienta de edicion.
+/ruta-de-archivo-mvcsanpedro.json
+
+# Documentacion de trabajo y material del despliegue: los casos de prueba en
+# Word y las capturas del panel muestran nombres, fotos y claves reales, y el
+# paquete armado y los volcados con datos de la base local tampoco se publican.
+/docs/

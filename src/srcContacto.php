@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 session_start();
 require_once '../Controlador/controladorSMS.php';
 
@@ -26,19 +26,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link rel="stylesheet" type="text/css" href="../assets/vendor/tiny-slider/dist/tiny-slider.css">
     <link rel="stylesheet" type="text/css" href="../assets/vendor/plyr/plyr.css">
     <link rel="stylesheet" type="text/css" href="../assets/css/style.css">
-    <link rel="stylesheet" type="text/css" href="../assets/css/Index.css">
+    <link rel="stylesheet" type="text/css" href="../assets/css/logo-cabecera.css?v=<?= filemtime(__DIR__ . '/../assets/css/logo-cabecera.css') ?>">
+    <link rel="stylesheet" type="text/css" href="../assets/css/Index.css?v=<?= filemtime(__DIR__ . '/../assets/css/Index.css') ?>">
+    <link rel="stylesheet" type="text/css" href="../assets/css/contacto-publico.css?v=<?= filemtime(__DIR__ . '/../assets/css/contacto-publico.css') ?>">
+    <style>
+        .bg-mode {
+            background-color: #ffffff;
+            color: #000000;
+        }
 
-
+        .navbar-light .navbar-brand {
+            color: #000000;
+        }
+    </style>
 </head>
 
 <body data-bs-theme="light">
 
-    <header class="navbar-light fixed-top header-static bg-mode">
+    <header class="navbar-light fixed-top header-static bg-mode cabecera-publica">
         <nav class="navbar navbar-expand-lg">
-        <div class="container">
+            <div class="container">
                 <a class="navbar-brand" href="../index.php">
-                    <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png" alt="logo">
-                    <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png" alt="logo">
+                    <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo.png') ?>" alt="logo">
+                    <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo-light.png') ?>" alt="logo">
                 </a>
                 <button class="navbar-toggler ms-auto icon-md btn btn-light p-0" type="button" data-bs-toggle="collapse"
                     data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" aria-expanded="false"
@@ -53,7 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <div class="collapse navbar-collapse" id="navbarCollapse">
                     <ul class="navbar-nav navbar-nav-scroll me-auto">
                         <li class="nav-item">
-                            <a class="nav-link active" href="../index.php">Inicio</a>
+                            <a class="nav-link" href="../index.php">Inicio</a>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link" href="srcActividadGeneral.php">Actividades</a>
@@ -71,7 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </li>
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle" href="#" id="NosotrosMenu" data-bs-toggle="dropdown"
-                                aria-haspopup="true" aria-expanded="false">Conócenos</a>
+                                aria-haspopup="true" aria-expanded="false">Nosotros</a>
                             <ul class="dropdown-menu" aria-labelledby="NosotrosMenu">
                                 <li> <a class="dropdown-item" href="srcNosotrosParroquia.php">Parroquia</a></li>
                                 <li> <a class="dropdown-item" href="srcNosotrosComunion.php">Primera Comunión</a></li>
@@ -81,15 +91,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     </ul>
                 </div>
-                <div class="ms-3 ms-lg-auto me-2" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Ingresar">
-                    <button type="button" class="btn btn-primary-soft" data-bs-toggle="modal"
+                <div class="cabecera-acceso">
+                    <button type="button" class="btn cabecera-ingresar" aria-label="Iniciar sesión" data-bs-toggle="modal"
                         data-bs-target="#exampleModal">
-                        <i class="bi bi-person-fill"></i>
+                        <i class="bi bi-person" aria-hidden="true"></i><span>Ingresar</span>
                     </button>
                 </div>
-                <div class="ms-3 ms-lg-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Contactos">
-                    <a type="button" href="srcContacto.php" class="btn btn-primary-soft">
-                        <i class="bi bi-chat-left-dots"></i>
+                <div class="cabecera-contacto">
+                    <a type="button" href="srcContacto.php" class="btn cabecera-mensajes" aria-label="Contactos">
+                        <i class="bi bi-chat-left-dots" aria-hidden="true"></i><span>Contactos</span>
                     </a>
                 </div>
             </div>
@@ -99,134 +109,178 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     <main>
 
-        <section class="py-4 py-sm-5">
+        <section class="contacto-pagina">
             <div class="container">
-                <div class="row justify-content-center">
-                    <div class="col-lg-12 text-center mb-4">
-                        <h2 class="h1">Contáctate con nosotros</h2>
-                        <p>Estamos abiertos a la participación activa de aquellos que deseen compartir su fe y
-                            contribuir al bienestar espiritual de Sacaba. Ya sea como catequista o participante, todos
-                            son bienvenidos a formar parte de esta comunidad vibrante y centrada en la fe.</p>
-                    </div>
+
+                <div class="contacto-cabecera">
+                    <span class="contacto-eyebrow"><i class="bi bi-chat-heart" aria-hidden="true"></i> Estamos cerca de ti</span>
+                    <h1>Contáctate con nosotros</h1>
+                    <div class="contacto-adorno" aria-hidden="true"><i class="bi bi-cross"></i></div>
+                    <p>Estamos para escucharte, orientarte y acompañarte. Visítanos en el centro de Sacaba o comunícate directamente con la parroquia.</p>
                 </div>
-                <div class="row g-4 g-lg-5 align-items-center">
-                    <div class="col-lg-6 card card-body bg-mode shadow-none border-0 p-3">
-                        <div class="text-center">
-                            <h5>Más Información</h5>
-                        </div>
-                        <div class="card-body p-2 pb-0">
-                            <h5 class="card-title mb-1 mt-3"><i class="bi bi-geo-alt"></i> Ubicación: </h5>
-                            <p">Plaza Principal 6 de Agosto, lado Este - lado Parroquia San Pedro de Sacaba.</p>
-                        </div>
-                        <div class="card-body p-2 pb-0">
-                            <h5><i class="bi bi-envelope"></i> Correo:</h5>
-                            <p>info@example.com</p>
-                        </div>
-                        <div class="card-body p-2 pb-0">
-                            <h5><i class="bi bi-phone"></i> Telefono / Celular:</h5>
-                            <p>+1 5589 55488 55s</p>
-                        </div>
-                    </div>
-                    <div class="col-lg-6">
-                        <div class="bg-mode shadow-none border-0 p-3 overflow-hidden">
-                            <div class="row g-4 d-flex">
-                                <div class="text-center">
-                                    <h5>Envíanos un mensaje</h5>
-                                </div>
-                                <form action="" method="POST">
-                                    <div class="row">
-                                        <div class="form-group col-md-6">
-                                            <label for="nombre">Nombre Completo</label>
-                                            <input type="text" name="nombre" class="form-control" placeholder="Nombre Completo" required>
-                                        </div>
-                                        <div class="form-group col-md-6">
-                                            <label for="numcorr">Telefono - Contacto</label>
-                                            <input type="number" class="form-control" name="numcorr" placeholder="Número de contacto" required>
-                                        </div>
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="concepto">Concepto</label>
-                                        <input type="text" class="form-control" name="concepto" placeholder="Motivo del Mensaje" required>
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="detalle">Mensaje</label>
-                                        <textarea class="form-control" name="detalle" rows="5" required></textarea>
-                                    </div>
-                                    <br>
-                                    <button type="submit" name="submit" class="btn btn-success-soft">Enviar Mensaje</button>
-                                </form>
 
+                <div class="contacto-grid">
+                    <article class="contacto-card">
+                        <h2 class="contacto-card-titulo"><i class="bi bi-geo-alt-fill" aria-hidden="true"></i> Visítanos</h2>
+                        <p class="contacto-card-subtitulo">Conoce nuestra ubicación y forma parte de la comunidad parroquial.</p>
+                        <iframe class="contacto-mapa"
+                            title="Ubicación de la Parroquia San Pedro de Sacaba"
+                            src="https://www.google.com/maps?q=Parroquia+San+Pedro+de+Sacaba,+Plaza+6+de+Agosto,+Sacaba,+Bolivia&amp;output=embed"
+                            loading="lazy"
+                            allowfullscreen
+                            referrerpolicy="no-referrer-when-downgrade"></iframe>
+                        <p class="contacto-direccion"><i class="bi bi-geo-alt-fill" aria-hidden="true"></i><span>Plaza Principal 6 de Agosto, lado Este, Parroquia San Pedro de Sacaba.</span></p>
+                        <div class="contacto-acciones-mapa">
+                            <a class="contacto-boton contacto-boton-primario" href="https://maps.app.goo.gl/72ZYHKxSxeMV9Hkj9" target="_blank" rel="noopener noreferrer"><i class="bi bi-sign-turn-right" aria-hidden="true"></i> Cómo llegar</a>
+                            <a class="contacto-boton contacto-boton-secundario" href="https://maps.app.goo.gl/72ZYHKxSxeMV9Hkj9" target="_blank" rel="noopener noreferrer"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i> Ver en Google Maps</a>
+                        </div>
+                    </article>
 
-                                <?php if ($resultado) { ?>
-                                <p style="color:green;"><?php echo $resultado; ?></p>
-                                <?php } ?>
+                    <article class="contacto-card">
+                        <h2 class="contacto-card-titulo"><i class="bi bi-chat-heart" aria-hidden="true"></i> Estamos para ayudarte</h2>
+                        <p class="contacto-card-subtitulo">Puedes comunicarte con nosotros por los siguientes medios.</p>
+
+                        <div class="contacto-datos">
+                            <div class="contacto-dato contacto-dato-whatsapp">
+                                <i class="bi bi-whatsapp" aria-hidden="true"></i>
+                                <div><strong>WhatsApp</strong><span>77985112<br>Número temporal de prueba</span></div>
                             </div>
-                        </div>
-                    </div>
-                    <div class="col-md-12 col-lg-12">
-                        <div class="card card-body bg-mode shadow-none border-0 p-3">
-                            <h4 class="mt-4">Nuestra ubicación exacta..</h4>
-                            <p class="mb-0">Pude visualizar la ubicación exacta de nuestra <strong>"Parroquia San Pedro
-                                    de Sacaba"</strong></p>
-                            <div>
-                                <img class="h-100%" src="../assets/images/mockup/Ubicacion.PNG" alt="">
+                            <div class="contacto-dato">
+                                <i class="bi bi-telephone" aria-hidden="true"></i>
+                                <div><strong>Teléfono</strong><span>44701041<br>Parroquia San Pedro</span></div>
                             </div>
-                            <div class="text-center p-2">
-                                <a href="https://g.co/kgs/9ERBEq9">
-                                    <p><i class="bi bi-geo-alt"></i> San Pedro de Sacaba</p>
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-
-
-
-
-
-        <div class="modal fade" id="exampleModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
-            <div class="modal-dialog modal-sm">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="exampleModalLabel">Ingrese sus datos</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                    </div>
-                    <?php
-                    if (isset($_SESSION['usuario']) || isset($_SESSION['CiPersona'])) {
-                        echo '<h2 class="mb-48 text-center">Oops..</h2>';
-                        echo '<h6 class="mb-48 text-center">Ya tienes una sesion activa</h6><br>';
-                        echo '<a href="../logout.php" class="btn btn-lg btn-danger-soft"> Cerrar Session</a>';
-                    } else {
-                    ?>
-                    <div class="modal-body">
-                        <form action="../Controlador/controladorLogin.php" method="POST" class="form-validator"
-                            id="login-form">
-                            <div class="mb-3 position-relative input-group-lg">
-                                <input type="text" class="form-control" placeholder="Usuario" id="username"
-                                    name="username">
-                            </div>
-                            <div class="mb-3">
-                                <div class="input-group input-group-lg">
-                                    <input class="form-control fakepassword" type="password" id="password"
-                                        name="password" placeholder="Contraseña">
-                                    <span class="input-group-text p-0">
-                                        <i class="fakepasswordicon fa-solid fa-eye-slash cursor-pointer p-2 w-40px"></i>
-                                    </span>
+                            <div class="contacto-dato contacto-horario">
+                                <i class="bi bi-clock" aria-hidden="true"></i>
+                                <div>
+                                    <strong>Horario de atención</strong>
+                                    <span>Lunes, miércoles, jueves y viernes: 08:00–12:00 y 14:00–18:00.<br>Martes: 08:00–12:00; por la tarde no hay atención.<br>Sábado y domingo: atención hasta las 12:00.</span>
                                 </div>
                             </div>
-                            <div class="d-grid">
-                                <button type="submit" class="btn btn-lg btn-primary-soft">Ingresar</button>
+                        </div>
+
+                        <div class="contacto-whatsapp">
+                            <i class="bi bi-whatsapp" aria-hidden="true"></i>
+                            <div class="contacto-whatsapp-texto">
+                                <strong>Conversa directamente con la parroquia</strong>
+                                <span>Te responderemos durante el horario de atención.</span>
+                            </div>
+                            <a class="contacto-boton contacto-boton-whatsapp" href="https://wa.me/59177985112?text=Hola%2C%20Parroquia%20San%20Pedro%20de%20Sacaba.%20Deseo%20realizar%20una%20consulta." target="_blank" rel="noopener noreferrer"><i class="bi bi-whatsapp" aria-hidden="true"></i> Escribir</a>
+                        </div>
+                    </article>
+                </div>
+
+                <article class="contacto-card contacto-formulario-card">
+                    <div class="contacto-form-layout">
+                        <div class="contacto-form-intro">
+                            <h2 class="contacto-card-titulo"><i class="bi bi-pencil-square" aria-hidden="true"></i> Prepara tu consulta</h2>
+                            <p class="contacto-card-subtitulo">Completa los datos y elige si deseas abrir el mensaje en WhatsApp o guardarlo como consulta interna.</p>
+                            <p class="contacto-nota"><i class="bi bi-info-circle" aria-hidden="true"></i> WhatsApp se abrirá con el mensaje preparado; tú decidirás cuándo enviarlo.</p>
+                        </div>
+
+                        <form action="" method="POST" id="formulario-contacto" class="contacto-formulario">
+                            <div class="contacto-form-grid">
+                                <div>
+                                    <label for="contacto-nombre">Nombre completo</label>
+                                    <input type="text" id="contacto-nombre" name="nombre" class="form-control" placeholder="Tu nombre completo" required>
+                                </div>
+                                <div>
+                                    <label for="contacto-telefono">Teléfono de contacto</label>
+                                    <input type="tel" id="contacto-telefono" name="numcorr" class="form-control" placeholder="Tu número de contacto" inputmode="numeric" required>
+                                </div>
+                                <div class="contacto-campo-ancho">
+                                    <label for="contacto-concepto">Motivo de la consulta</label>
+                                    <input type="text" id="contacto-concepto" name="concepto" class="form-control" placeholder="Ej.: consulta sobre Bautizo" required>
+                                </div>
+                                <div class="contacto-campo-ancho">
+                                    <label for="contacto-detalle">Mensaje</label>
+                                    <textarea id="contacto-detalle" class="form-control" name="detalle" rows="5" placeholder="Escribe aquí tu consulta" required></textarea>
+                                </div>
+                            </div>
+                            <div class="contacto-form-acciones">
+                                <button type="button" id="preparar-whatsapp" class="contacto-boton contacto-boton-whatsapp"><i class="bi bi-whatsapp" aria-hidden="true"></i> Preparar en WhatsApp</button>
+                                <button type="submit" name="submit" class="contacto-boton contacto-boton-secundario"><i class="bi bi-inbox" aria-hidden="true"></i> Guardar consulta</button>
                             </div>
                         </form>
                     </div>
-                    <?php }
-                    ?>
+                </article>
+
+                <?php if ($resultado) { ?>
+                    <p class="mt-3 text-success"><?php echo htmlspecialchars($resultado); ?></p>
+                <?php } ?>
+
+                <div class="contacto-ventajas">
+                    <div class="contacto-ventaja">
+                        <i class="bi bi-patch-check-fill" aria-hidden="true"></i>
+                        <div><strong>Ubicación verificada</strong><span>En el centro de Sacaba.</span></div>
+                    </div>
+                    <div class="contacto-ventaja">
+                        <i class="bi bi-people-fill" aria-hidden="true"></i>
+                        <div><strong>Atención parroquial</strong><span>Estamos para escucharte y orientarte.</span></div>
+                    </div>
+                    <div class="contacto-ventaja">
+                        <i class="bi bi-whatsapp" aria-hidden="true"></i>
+                        <div><strong>Respuesta por WhatsApp</strong><span>Durante el horario de atención.</span></div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <div class="modal fade login-modal" id="exampleModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-describedby="login-description" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+                <div class="modal-content">
+                    <button type="button" class="login-close" data-bs-dismiss="modal" aria-label="Cerrar inicio de sesión">
+                        <i class="bi bi-x-lg" aria-hidden="true"></i>
+                    </button>
+                    <div class="modal-body login-panel">
+                        <img class="login-logo" src="../assets/images/logo/logParroSP.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo/logParroSP.png') ?>" alt="Parroquia San Pedro">
+                        <div class="login-divider" aria-hidden="true"><span></span></div>
+                        <h2 class="modal-title login-title" id="exampleModalLabel">INICIAR SESIÓN</h2>
+                        <?php if (isset($_SESSION['usuario']) || isset($_SESSION['CiPersona'])) { ?>
+                            <p class="login-description" id="login-description">Ya tienes una sesión activa.</p>
+                            <a href="../logout.php" class="login-submit login-session-exit">
+                                Cerrar sesión <i class="bi bi-box-arrow-right" aria-hidden="true"></i>
+                            </a>
+                        <?php } else { ?>
+                            <p class="login-description" id="login-description">Ingresa tus datos para continuar.</p>
+                            <form action="../Controlador/controladorLogin.php" method="POST" class="form-validator" id="login-form">
+                                <div class="login-field">
+                                    <label for="username" class="login-label">Usuario</label>
+                                    <div class="login-input-wrap">
+                                        <i class="bi bi-person login-field-icon" aria-hidden="true"></i>
+                                        <input type="text" class="form-control login-input" placeholder="Escribe tu usuario" id="username" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+                                    </div>
+                                </div>
+                                <?php if (($_GET['error_login'] ?? '') === 'usuario'): ?>
+                                    <p class="login-field-error" role="alert"><i class="bi bi-exclamation-circle-fill" aria-hidden="true"></i> Usuario incorrecto.</p>
+                                <?php endif; ?>
+                                <div class="login-field">
+                                    <label for="password" class="login-label">Contraseña</label>
+                                    <div class="login-input-wrap">
+                                        <i class="bi bi-lock login-field-icon" aria-hidden="true"></i>
+                                        <input type="password" class="form-control login-input login-password" placeholder="Escribe tu contraseña" id="password" name="password" autocomplete="current-password" required>
+                                        <button type="button" class="login-password-toggle" aria-label="Mostrar contraseña" aria-controls="password" aria-pressed="false">
+                                            <i class="bi bi-eye-slash" aria-hidden="true"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <?php if (($_GET['error_login'] ?? '') === 'contrasena'): ?>
+                                    <p class="login-field-error" role="alert"><i class="bi bi-exclamation-circle-fill" aria-hidden="true"></i> Contraseña incorrecta.</p>
+                                <?php endif; ?>
+                                <button type="submit" class="login-submit">
+                                    Ingresar <i class="bi bi-arrow-right" aria-hidden="true"></i>
+                                </button>
+                            </form>
+                        <?php } ?>
+                        <div class="login-footer">
+                            <div class="login-divider login-divider-small" aria-hidden="true"><span></span></div>
+                            <p>Parroquia San Pedro de Sacaba</p>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
+
     </main>
 
     <footer class="pt-1 bg-mode">
@@ -241,11 +295,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
         </div>
     </footer>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            document.documentElement.setAttribute('data-bs-theme', 'light');
+
+            localStorage.setItem('theme', 'light');
+
+            const modeSwitchButtons = document.querySelectorAll('.btn-modeswitch');
+            modeSwitchButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    const theme = this.getAttribute('data-bs-theme-value');
+                    document.documentElement.setAttribute('data-bs-theme', theme);
+                    localStorage.setItem('theme', theme);
+                });
+            });
+        });
+    </script>
     <script src="../assets/vendor/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="../assets/vendor/plyr/plyr.js"></script>
     <script src="../assets/vendor/tiny-slider/dist/tiny-slider.js"></script>
     <script src="../assets/js/functions.js"></script>
     <script src="../assets/js/tema.js"></script>
+    <script src="../assets/js/acceso.js?v=<?= filemtime(__DIR__ . '/../assets/js/acceso.js') ?>" defer></script>
+    <script src="../assets/js/contacto-whatsapp.js?v=<?= filemtime(__DIR__ . '/../assets/js/contacto-whatsapp.js') ?>"></script>
+<?php if (isset($_GET['error_login'])): ?>
+<script>
+    (function () {
+        var formulario = document.getElementById('login-form');
+        var modalEl = formulario ? formulario.closest('.modal') : null;
+        if (!modalEl) { return; }
+        if (window.bootstrap) {
+            bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        }
+        modalEl.addEventListener('hidden.bs.modal', function () {
+            var avisos = modalEl.querySelectorAll('.login-field-error');
+            for (var i = 0; i < avisos.length; i++) { avisos[i].remove(); }
+        });
+        if (window.history && window.history.replaceState) {
+            var url = new URL(window.location.href);
+            url.searchParams.delete('error_login');
+            window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+        }
+    })();
+</script>
+<?php endif; ?>
 </body>
 
 </html>

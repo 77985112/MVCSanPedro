@@ -1,5 +1,6 @@
 <?php
 require_once '../Modelo/modeloLogin.php';
+require_once __DIR__ . '/../Modelo/modeloAcceso.php';
 
 class ControladorLogin {
     private $modeloLogin;
@@ -13,12 +14,15 @@ class ControladorLogin {
         $personalData = $this->modeloLogin->getPersonalData($username, $password);
         if ($personalData) {
             $_SESSION['usuario'] = $personalData;
-            
-            if (in_array($personalData['DescripCar'], ['Párroco', 'Secretario (a) Parroquial', 'Sacerdote', 'Personal'])) {
-                header("Location: ../VistaPersonal/VistaPersonal.php");
-            } else {
-                header("Location: ../logout.php");
-            }
+
+            // Permisos de módulos para esta persona (se aplican al menú y a
+            // la navegación directa por URL).
+            $modeloAcceso = new ModeloAcceso();
+            $_SESSION['permisos'] = $modeloAcceso->obtener((int) $personalData['CodPer'], $personalData['DescripCar']);
+
+            // Todo el personal activo con credenciales válidas puede ingresar,
+            // sin depender de un listado fijo de cargos.
+            header("Location: ../VistaPersonal/VistaDashboard.php");
             exit();
         }
 
@@ -46,7 +50,15 @@ class ControladorLogin {
             }
             exit();
         }
-        header("Location: ../logout.php");
+        // Inicio fallido: se vuelve al formulario indicando qué campo corregir
+        // (usuario desconocido o contraseña equivocada).
+        $motivo = $this->modeloLogin->existeUsuario($username) ? 'contrasena' : 'usuario';
+        $destino = $_SERVER['HTTP_REFERER'] ?? '';
+        if (!is_string($destino) || $destino === '' || preg_match('/[\r\n]/', $destino)) {
+            $destino = '../index.php';
+        }
+        $separador = strpos($destino, '?') === false ? '?' : '&';
+        header('Location: ' . $destino . $separador . 'error_login=' . $motivo);
         exit();
     }
 }

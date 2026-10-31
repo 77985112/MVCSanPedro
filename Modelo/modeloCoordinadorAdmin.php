@@ -16,9 +16,9 @@ class ModeloCoordinadorAdmin {
                    a.RolCat, a.IdGrupo, a.FechaIniCat, a.FechaFinCat,
                    g.NombreGrupo
             FROM catequista c
-            INNER JOIN persona p ON c.CiCat = p.CiPersona
-            INNER JOIN asignacion a ON c.CiCat = a.CiCat
-            INNER JOIN grupo g ON a.IdGrupo = g.IdGrupo
+            INNER JOIN `persona` p ON c.CiCat = p.CiPersona
+            INNER JOIN `asignacion` a ON c.CiCat = a.CiCat
+            INNER JOIN `grupo` g ON a.IdGrupo = g.IdGrupo
             WHERE a.RolCat = 'Coordinador'
             ORDER BY c.Sacramento, p.ApPaterno
         ");
@@ -29,8 +29,8 @@ class ModeloCoordinadorAdmin {
     public function obtenerGruposPorSacramento($sacramento) {
         $stmt = $this->conn->prepare("
             SELECT g.IdGrupo, g.NombreGrupo
-            FROM grupo g
-            INNER JOIN asignacion a ON g.IdGrupo = a.IdGrupo
+            FROM `grupo` g
+            INNER JOIN `asignacion` a ON g.IdGrupo = a.IdGrupo
             WHERE a.RolCat = 'Coordinador' AND a.CiCat IN (
                 SELECT CiCat FROM catequista WHERE Sacramento = ?
             )
@@ -43,9 +43,12 @@ class ModeloCoordinadorAdmin {
 
     public function buscarPersona($ci) {
         $stmt = $this->conn->prepare("
-            SELECT CiPersona, Nombre, ApPaterno, ApMaterno, Sexo, Contacto, Estado_per
-            FROM persona
-            WHERE CiPersona = ?
+            SELECT p.CiPersona, p.TipoDocumento, p.NumeroDocumento, p.Nacionalidad, p.Nombre, p.ApPaterno, p.ApMaterno, p.Sexo, p.FechaNac, p.Direccion, p.ZonaSector,
+                   p.Contacto, p.TelefonoAlternativo, p.Correo, p.Estado_per, p.SacramentoSolicita,
+                   a.Documento AS DocumentoBautizo, p.Observaciones
+            FROM `persona` p
+            LEFT JOIN antecedente_sacramental a ON a.CiPersona = p.CiPersona AND a.Sacramento = 'Bautizo'
+            WHERE p.CiPersona = ?
         ");
         $stmt->bind_param("s", $ci);
         $stmt->execute();
@@ -56,7 +59,7 @@ class ModeloCoordinadorAdmin {
         $stmt = $this->conn->prepare("
             SELECT c.CiCat
             FROM catequista c
-            INNER JOIN asignacion a ON c.CiCat = a.CiCat
+            INNER JOIN `asignacion` a ON c.CiCat = a.CiCat
             WHERE a.RolCat = 'Coordinador' AND c.Sacramento = ?
         ");
         $stmt->bind_param("s", $sacramento);
@@ -100,7 +103,7 @@ class ModeloCoordinadorAdmin {
                 }
 
                 $stmt = $this->conn->prepare("
-                    INSERT INTO asignacion (Gestion, CiCat, IdGrupo, FechaAsigCat, FechaIniCat, FechaFinCat, RolCat)
+                    INSERT INTO `asignacion` (Gestion, CiCat, IdGrupo, FechaAsigCat, FechaIniCat, FechaFinCat, RolCat)
                     VALUES (?, ?, ?, ?, ?, ?, ?)
                 ");
                 $stmt->bind_param("ssissss", $fecha, $ci, $idGrupo, $fecha, $fecha, $fechaFin, $rol);
@@ -139,7 +142,7 @@ class ModeloCoordinadorAdmin {
     }
 
     public function buscarTodosLosGrupos() {
-        $stmt = $this->conn->prepare("SELECT IdGrupo, NombreGrupo FROM grupo WHERE IdGrupo IN (2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40) ORDER BY IdGrupo");
+        $stmt = $this->conn->prepare("SELECT IdGrupo, NombreGrupo FROM `grupo` WHERE IdGrupo IN (2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40) ORDER BY IdGrupo");
         $stmt->execute();
         return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
     }
@@ -150,9 +153,9 @@ class ModeloCoordinadorAdmin {
                    p.Nombre, p.ApPaterno, p.ApMaterno,
                    a.RolCat, a.IdGrupo, g.NombreGrupo
             FROM catequista c
-            INNER JOIN persona p ON c.CiCat = p.CiPersona
-            INNER JOIN asignacion a ON c.CiCat = a.CiCat
-            INNER JOIN grupo g ON a.IdGrupo = g.IdGrupo
+            INNER JOIN `persona` p ON c.CiCat = p.CiPersona
+            INNER JOIN `asignacion` a ON c.CiCat = a.CiCat
+            INNER JOIN `grupo` g ON a.IdGrupo = g.IdGrupo
             WHERE c.CiCat = ? AND a.RolCat = 'Coordinador'
         ");
         $stmt->bind_param("s", $ci);
@@ -169,22 +172,83 @@ class ModeloCoordinadorAdmin {
     public function buscarPersonasPorNombre($nombre) {
         $busqueda = "%{$nombre}%";
         $stmt = $this->conn->prepare("
-            SELECT CiPersona, Nombre, ApPaterno, ApMaterno, Sexo, Contacto, Estado_per
-            FROM persona
-            WHERE Nombre LIKE ? OR ApPaterno LIKE ? OR ApMaterno LIKE ? OR CiPersona LIKE ?
+            SELECT p.CiPersona, p.Nombre, p.ApPaterno, p.ApMaterno, p.Sexo, p.Contacto, p.Estado_per,
+                   p.ZonaSector, p.SacramentoSolicita, a.Documento AS DocumentoBautizo
+            FROM `persona` p
+            LEFT JOIN antecedente_sacramental a ON a.CiPersona = p.CiPersona AND a.Sacramento = 'Bautizo'
+            WHERE p.Nombre LIKE ? OR p.ApPaterno LIKE ? OR p.ApMaterno LIKE ? OR p.CiPersona LIKE ? OR p.NumeroDocumento LIKE ? OR p.Contacto LIKE ?
             LIMIT 10
         ");
-        $stmt->bind_param("ssss", $busqueda, $busqueda, $busqueda, $busqueda);
+        $stmt->bind_param("ssssss", $busqueda, $busqueda, $busqueda, $busqueda, $busqueda, $busqueda);
         $stmt->execute();
         return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
     }
 
-    public function registrarPersona($ci, $nombre, $apPaterno, $apMaterno, $sexo, $fechaNac, $direccion, $contacto, $estadoCivil) {
+    /** Búsqueda de personas combinando texto libre y filtros del registro. */
+    public function buscarPersonasFiltradas($texto = '', $sacramento = '', $zona = '', $estadoCivil = '') {
+        $busqueda = $texto === '' ? '' : "%{$texto}%";
         $stmt = $this->conn->prepare("
-            INSERT INTO persona (CiPersona, Nombre, ApPaterno, ApMaterno, Sexo, FechaNac, Direccion, Contacto, Estado_per, id_certificado_nacimiento)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '')
+            SELECT p.CiPersona, p.Nombre, p.ApPaterno, p.ApMaterno, p.Sexo, p.Contacto, p.Estado_per,
+                   p.ZonaSector, p.SacramentoSolicita, a.Documento AS DocumentoBautizo
+            FROM `persona` p
+            LEFT JOIN antecedente_sacramental a ON a.CiPersona = p.CiPersona AND a.Sacramento = 'Bautizo'
+            WHERE (? = '' OR p.Nombre LIKE ? OR p.ApPaterno LIKE ? OR p.ApMaterno LIKE ? OR p.CiPersona LIKE ? OR p.NumeroDocumento LIKE ? OR p.Contacto LIKE ?)
+              AND (? = '' OR p.SacramentoSolicita = ?)
+              AND (? = '' OR p.ZonaSector = ?)
+              AND (? = '' OR p.Estado_per = ?)
+            ORDER BY p.ApPaterno, p.ApMaterno, p.Nombre
+            LIMIT 50
         ");
-        $stmt->bind_param("sssssssss", $ci, $nombre, $apPaterno, $apMaterno, $sexo, $fechaNac, $direccion, $contacto, $estadoCivil);
+        $stmt->bind_param(
+            "sssssssssssss",
+            $texto, $busqueda, $busqueda, $busqueda, $busqueda, $busqueda, $busqueda,
+            $sacramento, $sacramento,
+            $zona, $zona,
+            $estadoCivil, $estadoCivil
+        );
+        $stmt->execute();
+        return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    }
+
+    public function obtenerZonasSector() {
+        $stmt = $this->conn->prepare("
+            SELECT DISTINCT ZonaSector
+            FROM `persona`
+            WHERE ZonaSector IS NOT NULL AND ZonaSector <> ''
+            ORDER BY ZonaSector
+        ");
+        $stmt->execute();
+        return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    }
+
+    public function obtenerSacramentosSolicitados() {
+        $stmt = $this->conn->prepare("
+            SELECT DISTINCT SacramentoSolicita
+            FROM `persona`
+            WHERE SacramentoSolicita IS NOT NULL AND SacramentoSolicita <> ''
+            ORDER BY SacramentoSolicita
+        ");
+        $stmt->execute();
+        return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    }
+
+    public function obtenerEstadosCiviles() {
+        $stmt = $this->conn->prepare("
+            SELECT DISTINCT Estado_per
+            FROM `persona`
+            WHERE Estado_per IS NOT NULL AND Estado_per <> ''
+            ORDER BY Estado_per
+        ");
+        $stmt->execute();
+        return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    }
+
+    public function registrarPersona($ci, $nombre, $apPaterno, $apMaterno, $sexo, $fechaNac, $direccion, $zonaSector, $contacto, $telefonoAlternativo, $correo, $estadoCivil, $sacramentoSolicita, $observaciones) {
+        $stmt = $this->conn->prepare("
+            INSERT INTO `persona` (CiPersona, Nombre, ApPaterno, ApMaterno, Sexo, FechaNac, Direccion, ZonaSector, Contacto, TelefonoAlternativo, Correo, Estado_per, SacramentoSolicita, Observaciones, id_certificado_nacimiento)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '')
+        ");
+        $stmt->bind_param("ssssssssssssss", $ci, $nombre, $apPaterno, $apMaterno, $sexo, $fechaNac, $direccion, $zonaSector, $contacto, $telefonoAlternativo, $correo, $estadoCivil, $sacramentoSolicita, $observaciones);
         return $stmt->execute();
     }
 }

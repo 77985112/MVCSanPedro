@@ -1,0 +1,340 @@
+.contacto-pagina {
+    padding: 46px 0 60px;
+    color: #101828;
+    background: radial-gradient(circle at 8% 8%, rgba(217, 162, 11, .12), transparent 24rem), radial-gradient(circle at 92% 6%, rgba(31, 95, 191, .1), transparent 25rem), #f2f5f9;
+}
+.contacto-cabecera {
+    max-width: 780px;
+    margin: 0 auto 34px;
+    height: auto;
+    text-align: center;
+}
+.contacto-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    margin-bottom: 14px;
+    padding: 5px 12px;
+    color: #8a5d00;
+    background: #fff6dd;
+    border: 1px solid #f1e2b8;
+    border-radius: 999px;
+    font-size: 11.5px;
+    font-weight: 800;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+}
+.contacto-cabecera h1 {
+    margin: 0 0 12px;
+    color: #0b2545;
+    font-size: clamp(2.2rem, 4.6vw, 2.9rem);
+    line-height: 1.08;
+    font-weight: 800;
+    letter-spacing: -.03em;
+}
+.contacto-adorno {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 14px;
+    color: #bd8700;
+}
+.contacto-adorno::before,
+.contacto-adorno::after {
+    width: 64px;
+    height: 2px;
+    border-radius: 2px;
+    content: "";
+    background: linear-gradient(90deg, transparent, #d9a20b);
+}
+.contacto-adorno::after {
+    background: linear-gradient(90deg, #d9a20b, transparent);
+}
+.contacto-adorno i { font-size: 13px; }
+.contacto-cabecera p {
+    max-width: 720px;
+    margin: 0 auto;
+    color: #475467;
+    font-size: 15.5px;
+    line-height: 1.65;
+}
+
+.contacto-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr);
+    gap: 22px;
+    align-items: start;
+}
+.contacto-card {
+    padding: 24px;
+    background: #fff;
+    border: 1px solid #e1e7ef;
+    border-radius: 20px;
+    box-shadow: 0 14px 34px rgba(15, 45, 82, .07);
+}
+.contacto-card-titulo {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    margin: 0 0 6px;
+    color: #0b2545;
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -.01em;
+}
+.contacto-card-titulo > i {
+    display: inline-grid;
+    width: 46px;
+    height: 46px;
+    flex: 0 0 46px;
+    place-items: center;
+    color: #8a5d00;
+    background: #fff4d6;
+    border-radius: 13px;
+    font-size: 21px;
+}
+.contacto-card-subtitulo {
+    margin: 0 0 18px 60px;
+    color: #667085;
+    font-size: 13.5px;
+    line-height: 1.5;
+}
+.contacto-mapa {
+    width: 100%;
+    height: 360px;
+    overflow: hidden;
+    background: #e7edf4;
+    border: 1px solid #dbe3ee;
+    border-radius: 14px;
+}
+.contacto-direccion {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 18px 0 6px;
+    margin: 0;
+    color: #1d2939;
+    font-size: 13.5px;
+    font-weight: 600;
+    line-height: 1.5;
+}
+.contacto-direccion i {
+    margin-top: 1px;
+    color: #12345b;
+    font-size: 18px;
+}
+.contacto-acciones-mapa {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    padding-top: 12px;
+}
+.contacto-boton {
+    display: inline-flex;
+    min-height: 44px;
+    padding: 10px 16px;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: #12345b;
+    background: #fff;
+    border: 1px solid #12345b;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 700;
+    text-decoration: none;
+    cursor: pointer;
+    transition: color .2s ease, background-color .2s ease, transform .2s ease;
+}
+.contacto-boton:hover { transform: translateY(-1px); }
+.contacto-boton-primario { color: #fff; background: #12345b; }
+.contacto-boton-primario:hover { color: #fff; background: #1f4d7e; }
+.contacto-boton-secundario { color: #12345b; background: #fff; }
+.contacto-boton-secundario:hover { color: #fff; background: #12345b; }
+
+.contacto-datos {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+.contacto-dato {
+    display: flex;
+    gap: 10px;
+    padding: 12px;
+    align-items: flex-start;
+    background: #f7f9fc;
+    border: 1px solid #e7ebf1;
+    border-radius: 12px;
+}
+.contacto-dato i {
+    display: inline-grid;
+    width: 34px;
+    height: 34px;
+    flex: 0 0 34px;
+    place-items: center;
+    color: #fff;
+    background: #12345b;
+    border-radius: 50%;
+    font-size: 15px;
+}
+.contacto-dato-whatsapp i { background: #10a84b; }
+.contacto-dato strong,
+.contacto-dato span { display: block; }
+.contacto-dato strong {
+    margin-bottom: 2px;
+    color: #101828;
+    font-size: 13px;
+}
+.contacto-dato span {
+    color: #475467;
+    font-size: 12px;
+    line-height: 1.4;
+}
+.contacto-horario { grid-column: 1 / -1; }
+.contacto-horario span { line-height: 1.5; }
+
+.contacto-whatsapp {
+    display: flex;
+    gap: 14px;
+    padding: 14px;
+    margin-top: 12px;
+    align-items: center;
+    background: linear-gradient(100deg, #e9fbf0, #f5fff8);
+    border: 1px solid #c9efd7;
+    border-radius: 14px;
+}
+.contacto-whatsapp > i {
+    color: #0aa546;
+    font-size: 32px;
+}
+.contacto-whatsapp-texto { flex: 1; }
+.contacto-whatsapp strong {
+    display: block;
+    margin-bottom: 2px;
+    color: #123524;
+    font-size: 13.5px;
+}
+.contacto-whatsapp span {
+    color: #42604c;
+    font-size: 12px;
+}
+.contacto-boton-whatsapp {
+    color: #fff;
+    background: #0aa546;
+    border-color: #0aa546;
+    white-space: nowrap;
+}
+.contacto-boton-whatsapp:hover {
+    color: #fff;
+    background: #087e37;
+    border-color: #087e37;
+}
+
+.contacto-formulario-card { margin-top: 22px; }
+.contacto-form-layout {
+    display: grid;
+    grid-template-columns: .9fr 1.1fr;
+    gap: 30px;
+    align-items: start;
+}
+.contacto-form-intro .contacto-card-subtitulo { margin-left: 60px; }
+.contacto-form-intro .contacto-nota { margin-top: 14px; }
+.contacto-formulario { display: grid; gap: 12px; }
+.contacto-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+.contacto-campo-ancho { grid-column: 1 / -1; }
+.contacto-formulario label {
+    display: block;
+    margin-bottom: 5px;
+    color: #344054;
+    font-size: 12px;
+    font-weight: 700;
+}
+.contacto-formulario .form-control {
+    width: 100%;
+    min-height: 44px;
+    padding: 10px 12px;
+    color: #1d2939;
+    background: #fff;
+    border: 1px solid #d8dee8;
+    border-radius: 9px;
+    font-size: 13px;
+}
+.contacto-formulario textarea.form-control {
+    min-height: 112px;
+    resize: vertical;
+}
+.contacto-formulario .form-control:focus {
+    border-color: #2d6eb4;
+    box-shadow: 0 0 0 3px rgba(45, 110, 180, .12);
+}
+.contacto-form-acciones {
+    display: grid;
+    grid-template-columns: 1.15fr .85fr;
+    gap: 10px;
+    margin-top: 2px;
+}
+.contacto-nota {
+    display: flex;
+    gap: 6px;
+    margin: 0;
+    align-items: flex-start;
+    color: #667085;
+    font-size: 11.5px;
+    line-height: 1.45;
+}
+
+.contacto-ventajas {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin-top: 22px;
+}
+.contacto-ventaja {
+    display: flex;
+    gap: 12px;
+    padding: 14px 16px;
+    align-items: center;
+    background: #fff;
+    border: 1px solid #e2e7ee;
+    border-radius: 14px;
+}
+.contacto-ventaja i {
+    color: #bd8700;
+    font-size: 24px;
+}
+.contacto-ventaja strong {
+    display: block;
+    color: #101828;
+    font-size: 13px;
+}
+.contacto-ventaja span {
+    color: #667085;
+    font-size: 12px;
+}
+
+@media (max-width: 991.98px) {
+    .contacto-grid,
+    .contacto-form-layout { grid-template-columns: 1fr; }
+    .contacto-mapa { height: 340px; }
+}
+@media (max-width: 640px) {
+    .contacto-pagina { padding-top: 28px; }
+    .contacto-cabecera h1 { font-size: 2rem; }
+    .contacto-datos,
+    .contacto-form-grid,
+    .contacto-form-acciones,
+    .contacto-ventajas,
+    .contacto-acciones-mapa { grid-template-columns: 1fr; }
+    .contacto-horario,
+    .contacto-campo-ancho { grid-column: auto; }
+    .contacto-card-subtitulo,
+    .contacto-form-intro .contacto-card-subtitulo { margin-left: 0; }
+    .contacto-whatsapp { flex-wrap: wrap; align-items: flex-start; }
+    .contacto-whatsapp .contacto-boton { width: 100%; }
+    .contacto-mapa { height: 300px; }
+}

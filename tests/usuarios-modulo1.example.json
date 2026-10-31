@@ -1,0 +1,18 @@
+{
+  "parroco": { "usuario": "", "contrasena": "", "nombre": "" },
+  "personalRoles": [
+    { "usuario": "", "contrasena": "", "nombre": "", "rol": "Párroco" },
+    { "usuario": "", "contrasena": "", "nombre": "", "rol": "Secretario (a) Parroquial" },
+    { "usuario": "", "contrasena": "", "nombre": "", "rol": "Sacerdote" },
+    { "usuario": "", "contrasena": "", "nombre": "", "rol": "Sacristán" },
+    { "usuario": "", "contrasena": "", "nombre": "", "rol": "Diácono" },
+    { "usuario": "", "contrasena": "", "nombre": "", "rol": "Musico Parroquial" }
+  ],
+  "coordinadorPrimera": { "usuario": "", "contrasena": "", "nombre": "" },
+  "coordinadorConfirmacion": { "usuario": "", "contrasena": "", "nombre": "" },
+  "catequista": { "usuario": "", "contrasena": "", "nombre": "" },
+  "titular": { "usuario": "", "contrasena": "", "nombre": "" },
+  "catequisandoPrimera": { "usuario": "", "contrasena": "", "nombre": "" },
+  "catequisandoConfirmacion": { "usuario": "", "contrasena": "", "nombre": "" },
+  "inactivo": { "usuario": "", "contrasena": "", "nombre": "" }
+}

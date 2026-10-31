@@ -1,25 +1,109 @@
 <?php
 require('../fpdf/fpdf.php');
+require_once '../Controlador/controladorPersonal.php';
 session_start();
 
-if (!isset($_SESSION['usuario']) || !isset($_SESSION['registroPersonal'])) {
+// Solo el Párroco puede generar tickets de acceso.
+if (!isset($_SESSION['usuario']) || $_SESSION['usuario']['DescripCar'] != 'Párroco') {
     header("Location: ../logout.php");
     exit();
 }
 
-$personal = $_SESSION['registroPersonal'];
+// 1) Ticket de un personal buscado (?ci=...); 2) el del último registrado (sesión).
+$personal = null;
+if (isset($_GET['ci']) && trim($_GET['ci']) !== '') {
+    $controller = new ControladorPersonal();
+    $registro = $controller->buscarPersonalPorCi(trim($_GET['ci']));
+    if ($registro) {
+        $personal = [
+            'Nombre' => trim($registro['Nombre'] . ' ' . $registro['Paterno'] . ' ' . $registro['Materno']),
+            'UsuarioPer' => $registro['UsuarioPer'],
+            'ClavePer' => $registro['ClavePer'],
+            'DescripCar' => $registro['DescripCar'] ?? '',
+        ];
+    }
+}
+if (!$personal && isset($_SESSION['registroPersonal'])) {
+    $personal = $_SESSION['registroPersonal'];
+}
+if (!$personal) {
+    header("Location: ../logout.php");
+    exit();
+}
+
+// Conversión a ISO-8859-1 para las fuentes incluidas de FPDF.
+$txt = function ($cadena) {
+    return iconv('UTF-8', 'ISO-8859-1//TRANSLIT', $cadena);
+};
+
+$cargo = $personal['DescripCar'] ?? '';
+
 $pdf = new FPDF('P', 'mm', array(100, 100));
+$pdf->SetMargins(0, 0, 0);
+$pdf->SetAutoPageBreak(false);
 $pdf->AddPage();
-$pdf->SetFont('Arial', 'B', 12);
-$pdf->Cell(0, 5, 'San Pedro de Sacaba', 0, 1, 'C');
-$pdf->Ln();
-$pdf->Image('../assets/images/Santo/SanPedro.png', 12, 15, 20, 20);
-$pdf->SetFont('Arial', '', 8);
-$pdf->SetXY(35, 15);
-$pdf->Cell(0, 5, 'Nombre: ' . $personal['Nombre'], 0, 1);
-$pdf->SetX(35);
-$pdf->Cell(0, 5, 'Usuario: ' . $personal['UsuarioPer'], 0, 1);
-$pdf->SetX(35);
-$pdf->Cell(0, 5, 'Clave: ' . $personal['ClavePer'], 0, 1);
+
+// Barra superior dorada.
+$pdf->SetFillColor(189, 145, 50);
+$pdf->Rect(0, 0, 100, 3, 'F');
+
+// Logo de la parroquia (proporción original 1665x945).
+$pdf->Image('../assets/images/logo.png', 5, 5.4, 14, 7.95);
+
+// Título.
+$pdf->SetTextColor(45, 45, 45);
+$pdf->SetFont('Arial', 'B', 11);
+$pdf->SetXY(0, 6.5);
+$pdf->Cell(100, 6, $txt('Parroquia San Pedro de Sacaba'), 0, 0, 'C');
+
+$pdf->SetFont('Arial', '', 7);
+$pdf->SetTextColor(120, 120, 120);
+$pdf->SetXY(0, 14);
+$pdf->Cell(100, 4, $txt('Ticket de acceso'), 0, 0, 'C');
+
+// Cargo, destacado debajo del título.
+if ($cargo !== '') {
+    $pdf->SetFont('Arial', 'B', 8);
+    $ancho = $pdf->GetStringWidth($txt($cargo)) + 14;
+    $x = (100 - $ancho) / 2;
+    $pdf->SetFillColor(189, 145, 50);
+    $pdf->Rect($x, 20, $ancho, 6.5, 'F');
+    $pdf->SetTextColor(255, 255, 255);
+    $pdf->SetXY($x, 20);
+    $pdf->Cell($ancho, 6.5, $txt($cargo), 0, 0, 'C');
+}
+
+// Datos del acceso.
+$pdf->SetDrawColor(222, 222, 222);
+$pdf->SetLineWidth(0.2);
+$filas = [
+    'Nombre' => $personal['Nombre'],
+    'Usuario' => $personal['UsuarioPer'],
+    'Clave' => $personal['ClavePer'],
+];
+$y = 31;
+foreach ($filas as $etiqueta => $valor) {
+    $pdf->SetXY(12, $y);
+    $pdf->SetTextColor(120, 120, 120);
+    $pdf->SetFont('Arial', 'B', 7);
+    $pdf->Cell(18, 6, $txt($etiqueta), 0, 0);
+    $pdf->SetTextColor(40, 40, 40);
+    $pdf->SetFont('Arial', 'B', 9);
+    $pdf->Cell(70, 6, $txt($valor), 0, 0);
+    $pdf->Line(12, $y + 6.5, 88, $y + 6.5);
+    $y += 9;
+}
+
+// Imagen de San Pedro, más abajo.
+$pdf->Image('../assets/images/Santo/SanPedro.png', 37, 56, 26, 26);
+
+// Pie del ticket.
+$pdf->SetDrawColor(189, 145, 50);
+$pdf->Line(12, 86, 88, 86);
+$pdf->SetTextColor(140, 140, 140);
+$pdf->SetFont('Arial', '', 6);
+$pdf->SetXY(0, 88);
+$pdf->Cell(100, 4, $txt('Documento de uso interno · Parroquia San Pedro de Sacaba'), 0, 0, 'C');
+
 $pdf->Output();
 ?>

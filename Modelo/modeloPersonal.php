@@ -1,5 +1,5 @@
 <?php
-require_once '../conexion/Conexion.php';
+require_once '../Conexion/Conexion.php';
 
 class Personal
 {
@@ -12,22 +12,69 @@ class Personal
 
     public function registrarNuevoPersonal($data)
     {
+        $usuario = trim((string) ($data['UsuarioPer'] ?? ''));
+        $clave = trim((string) ($data['ClavePer'] ?? ''));
+        if ($usuario === '' || $clave === '') {
+            return false;
+        }
         if (strtolower($data['Sexo']) === 'mujer' && in_array($data['CodCar'], [2, 3])) {
             $data['CodCar'] = 1;
         }
-        $stmt = $this->conn->prepare("CALL RegistrarNuevoPersonal(?, ?, ?, ?, ?, ?, ?)");
+        $correo = $data['Correo'] ?? null;
+        $fechaNac = ($data['FechaNac'] ?? '') !== '' ? $data['FechaNac'] : null;
+        $fechaOrdenacion = ($data['FechaOrdenacion'] ?? '') !== '' ? $data['FechaOrdenacion'] : null;
+        $stmt = $this->conn->prepare("CALL RegistrarNuevoPersonal(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         $stmt->bind_param(
-            "ssssssi",
+            "sssssssssi",
             $data['Nombre'],
             $data['Paterno'],
             $data['Materno'],
             $data['CiPersonal'],
             $data['Sexo'],
+            $fechaNac,
             $data['ContactoPer'],
+            $correo,
+            $fechaOrdenacion,
             $data['CodCar']
         );
 
-        return $stmt->execute();
+        $this->conn->begin_transaction();
+        try {
+            if (!$stmt->execute()) {
+                $this->conn->rollback();
+                return false;
+            }
+            $stmt->close();
+
+            // El procedimiento guarda el CI y el contacto como credenciales
+            // provisionales; se reemplazan por las escritas en el formulario.
+            $stmt = $this->conn->prepare(
+                "SELECT CodPer FROM `personal` WHERE CiPersonal = ? ORDER BY CodPer DESC LIMIT 1"
+            );
+            $stmt->bind_param("s", $data['CiPersonal']);
+            $stmt->execute();
+            $registro = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+            if (!$registro) {
+                $this->conn->rollback();
+                return false;
+            }
+
+            $stmt = $this->conn->prepare(
+                "UPDATE `personal` SET UsuarioPer = ?, ClavePer = ? WHERE CodPer = ?"
+            );
+            $stmt->bind_param("ssi", $usuario, $clave, $registro['CodPer']);
+            if (!$stmt->execute()) {
+                $this->conn->rollback();
+                return false;
+            }
+            $stmt->close();
+            $this->conn->commit();
+            return true;
+        } catch (Throwable $e) {
+            $this->conn->rollback();
+            return false;
+        }
     }
 
     public function buscarPersonalPorCi($ci)
@@ -36,6 +83,37 @@ class Personal
         $stmt->bind_param("s", $ci);
         $stmt->execute();
         return $stmt->get_result()->fetch_assoc();
+    }
+
+    public function buscarPersonalPorTexto($texto)
+    {
+        $stmt = $this->conn->prepare("CALL BuscarPersonalPorTexto(?)");
+        $stmt->bind_param("s", $texto);
+        $stmt->execute();
+        return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    }
+
+    public function contarPersonal()
+    {
+        $result = $this->conn->query("SELECT COUNT(*) AS total FROM `personal`");
+        $fila = $result->fetch_assoc();
+        return (int) $fila['total'];
+    }
+
+    public function listarPersonal($inicio, $limite)
+    {
+        $stmt = $this->conn->prepare(
+            "SELECT p.CiPersonal, p.Nombre, p.Paterno, p.Materno, p.FechaNac, p.FechaOrdenacion,
+                    p.ContactoPer, p.Correo, p.Estado, p.FechaIng, p.FechaFinGestion,
+                    p.CodCar, c.DescripCar
+             FROM `personal` p
+             LEFT JOIN `cargo` c ON c.CodCar = p.CodCar
+             ORDER BY p.CodCar ASC, p.Paterno ASC, p.Nombre ASC
+             LIMIT ?, ?"
+        );
+        $stmt->bind_param("ii", $inicio, $limite);
+        $stmt->execute();
+        return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
     }
 
     public function PersonalDemas($ciPersonal)
@@ -47,11 +125,32 @@ class Personal
         return $result->fetch_all(MYSQLI_ASSOC);
     }
 
+    public function obtenerOCrearCargo($nombre)
+    {
+        $stmt = $this->conn->prepare("SELECT CodCar FROM `cargo` WHERE LOWER(DescripCar) = LOWER(?) LIMIT 1");
+        $stmt->bind_param("s", $nombre);
+        $stmt->execute();
+        $fila = $stmt->get_result()->fetch_assoc();
+        if ($fila) {
+            return (int) $fila['CodCar'];
+        }
+
+        $stmt = $this->conn->prepare("INSERT INTO `cargo` (DescripCar) VALUES (?)");
+        $stmt->bind_param("s", $nombre);
+        if (!$stmt->execute()) {
+            return 0;
+        }
+        return (int) $this->conn->insert_id;
+    }
+
     public function modificarPersonalPorCi($data)
     {
-        $stmt = $this->conn->prepare("CALL ModificarPersonalPorCi(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $correo = $data['Correo'] ?? null;
+        $fechaNac = ($data['FechaNac'] ?? '') !== '' ? $data['FechaNac'] : null;
+        $fechaOrdenacion = ($data['FechaOrdenacion'] ?? '') !== '' ? $data['FechaOrdenacion'] : null;
+        $stmt = $this->conn->prepare("CALL ModificarPersonalPorCi(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         $stmt->bind_param(
-            "sssssssssssi",
+            "sssssssssssssssi",
             $data['CiPersonal'],
             $data['ClavePer'],
             $data['Nombre'],
@@ -59,6 +158,10 @@ class Personal
             $data['Materno'],
             $data['Sexo'],
             $data['ContactoPer'],
+            $correo,
+            $fechaNac,
+            $fechaOrdenacion,
+            $data['UsuarioPer'],
             $data['PerfilPer'],
             $data['FondoPer'],
             $data['FrasePer'],
@@ -66,8 +169,11 @@ class Personal
             $data['CodCar_2']
         );
 
-        if (!$stmt->execute()) {
-            echo "Error en la ejecución: " . $stmt->error;
+        try {
+            if (!$stmt->execute()) {
+                return false;
+            }
+        } catch (mysqli_sql_exception $e) {
             return false;
         }
 

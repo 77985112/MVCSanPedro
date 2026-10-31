@@ -15,6 +15,9 @@ class controladorReporteGeneral {
     public function obtenerReservas() {
         return $this->modelo->obtenerReservas();
     }
+    public function obtenerReservasReporte($tipo = 'anual', $anio = null, $mes = null, $dia = null) {
+        return $this->modelo->obtenerReservasReporte($tipo, $anio, $mes, $dia);
+    }
     public function obtenerReservasMes($anio, $mes) {
         return $this->modelo->obtenerReservasMes($anio, $mes);
     }

@@ -1,5 +1,5 @@
 <?php
-require_once "../Modelo/ModeloEmitidos.php";
+require_once __DIR__ . "/../Modelo/modeloEmitidos.php";
 
 class CertificadoControlador {
 

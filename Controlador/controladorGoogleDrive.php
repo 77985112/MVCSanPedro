@@ -13,6 +13,10 @@ class ControladorGoogleDrive {
         return $this->modelo->estaConectado();
     }
 
+    public function obtenerErrorConexion() {
+        return $this->modelo->obtenerErrorConexion();
+    }
+
     public function obtenerUrlConexion() {
         return $this->modelo->obtenerUrlConexion();
     }

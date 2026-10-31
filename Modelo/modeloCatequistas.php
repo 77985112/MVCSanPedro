@@ -12,7 +12,7 @@ class CatequistaModel {
     public function getActCatequistas() {
         $sql = "SELECT catequista.CiCat, CONCAT(persona.Nombre, ' ', persona.ApPaterno, ' ', persona.ApMaterno) AS NombreCompleto, catequista.ImagenCat, catequista.Sacramento 
                 FROM catequista 
-                INNER JOIN persona ON catequista.CiCat = persona.CiPersona
+                INNER JOIN `persona` ON catequista.CiCat = persona.CiPersona
                 WHERE catequista.EstadoCat = 'Activo'
                 ORDER BY RAND()
                 LIMIT 10";
@@ -33,7 +33,7 @@ class CatequistaModel {
     public function buscarCatequista($ciCat) {
         $sql = "SELECT catequista.CiCat, CONCAT(persona.Nombre, ' ', persona.ApPaterno, ' ', persona.ApMaterno) AS NombreCompleto, catequista.ImagenCat, catequista.Sacramento 
         FROM catequista 
-        INNER JOIN persona ON catequista.CiCat = persona.CiPersona
+        INNER JOIN `persona` ON catequista.CiCat = persona.CiPersona
         WHERE catequista.CiCat = ?";
         
         $stmt = $this->conn->prepare($sql);
@@ -48,12 +48,12 @@ class CatequistaModel {
         $sql = "
             SELECT c.*, CONCAT(p.Nombre, ' ', p.ApPaterno, ' ', p.ApMaterno) AS NombreCompleto,
                    ins.*, g.NombreGrupo, ti.DescripItem, ti.Valor, ti.CodTipoItem
-            FROM celebrante c
-            INNER JOIN persona p ON p.CiPersona = c.CiCel
+            FROM `celebrante` c
+            INNER JOIN `persona` p ON p.CiPersona = c.CiCel
             INNER JOIN inscripcion ins ON ins.CiCel = c.CiCel
-            INNER JOIN grupo g ON g.IdGrupo = ins.IdGrupo
-            LEFT JOIN detalleTipoins dti ON dti.IdInscripcion = ins.IdInscripcion
-            LEFT JOIN TipoIns ti ON ti.CodTipoItem = dti.CodTipoItem
+            INNER JOIN `grupo` g ON g.IdGrupo = ins.IdGrupo
+            LEFT JOIN `detalletipoins` dti ON dti.IdInscripcion = ins.IdInscripcion
+            LEFT JOIN `tipoins` ti ON ti.CodTipoItem = dti.CodTipoItem
             WHERE c.CiCel = ? AND c.Sacramento = ?";
 
         $stmt = $this->conn->prepare($sql);

@@ -26,7 +26,8 @@ $personalExt = $cont->PersonalDemas($usuario['CiPersonal']);
   <link rel="shortcut icon" href="../assets/images/Icono.png">
   <link rel="stylesheet" type="text/css" href="../assets/vendor/font-awesome/css/all.min.css">
   <link rel="stylesheet" type="text/css" href="../assets/vendor/bootstrap-icons/bootstrap-icons.css">
-  <link rel="stylesheet" type="text/css" href="../assets/css/style.css">
+  <link rel="stylesheet" type="text/css" href="../assets/css/style.css?v=<?php echo filemtime(__DIR__ . '/../assets/css/style.css'); ?>">
+  <link rel="stylesheet" type="text/css" href="../assets/css/logo-cabecera.css?v=<?= filemtime(__DIR__ . '/../assets/css/logo-cabecera.css') ?>">
   <script src="../assets/js/jquery-3.6.4.min.js"></script>
 </head>
 
@@ -35,8 +36,8 @@ $personalExt = $cont->PersonalDemas($usuario['CiPersonal']);
     <nav class="navbar navbar-expand-lg">
       <div class="container">
         <a class="navbar-brand" href="VistaPersonal.php">
-          <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png" alt="logo">
-          <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png" alt="logo">
+          <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo.png') ?>" alt="logo">
+          <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo-light.png') ?>" alt="logo">
         </a>
 
         <ul class="nav flex-nowrap align-items-center ms-sm-3 list-unstyled">
@@ -48,13 +49,13 @@ $personalExt = $cont->PersonalDemas($usuario['CiPersonal']);
 
           <li class="nav-item ms-2 dropdown">
             <a class="nav-link btn icon-md p-0" href="#" id="profileDropdown" role="button" data-bs-auto-close="outside" data-bs-display="static" data-bs-toggle="dropdown" aria-expanded="false">
-              <img class="avatar-img rounded border border-white border-3" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}"; ?>" alt="">
+              <img class="avatar-img rounded border border-white border-3" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}?v=" . time(); ?>" alt="">
             </a>
             <ul class="dropdown-menu dropdown-animation dropdown-menu-end pt-3 small me-md-n3" aria-labelledby="profileDropdown">
               <li class="px-3">
                 <div class="d-flex align-items-center position-relative">
                   <div class="avatar me-3">
-                    <img class="avatar-img rounded-circle" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}"; ?>" alt="avatar">
+                    <img class="avatar-img rounded-circle" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}?v=" . time(); ?>" alt="avatar">
                   </div>
                   <div>
                     <a class="h6 stretched-link" href="#"><?php echo $usuario['Nombre'] . " " . $usuario['Paterno'] . " " . $usuario['Materno']; ?></a>
@@ -103,17 +104,17 @@ $personalExt = $cont->PersonalDemas($usuario['CiPersonal']);
   </header>
 
   <main>
-    <div class="container">
+    <div class="container personal-dashboard-container">
       <div class="row g-4">
         <div class="col-lg-8 vstack gap-4">
           <div class="card">
-            <div class="h-200px rounded-top" style="background-image:url(<?php echo ($usuario['FondoPer'] == 'Ninguno' || empty($usuario['FondoPer'])) ? '../assets/images/fondo/Ninguno.jpg' : "../assets/images/fondo/{$usuario['FondoPer']}"; ?>); background-position: center; background-size: cover; background-repeat: no-repeat;"></div>
+            <div class="h-200px rounded-top" style="background-image:url(<?php echo ($usuario['FondoPer'] == 'Ninguno' || empty($usuario['FondoPer'])) ? '../assets/images/fondo/Ninguno.jpg' : "../assets/images/fondo/{$usuario['FondoPer']}?v=" . time(); ?>); background-position: center; background-size: cover; background-repeat: no-repeat;"></div>
 
             <div class="card-body py-0">
               <div class="d-sm-flex align-items-start text-center text-sm-start">
                 <div>
                   <div class="avatar avatar-xxl mt-n5 mb-3">
-                    <img class="avatar-img rounded-circle border border-white border-3" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}"; ?>" alt="">
+                    <img class="avatar-img rounded-circle border border-white border-3" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}?v=" . time(); ?>" alt="">
                   </div>
                 </div>
                 <div class="ms-sm-4 mt-sm-3">
@@ -187,16 +188,26 @@ $personalExt = $cont->PersonalDemas($usuario['CiPersonal']);
                         <div class="col-6">
                           <div class="card shadow-none text-center h-100">
                             <div class="card-body p-2 pb-0">
-                              <input type="hidden" value="<?php echo htmlspecialchars($personalExtD['CiPersonal']); ?>">
                               <div class="avatar avatar-xl">
-                                <img class="avatar-img rounded-circle" src="<?php echo ($personalExtD['PerfilPer'] == 'Ninguno' || empty($personalExtD['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$personalExtD['PerfilPer']}"; ?>" alt="">
+                                <img class="avatar-img rounded-circle" src="<?php echo ($personalExtD['PerfilPer'] == 'Ninguno' || empty($personalExtD['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$personalExtD['PerfilPer']}?v=" . time(); ?>" alt="">
                               </div>
                               <h6 class="card-title mb-1 mt-3"> <?php echo $personalExtD['NombreCompleto']; ?></h6>
                               <p class="mb-0 small lh-sm"><?php echo $personalExtD['DescripCar']; ?></p>
                             </div>
                             <div class="card-footer p-2 border-0">
-                              <button class="btn btn-sm btn-primary" data-bs-toggle="tooltip" data-bs-placement="top" title="Ver Perfil"> <i class="bi bi-chat-left-text"></i> </button>
-                              <button class="btn btn-sm btn-danger" data-bs-toggle="tooltip" data-bs-placement="top" title="Ver demás"> <i class="bi bi-person-x"></i> </button>
+                              <button type="button" class="btn btn-sm btn-primary ver-perfil"
+                                data-bs-toggle="modal" data-bs-target="#modalVerPerfil"
+                                data-nombre="<?php echo htmlspecialchars($personalExtD['NombreCompleto']); ?>"
+                                data-cargo="<?php echo htmlspecialchars($personalExtD['DescripCar']); ?>"
+                                data-frase="<?php echo htmlspecialchars($personalExtD['FrasePer']); ?>"
+                                data-fecha="<?php echo htmlspecialchars($personalExtD['FechaIng']); ?>"
+                                data-estado="<?php echo htmlspecialchars($personalExtD['Estado']); ?>"
+                                data-contacto="<?php echo htmlspecialchars($personalExtD['ContactoPer']); ?>"
+                                data-perfil="<?php echo ($personalExtD['PerfilPer'] == 'Ninguno' || empty($personalExtD['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$personalExtD['PerfilPer']}?v=" . time(); ?>"
+                                data-fondo="<?php echo ($personalExtD['FondoPer'] == 'Ninguno' || empty($personalExtD['FondoPer'])) ? '../assets/images/fondo/Ninguno.jpg' : "../assets/images/fondo/{$personalExtD['FondoPer']}?v=" . time(); ?>"
+                                data-bs-placement="top" title="Ver Perfil">
+                                <i class="bi bi-chat-left-text"></i>
+                              </button>
                             </div>
                           </div>
                         </div>
@@ -215,9 +226,58 @@ $personalExt = $cont->PersonalDemas($usuario['CiPersonal']);
       </div>
     </div>
   </main>
+
+  <!-- Modal Ver Perfil de Personal -->
+  <div class="modal fade" id="modalVerPerfil" tabindex="-1" aria-labelledby="modalVerPerfilLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalVerPerfilLabel">Información de Cuenta</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+          <div class="position-relative mb-4">
+            <div class="h-100px rounded" id="modalFondo" style="background-position: center; background-size: cover; background-repeat: no-repeat;"></div>
+            <div class="text-center mt-n5">
+              <img id="modalPerfilImg" class="avatar-img rounded-circle border border-white border-3" src="" alt="" style="width: 120px; height: 120px;">
+            </div>
+          </div>
+          <div class="text-center">
+            <h5 class="mb-1" id="modalNombre"></h5>
+            <p class="text-muted mb-0" id="modalCargo"></p>
+          </div>
+          <hr>
+          <p class="text-center fst-italic" id="modalFrase"></p>
+          <ul class="list-unstyled mt-3 mb-0">
+            <li class="mb-2"><i class="bi bi-calendar2-plus me-2"></i> Ingresó: <strong id="modalFecha"></strong></li>
+            <li class="mb-2"><i class="bi bi-broadcast me-2"></i> Estado: <strong id="modalEstado"></strong></li>
+            <li><i class="bi bi-telephone me-2"></i> Contacto: <strong id="modalContacto"></strong></li>
+          </ul>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary-soft" data-bs-dismiss="modal">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="../assets/vendor/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
   <script src="../assets/js/functions.js"></script>
   <script src="../assets/js/tema.js"></script>
+  <script>
+    document.querySelectorAll('.ver-perfil').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        document.getElementById('modalNombre').textContent = this.dataset.nombre;
+        document.getElementById('modalCargo').textContent = this.dataset.cargo;
+        document.getElementById('modalFrase').textContent = this.dataset.frase;
+        document.getElementById('modalFecha').textContent = this.dataset.fecha;
+        document.getElementById('modalEstado').textContent = this.dataset.estado;
+        document.getElementById('modalContacto').textContent = this.dataset.contacto;
+        document.getElementById('modalPerfilImg').src = this.dataset.perfil;
+        document.getElementById('modalFondo').style.backgroundImage = 'url(' + this.dataset.fondo + ')';
+      });
+    });
+  </script>
 </body>
 
 </html>

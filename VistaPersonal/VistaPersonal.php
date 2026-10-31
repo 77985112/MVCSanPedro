@@ -1,14 +1,113 @@
-﻿<?php
+<?php
 session_start();
 if (!isset($_SESSION['usuario'])) {
   header("Location: ../logout.php");
   exit();
 }
 $usuario = $_SESSION['usuario'];
+$accesoDenegado = !empty($_SESSION['acceso_denegado']);
+unset($_SESSION['acceso_denegado']);
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($_POST) && empty($_FILES)
+    && (int) ($_SERVER['CONTENT_LENGTH'] ?? 0) > 0) {
+    http_response_code(413);
+    exit('El archivo supera el límite de carga. Use una imagen de hasta 5 MB o un video de hasta 100 MB.');
+}
 
-require_once '../controlador/ControladorActividad.php';
+
+require_once __DIR__ . '/../Controlador/controladorActividad.php';
 
 $controller = new ControladorActividad();
+$puedeRegistrarParroquia = $controller->puedePublicarParroquia($usuario);
+$puedeGestionarParroquia = $controller->puedeGestionarActividadParroquia($usuario);
+$esAutorActividad = static function ($actividad) use ($usuario) {
+    return (int) ($actividad['CodPer'] ?? 0) === (int) ($usuario['CodPer'] ?? 0);
+};
+$puedeEditarActividad = static function ($actividad) use ($controller, $esAutorActividad, $puedeGestionarParroquia) {
+    return ($esAutorActividad($actividad) || $puedeGestionarParroquia)
+        && ControladorActividad::esActividadEditable($actividad);
+};
+$puedeEliminarActividad = static function ($actividad) use ($esAutorActividad, $puedeGestionarParroquia) {
+    return $esAutorActividad($actividad) || $puedeGestionarParroquia;
+};
+$errorActividad = '';
+$actividadPublicada = !empty($_SESSION['actividad_parroquia_publicada']);
+unset($_SESSION['actividad_parroquia_publicada']);
+$valoresActividad = array_fill_keys(
+    ['TituloActividad', 'DetalleActividad', 'FechaActividad', 'HoraAct', 'LugarAct'], ''
+);
+if (empty($_SESSION['csrf_actividad_parroquia'])) {
+  $_SESSION['csrf_actividad_parroquia'] = bin2hex(random_bytes(32));
+}
+if (empty($_SESSION['csrf_actividad_eliminar'])) {
+  $_SESSION['csrf_actividad_eliminar'] = bin2hex(random_bytes(32));
+}
+$actividadActualizada = !empty($_SESSION['actividad_parroquia_actualizada']);
+unset($_SESSION['actividad_parroquia_actualizada']);
+$actividadEliminada = !empty($_SESSION['actividad_eliminada']);
+unset($_SESSION['actividad_eliminada']);
+$errorEliminarActividad = isset($_SESSION['actividad_eliminada_error'])
+  ? (string) $_SESSION['actividad_eliminada_error'] : '';
+unset($_SESSION['actividad_eliminada_error']);
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['accion'] ?? '') === 'eliminar_actividad') {
+  $idActividadEliminar = (int) ($_POST['idActividad'] ?? 0);
+  if (!$controller->puedeEliminarActividadParroquia($idActividadEliminar, $usuario)) {
+    http_response_code(403);
+    exit('No tienes permiso para eliminar esta actividad.');
+  }
+  $errorEliminacion = '';
+  if (!is_string($_POST['csrf_actividad_eliminar'] ?? null)
+      || !hash_equals($_SESSION['csrf_actividad_eliminar'], $_POST['csrf_actividad_eliminar'])) {
+    $errorEliminacion = 'La sesión del formulario venció. Recargue la página e intente de nuevo.';
+  } else {
+    try {
+      $controller->eliminarActividad((int) ($_POST['idActividad'] ?? 0), $usuario);
+      $_SESSION['actividad_eliminada'] = true;
+    } catch (InvalidArgumentException $e) {
+      $errorEliminacion = $e->getMessage();
+    } catch (Throwable $e) {
+      error_log('Eliminar actividad: ' . $e->getMessage());
+      $errorEliminacion = 'No se pudo eliminar la actividad. Intente nuevamente.';
+    }
+  }
+  if ($errorEliminacion !== '') {
+    $_SESSION['actividad_eliminada_error'] = $errorEliminacion;
+  }
+  header('Location: VistaPersonal.php', true, 303);
+  exit();
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+  if (!$puedeRegistrarParroquia) {
+    http_response_code(403);
+    exit('No tienes permiso para publicar actividades de Parroquia.');
+  }
+  foreach ($valoresActividad as $campo => $valor) {
+    $valoresActividad[$campo] = is_string($_POST[$campo] ?? null) ? trim($_POST[$campo]) : '';
+  }
+  if (!is_string($_POST['csrf_actividad_parroquia'] ?? null)
+      || !hash_equals($_SESSION['csrf_actividad_parroquia'], $_POST['csrf_actividad_parroquia'])) {
+    $errorActividad = 'La sesión del formulario venció. Revise los datos y vuelva a seleccionar la imagen o el video.';
+  } else {
+    try {
+      $controller->registrarActividadParroquia($_POST, $usuario);
+      $_SESSION['actividad_parroquia_publicada'] = true;
+      $_SESSION['csrf_actividad_parroquia'] = bin2hex(random_bytes(32));
+      header('Location: VistaPersonal.php#tab-2', true, 303);
+      exit();
+    } catch (InvalidArgumentException | DomainException $e) {
+      $errorActividad = $e->getMessage();
+    } catch (Throwable $e) {
+      error_log('Registrar actividad de Parroquia: ' . $e->getMessage());
+      $errorActividad = 'No se pudo publicar la actividad. Intente nuevamente.';
+    }
+  }
+}
+$valorActividad = static function ($campo) use ($valoresActividad) {
+  return htmlspecialchars($valoresActividad[$campo], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+};
+$fechaMinimaActividad = ControladorActividad::fechaMinimaActividad();
+
 $actividadesParroquia = $controller->obtenerActividades('Parroquia');
 $actividadesPrimeraComunion = $controller->obtenerActividades('Primera Comunión');
 $actividadesConfirmacion = $controller->obtenerActividades('Confirmación');
@@ -27,7 +126,8 @@ $actividadesTodas = $controller->obtenerActividades();
   <link rel="shortcut icon" href="../assets/images/Icono.png">
   <link rel="stylesheet" type="text/css" href="../assets/vendor/font-awesome/css/all.min.css">
   <link rel="stylesheet" type="text/css" href="../assets/vendor/bootstrap-icons/bootstrap-icons.css">
-  <link rel="stylesheet" type="text/css" href="../assets/css/style.css">
+  <link rel="stylesheet" type="text/css" href="../assets/css/style.css?v=<?php echo filemtime(__DIR__ . '/../assets/css/style.css'); ?>">
+  <link rel="stylesheet" type="text/css" href="../assets/css/logo-cabecera.css?v=<?= filemtime(__DIR__ . '/../assets/css/logo-cabecera.css') ?>">
   <script src="../assets/js/jquery-3.6.4.min.js"></script>
 </head>
 
@@ -36,8 +136,8 @@ $actividadesTodas = $controller->obtenerActividades();
     <nav class="navbar navbar-expand-lg">
       <div class="container">
         <a class="navbar-brand" href="VistaPersonal.php">
-          <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png" alt="logo">
-          <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png" alt="logo">
+          <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo.png') ?>" alt="logo">
+          <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo-light.png') ?>" alt="logo">
         </a>
 
         <ul class="nav flex-nowrap align-items-center ms-sm-3 list-unstyled">
@@ -49,13 +149,13 @@ $actividadesTodas = $controller->obtenerActividades();
 
           <li class="nav-item ms-2 dropdown">
             <a class="nav-link btn icon-md p-0" href="#" id="profileDropdown" role="button" data-bs-auto-close="outside" data-bs-display="static" data-bs-toggle="dropdown" aria-expanded="false">
-              <img class="avatar-img rounded border border-white border-3" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}"; ?>" alt="">
+              <img class="avatar-img rounded border border-white border-3" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}?v=" . time(); ?>" alt="">
             </a>
             <ul class="dropdown-menu dropdown-animation dropdown-menu-end pt-3 small me-md-n3" aria-labelledby="profileDropdown">
               <li class="px-3">
                 <div class="d-flex align-items-center position-relative">
                   <div class="avatar me-3">
-                    <img class="avatar-img rounded-circle" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}"; ?>" alt="avatar">
+                    <img class="avatar-img rounded-circle" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}?v=" . time(); ?>" alt="avatar">
                   </div>
                   <div>
                     <a class="h6 stretched-link" href="#"><?php echo $usuario['Nombre'] . " " . $usuario['Paterno'] . " " . $usuario['Materno']; ?></a>
@@ -105,7 +205,13 @@ $actividadesTodas = $controller->obtenerActividades();
 
 
   <main>
-    <div class="container">
+    <div class="container personal-dashboard-container">
+      <?php if ($accesoDenegado): ?>
+        <div class="alert alert-warning d-flex align-items-center" role="alert">
+          <i class="bi bi-shield-lock me-2"></i>
+          No tienes acceso a ese módulo. El Párroco puede habilitarlo desde «Personal».
+        </div>
+      <?php endif; ?>
       <div class="row g-4">
         <div class="col-lg-3">
           <div class="d-flex align-items-center d-lg-none">
@@ -119,20 +225,20 @@ $actividadesTodas = $controller->obtenerActividades();
             <div class="offcanvas offcanvas-start" tabindex="-1" id="offcanvasSideNavbar">
               <div class="offcanvas-header">
                 <a class="navbar-brand" href="#">
-                  <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png" alt="logo">
-                  <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png" alt="logo">
+                  <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo.png') ?>" alt="logo">
+                  <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo-light.png') ?>" alt="logo">
                 </a>
                 <button type="button" class="btn-close text-reset ms-auto" data-bs-dismiss="offcanvas" aria-label="Close"></button>
               </div>
 
               <div class="offcanvas-body d-block px-2 px-lg-0">
                 <div class="card overflow-hidden">
-                  <div class="h-50px" style="background-image:url(<?php echo ($usuario['FondoPer'] == 'Ninguno' || empty($usuario['FondoPer'])) ? '../assets/images/fondo/Ninguno.jpg' : "../assets/images/fondo/{$usuario['FondoPer']}"; ?>); background-position: center; background-size: cover; background-repeat: no-repeat;">
+                  <div class="h-50px" style="background-image:url(<?php echo ($usuario['FondoPer'] == 'Ninguno' || empty($usuario['FondoPer'])) ? '../assets/images/fondo/Ninguno.jpg' : "../assets/images/fondo/{$usuario['FondoPer']}?v=" . time(); ?>); background-position: center; background-size: cover; background-repeat: no-repeat;">
                   </div>
                   <div class="card-body pt-0">
                     <div class="text-center">
                       <div class="avatar avatar-lg mt-n5 mb-3">
-                        <img class="avatar-img rounded border border-white border-3" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}"; ?>" alt="">
+                        <img class="avatar-img rounded border border-white border-3" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}?v=" . time(); ?>" alt="">
                       </div>
                       <h5 class="mb-0"> <a href="PerfilAdmin.php"><?php echo $usuario['Nombre'] . " " . $usuario['Paterno'] . " " . $usuario['Materno']; ?></a> </h5>
                       <small><?php echo $usuario['DescripCar']; ?></small>
@@ -141,35 +247,7 @@ $actividadesTodas = $controller->obtenerActividades();
 
                     <hr>
 
-                    <ul class="nav nav-link-secondary flex-column fw-bold gap-2">
-                      <li class="nav-item">
-                        <a class="nav-link active" href="VistaPersonal.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/mensaje.png" alt=""><span>Inicio </span></a>
-                      </li>
-                      <li class="nav-item">
-                        <a class="nav-link" href="VistaPersona.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/nuevo.png" alt=""><span>Persona </span></a>
-                      </li>
-                      <li class="nav-item">
-                        <a class="nav-link" href="VistaReservas.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/instrucciones.png" alt=""><span>Celebración </span></a>
-                      </li>
-                      <?php if ($usuario['DescripCar'] == 'Párroco') { ?>
-                        <li class="nav-item">
-                          <a class="nav-link" href="VistaGesPersonal.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/seguro.png" alt=""><span>Personal</span></a>
-                        </li>
-                        <li class="nav-item">
-                          <a class="nav-link" href="VistaCoordinadorAdmin.php"> <span>🔥 ⚪ Coordinador</span></a>
-                        </li>
-                      <?php } ?>
-                      <li class="nav-item">
-                        <a class="nav-link" href="VistaSolicitante.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/contrato.png" alt=""><span>Certificado </span></a>
-                      </li>
-                      <li class="nav-item">
-                        <a class="nav-link" href="VistaEmitidos.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/Emitido.png" alt=""><span>Certificado Emitido </span></a>
-                      </li>
-                      <li class="nav-item">
-                        <a class="nav-link" href="VistaGoogleDrive.php"> <i class="me-2 h-20px fa-fw bi bi-cloud-arrow-up"></i><span>Google Drive </span></a>
-                      </li>
-
-                    </ul>
+                    <?php require_once __DIR__ . '/../Controlador/controladorAcceso.php'; ControladorAcceso::renderMenu(['drive' => true]); ?>
                   </div>
                   <div class="card-footer text-center py-2">
                     <a class="btn btn-link btn-sm" href="PerfilAdmin.php">Ver mi Perfil</a>
@@ -186,6 +264,16 @@ $actividadesTodas = $controller->obtenerActividades();
           <div class="card h-100">
             <div class="card-header d-sm-flex align-items-center text-center justify-content-sm-between border-0 pb-0">
               <h1 class="h4 card-title">Proximas Actividades</h1>
+              <?php if (trim($usuario['DescripCar'] ?? '') === 'Párroco'): ?>
+                <div class="d-flex gap-2 mt-2 mt-sm-0">
+                  <a class="btn btn-outline-primary btn-sm" href="VistaReporteActividades.php?tipo=mensual" target="_blank" rel="noopener noreferrer">
+                    <i class="bi bi-calendar-month me-1"></i>Reporte Mensual
+                  </a>
+                  <a class="btn btn-outline-primary btn-sm" href="VistaReporteActividades.php?tipo=anual" target="_blank" rel="noopener noreferrer">
+                    <i class="bi bi-calendar3 me-1"></i>Reporte Anual
+                  </a>
+                </div>
+              <?php endif; ?>
             </div>
             <div class="card-body">
               <ul class="nav nav-tabs nav-bottom-line justify-content-center justify-content-md-start">
@@ -194,7 +282,16 @@ $actividadesTodas = $controller->obtenerActividades();
                 <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-3"> Primera Comunión </a></li>
                 <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-4"> Confirmación </a></li>
               </ul>
-              <div class="tab-content mb-0 pb-0">
+              <?php if ($actividadActualizada): ?>
+                <div class="alert alert-success" role="status"><i class="bi bi-check-circle me-1"></i>Los cambios de la actividad se guardaron correctamente.</div>
+              <?php endif; ?>
+              <?php if ($actividadEliminada): ?>
+                <div class="alert alert-success" role="status"><i class="bi bi-check-circle me-1"></i>La actividad se eliminó correctamente.</div>
+              <?php endif; ?>
+              <?php if ($errorEliminarActividad !== ''): ?>
+                <div class="alert alert-danger" role="alert"><i class="bi bi-exclamation-triangle me-1"></i><?php echo htmlspecialchars($errorEliminarActividad, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></div>
+              <?php endif; ?>
+              <div class="tab-content mb-0 pb-0 actividades-lista-compacta">
 
                 <div class="tab-pane fade show active" id="tab-1">
                   <div class="row g-4">
@@ -208,14 +305,26 @@ $actividadesTodas = $controller->obtenerActividades();
                         <div class="col-sm-6 col-xl-4">
                           <div class="card h-100">
                             <div class="position-relative">
-                              <img class="img-fluid rounded-top fixed-height" src="../assets/images/events/<?php echo $actividad['ImagenActividad'] !== 'Ninguno' ? $actividad['ImagenActividad'] : 'Generico.png'; ?>" alt="" style="width: 100%; height:150px;">
+                              <?php echo ControladorActividad::mediaActividad($actividad, '150px'); ?>
                               <div class="badge bg-<?php echo $actividad['EstActividad'] == 'Activo' ? 'success' : 'danger'; ?> text-white mt-2 me-2 position-absolute top-0 end-0"><?php echo $actividad['EstActividad']; ?></div>
                             </div>
                             <div class="card-body position-relative pt-0">
                               <input type="hidden" value="<?php echo $actividad['idActividad']; ?>">
-                              <h6 class="mt-3"><a href="DetalleActividad.php?Actividad=<?php echo $actividad['idActividad']; ?>"><?php echo $actividad['TituloActividad']; ?></a></h6>
+                              <h6 class="mt-3"><a href="DetalleActividad.php?Actividad=<?php echo $actividad['idActividad']; ?>"><?php echo htmlspecialchars($actividad['TituloActividad'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></a></h6>
                               <p class="mb-0 small"><i class="bi bi-calendar-check pe-1"></i><?php echo $actividad['FechaActividad']; ?> a <?php echo $actividad['HoraAct']; ?></p>
-                              <p class="small"><i class="bi bi-geo-alt pe-1"></i><?php echo $actividad['LugarAct']; ?></p>
+                              <p class="small"><i class="bi bi-geo-alt pe-1"></i><?php echo htmlspecialchars($actividad['LugarAct'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></p>
+                              <?php if ($puedeEliminarActividad($actividad)): ?>
+                                <div class="d-flex gap-2 mt-2">
+                                  <?php if ($puedeEditarActividad($actividad)): ?>
+                                    <a class="btn btn-primary-soft btn-sm flex-fill" href="DetalleActividad.php?Actividad=<?php echo (int) $actividad['idActividad']; ?>&amp;editar=1#editarActividad">
+                                      <i class="bi bi-pencil-square me-1"></i>Editar
+                                    </a>
+                                  <?php endif; ?>
+                                  <button type="button" class="btn btn-outline-danger btn-sm flex-fill" data-bs-toggle="modal" data-bs-target="#modalEliminarActividad" data-id="<?php echo $actividad['idActividad']; ?>" data-titulo="<?php echo htmlspecialchars($actividad['TituloActividad'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>">
+                                    <i class="bi bi-trash3 me-1"></i>Eliminar
+                                  </button>
+                                </div>
+                              <?php endif; ?>
                             </div>
                           </div>
                         </div>
@@ -225,6 +334,16 @@ $actividadesTodas = $controller->obtenerActividades();
                 </div>
 
                 <div class="tab-pane fade" id="tab-2">
+                  <?php if ($puedeRegistrarParroquia): ?>
+                    <div class="mb-4">
+                      <button type="button" class="btn btn-primary-soft" data-bs-toggle="modal" data-bs-target="#nuevaActividadParroquia">
+                        <i class="bi bi-plus-circle me-2"></i>Nueva actividad de Parroquia
+                      </button>
+                    </div>
+                  <?php endif; ?>
+                  <?php if ($actividadPublicada): ?>
+                    <div class="alert alert-success" role="status">La actividad se publicó en Parroquia.</div>
+                  <?php endif; ?>
                   <div class="row g-4">
                     <?php if (empty($actividadesParroquia)): ?>
                       <div class="my-sm-5 py-sm-5 text-center">
@@ -236,14 +355,26 @@ $actividadesTodas = $controller->obtenerActividades();
                         <div class="col-sm-6 col-xl-4">
                           <div class="card h-100">
                             <div class="position-relative">
-                              <img class="img-fluid rounded-top fixed-height" src="../assets/images/events/<?php echo $actividad['ImagenActividad'] !== 'Ninguno' ? $actividad['ImagenActividad'] : 'Generico.png'; ?>" alt="" style="width: 100%; height:150px;">
+                              <?php echo ControladorActividad::mediaActividad($actividad, '150px'); ?>
                               <div class="badge bg-<?php echo $actividad['EstActividad'] == 'Activo' ? 'success' : 'danger'; ?> text-white mt-2 me-2 position-absolute top-0 end-0"><?php echo $actividad['EstActividad']; ?></div>
                             </div>
                             <div class="card-body position-relative pt-0">
                               <input type="hidden" value="<?php echo $actividad['idActividad']; ?>">
-                              <h6 class="mt-3"><a href="DetalleActividad.php?Actividad=<?php echo $actividad['idActividad']; ?>"><?php echo $actividad['TituloActividad']; ?></a></h6>
+                              <h6 class="mt-3"><a href="DetalleActividad.php?Actividad=<?php echo $actividad['idActividad']; ?>"><?php echo htmlspecialchars($actividad['TituloActividad'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></a></h6>
                               <p class="mb-0 small"><i class="bi bi-calendar-check pe-1"></i><?php echo $actividad['FechaActividad']; ?> a <?php echo $actividad['HoraAct']; ?></p>
-                              <p class="small"><i class="bi bi-geo-alt pe-1"></i><?php echo $actividad['LugarAct']; ?></p>
+                              <p class="small"><i class="bi bi-geo-alt pe-1"></i><?php echo htmlspecialchars($actividad['LugarAct'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></p>
+                              <?php if ($puedeEliminarActividad($actividad)): ?>
+                                <div class="d-flex gap-2 mt-2">
+                                  <?php if ($puedeEditarActividad($actividad)): ?>
+                                    <a class="btn btn-primary-soft btn-sm flex-fill" href="DetalleActividad.php?Actividad=<?php echo (int) $actividad['idActividad']; ?>&amp;editar=1#editarActividad">
+                                      <i class="bi bi-pencil-square me-1"></i>Editar
+                                    </a>
+                                  <?php endif; ?>
+                                  <button type="button" class="btn btn-outline-danger btn-sm flex-fill" data-bs-toggle="modal" data-bs-target="#modalEliminarActividad" data-id="<?php echo $actividad['idActividad']; ?>" data-titulo="<?php echo htmlspecialchars($actividad['TituloActividad'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>">
+                                    <i class="bi bi-trash3 me-1"></i>Eliminar
+                                  </button>
+                                </div>
+                              <?php endif; ?>
                             </div>
                           </div>
                         </div>
@@ -265,14 +396,26 @@ $actividadesTodas = $controller->obtenerActividades();
                         <div class="col-sm-6 col-xl-4">
                           <div class="card h-100">
                             <div class="position-relative">
-                              <img class="img-fluid rounded-top fixed-height" src="../assets/images/events/<?php echo $actividad['ImagenActividad'] !== 'Ninguno' ? $actividad['ImagenActividad'] : 'Generico.png'; ?>" alt="" style="width: 100%; height:150px;">
+                              <?php echo ControladorActividad::mediaActividad($actividad, '150px'); ?>
                               <div class="badge bg-<?php echo $actividad['EstActividad'] == 'Activo' ? 'success' : 'danger'; ?> text-white mt-2 me-2 position-absolute top-0 end-0"><?php echo $actividad['EstActividad']; ?></div>
                             </div>
                             <div class="card-body position-relative pt-0">
                               <input type="hidden" value="<?php echo $actividad['idActividad']; ?>">
-                              <h6 class="mt-3"><a href="DetalleActividad.php?Actividad=<?php echo $actividad['idActividad']; ?>"><?php echo $actividad['TituloActividad']; ?></a></h6>
+                              <h6 class="mt-3"><a href="DetalleActividad.php?Actividad=<?php echo $actividad['idActividad']; ?>"><?php echo htmlspecialchars($actividad['TituloActividad'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></a></h6>
                               <p class="mb-0 small"><i class="bi bi-calendar-check pe-1"></i><?php echo $actividad['FechaActividad']; ?> a <?php echo $actividad['HoraAct']; ?></p>
-                              <p class="small"><i class="bi bi-geo-alt pe-1"></i><?php echo $actividad['LugarAct']; ?></p>
+                              <p class="small"><i class="bi bi-geo-alt pe-1"></i><?php echo htmlspecialchars($actividad['LugarAct'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></p>
+                              <?php if ($puedeEliminarActividad($actividad)): ?>
+                                <div class="d-flex gap-2 mt-2">
+                                  <?php if ($puedeEditarActividad($actividad)): ?>
+                                    <a class="btn btn-primary-soft btn-sm flex-fill" href="DetalleActividad.php?Actividad=<?php echo (int) $actividad['idActividad']; ?>&amp;editar=1#editarActividad">
+                                      <i class="bi bi-pencil-square me-1"></i>Editar
+                                    </a>
+                                  <?php endif; ?>
+                                  <button type="button" class="btn btn-outline-danger btn-sm flex-fill" data-bs-toggle="modal" data-bs-target="#modalEliminarActividad" data-id="<?php echo $actividad['idActividad']; ?>" data-titulo="<?php echo htmlspecialchars($actividad['TituloActividad'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>">
+                                    <i class="bi bi-trash3 me-1"></i>Eliminar
+                                  </button>
+                                </div>
+                              <?php endif; ?>
                             </div>
                           </div>
                         </div>
@@ -293,14 +436,26 @@ $actividadesTodas = $controller->obtenerActividades();
                         <div class="col-sm-6 col-xl-4">
                           <div class="card h-100">
                             <div class="position-relative">
-                              <img class="img-fluid rounded-top fixed-height" src="../assets/images/events/<?php echo $actividad['ImagenActividad'] !== 'Ninguno' ? $actividad['ImagenActividad'] : 'Generico.png'; ?>" alt="" style="width: 100%; height:150px;">
+                              <?php echo ControladorActividad::mediaActividad($actividad, '150px'); ?>
                               <div class="badge bg-<?php echo $actividad['EstActividad'] == 'Activo' ? 'success' : 'danger'; ?> text-white mt-2 me-2 position-absolute top-0 end-0"><?php echo $actividad['EstActividad']; ?></div>
                             </div>
                             <div class="card-body position-relative pt-0">
                               <input type="hidden" value="<?php echo $actividad['idActividad']; ?>">
-                              <h6 class="mt-3"><a href="DetalleActividad.php?Actividad=<?php echo $actividad['idActividad']; ?>"><?php echo $actividad['TituloActividad']; ?></a></h6>
+                              <h6 class="mt-3"><a href="DetalleActividad.php?Actividad=<?php echo $actividad['idActividad']; ?>"><?php echo htmlspecialchars($actividad['TituloActividad'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></a></h6>
                               <p class="mb-0 small"><i class="bi bi-calendar-check pe-1"></i><?php echo $actividad['FechaActividad']; ?> a <?php echo $actividad['HoraAct']; ?></p>
-                              <p class="small"><i class="bi bi-geo-alt pe-1"></i><?php echo $actividad['LugarAct']; ?></p>
+                              <p class="small"><i class="bi bi-geo-alt pe-1"></i><?php echo htmlspecialchars($actividad['LugarAct'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></p>
+                              <?php if ($puedeEliminarActividad($actividad)): ?>
+                                <div class="d-flex gap-2 mt-2">
+                                  <?php if ($puedeEditarActividad($actividad)): ?>
+                                    <a class="btn btn-primary-soft btn-sm flex-fill" href="DetalleActividad.php?Actividad=<?php echo (int) $actividad['idActividad']; ?>&amp;editar=1#editarActividad">
+                                      <i class="bi bi-pencil-square me-1"></i>Editar
+                                    </a>
+                                  <?php endif; ?>
+                                  <button type="button" class="btn btn-outline-danger btn-sm flex-fill" data-bs-toggle="modal" data-bs-target="#modalEliminarActividad" data-id="<?php echo $actividad['idActividad']; ?>" data-titulo="<?php echo htmlspecialchars($actividad['TituloActividad'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>">
+                                    <i class="bi bi-trash3 me-1"></i>Eliminar
+                                  </button>
+                                </div>
+                              <?php endif; ?>
                             </div>
                           </div>
                         </div>
@@ -318,6 +473,90 @@ $actividadesTodas = $controller->obtenerActividades();
       </div>
     </div>
   </main>
+
+  <?php if ($puedeRegistrarParroquia): ?>
+    <div class="modal fade" id="nuevaActividadParroquia" tabindex="-1" aria-labelledby="tituloActividadParroquia" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="tituloActividadParroquia">Nueva actividad de Parroquia</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+          </div>
+          <div class="modal-body">
+            <?php if ($errorActividad !== ''): ?>
+              <div class="alert alert-danger" role="alert"><?php echo htmlspecialchars($errorActividad, ENT_QUOTES, 'UTF-8'); ?></div>
+            <?php endif; ?>
+            <form id="formActividadParroquia" action="VistaPersonal.php#tab-2" method="POST" class="row g-3" enctype="multipart/form-data">
+              <input type="hidden" name="csrf_actividad_parroquia" value="<?php echo htmlspecialchars($_SESSION['csrf_actividad_parroquia'], ENT_QUOTES, 'UTF-8'); ?>">
+              <div class="col-12">
+                <label class="form-label" for="parroquiaTituloActividad">Título de la actividad *</label>
+                <input type="text" class="form-control" id="parroquiaTituloActividad" name="TituloActividad" maxlength="150" value="<?php echo $valorActividad('TituloActividad'); ?>" required>
+              </div>
+              <div class="col-12">
+                <label class="form-label" for="parroquiaDetalleActividad">Descripción *</label>
+                <textarea class="form-control" id="parroquiaDetalleActividad" name="DetalleActividad" rows="4" maxlength="<?php echo ControladorActividad::LIMITE_DESCRIPCION; ?>" placeholder="Describe brevemente la actividad..." required><?php echo $valorActividad('DetalleActividad'); ?></textarea>
+              </div>
+              <div class="col-sm-6">
+                <label class="form-label" for="parroquiaFechaActividad">Fecha *</label>
+                <input type="date" class="form-control" id="parroquiaFechaActividad" name="FechaActividad" min="<?php echo $fechaMinimaActividad; ?>" value="<?php echo $valorActividad('FechaActividad'); ?>" required>
+              </div>
+              <div class="col-sm-6">
+                <label class="form-label" for="parroquiaHoraAct">Hora *</label>
+                <input type="time" class="form-control" id="parroquiaHoraAct" name="HoraAct" value="<?php echo $valorActividad('HoraAct'); ?>" required>
+              </div>
+              <div class="col-12">
+                <label class="form-label" for="parroquiaLugarAct">Lugar *</label>
+                <input type="text" class="form-control" id="parroquiaLugarAct" name="LugarAct" maxlength="<?php echo ControladorActividad::LIMITE_LUGAR; ?>" placeholder="Ej: Plaza principal de Sacaba" value="<?php echo $valorActividad('LugarAct'); ?>" required>
+              </div>
+              <div class="col-12">
+                <label class="form-label">Imagen o video *</label>
+                <div class="row g-3 align-items-end">
+                  <div class="col-sm-6">
+                    <label class="form-label small text-muted mb-1" for="parroquiaNuevaImagen">Imágenes (máx. 7)</label>
+                    <input type="file" class="form-control" id="parroquiaNuevaImagen" name="NuevaImagenActividad[]" multiple accept=".jpg,.jpeg,.png,image/jpeg,image/png" data-actividad-imagen="previewActividadParroquia" data-actividad-grupo="actividadParroquia" data-actividad-requerido="true" data-actividad-maximas="<?php echo ControladorActividad::MAXIMO_IMAGENES; ?>">
+                  </div>
+                  <div class="col-sm-6">
+                    <label class="form-label small text-muted mb-1" for="parroquiaNuevaVideo">Video</label>
+                    <input type="file" class="form-control" id="parroquiaNuevaVideo" name="NuevaVideoActividad" accept=".mp4,.webm,video/mp4,video/webm" data-actividad-video="previewVideoParroquia" data-actividad-grupo="actividadParroquia" data-actividad-requerido="true">
+                    <video id="previewVideoParroquia" class="w-100 rounded mt-3 d-none actividad-video" controls playsinline preload="metadata" style="max-height:300px;"></video>
+                  </div>
+                </div>
+                <div id="previewActividadParroquia" class="d-flex flex-wrap gap-2 mt-3"></div>
+              </div>
+            </form>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-danger-soft" data-bs-dismiss="modal">Cancelar</button>
+            <button type="submit" class="btn btn-success-soft" form="formActividadParroquia">Publicar actividad</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  <?php endif; ?>
+
+  <div class="modal fade" id="modalEliminarActividad" tabindex="-1" aria-labelledby="tituloEliminarActividad" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <form method="post" id="formEliminarActividad">
+          <input type="hidden" name="accion" value="eliminar_actividad">
+          <input type="hidden" name="idActividad" id="eliminarActividadId" value="">
+          <input type="hidden" name="csrf_actividad_eliminar" value="<?php echo htmlspecialchars($_SESSION['csrf_actividad_eliminar'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>">
+          <div class="modal-header">
+            <h5 class="modal-title" id="tituloEliminarActividad">Eliminar actividad</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+          </div>
+          <div class="modal-body">
+            <p class="mb-2">¿Seguro que desea eliminar la actividad <strong id="eliminarActividadTitulo"></strong>?</p>
+            <p class="small mb-0 text-danger"><i class="bi bi-exclamation-triangle me-1"></i>La actividad dejará de mostrarse en la página web, pero quedará registrada para fines de reporte. Esta acción no se puede deshacer.</p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-danger-soft" data-bs-dismiss="modal">Cancelar</button>
+            <button type="submit" class="btn btn-danger"><i class="bi bi-trash3 me-1"></i>Eliminar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
 
   <script>
     $(document).ready(function() {
@@ -351,6 +590,32 @@ $actividadesTodas = $controller->obtenerActividades();
   <script src="../assets/vendor/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
   <script src="../assets/js/functions.js"></script>
   <script src="../assets/js/tema.js"></script>
+  <script>
+    if (window.location.hash === '#tab-2' || <?php echo ($actividadPublicada || $errorActividad !== '') ? 'true' : 'false'; ?>) {
+      bootstrap.Tab.getOrCreateInstance(document.querySelector('a[href="#tab-2"]')).show();
+    }
+    <?php if ($puedeRegistrarParroquia): ?>
+      document.getElementById('formActividadParroquia').addEventListener('submit', function () {
+        document.querySelector('button[form="formActividadParroquia"]').disabled = true;
+      });
+      <?php if ($errorActividad !== ''): ?>
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('nuevaActividadParroquia')).show();
+      <?php endif; ?>
+    <?php endif; ?>
+  </script>
+  <script src="../assets/js/actividad-multimedia.js?v=<?php echo filemtime(__DIR__ . '/../assets/js/actividad-multimedia.js'); ?>"></script>
+  <script>
+    (function () {
+      var modal = document.getElementById('modalEliminarActividad');
+      if (!modal || !window.bootstrap) return;
+      modal.addEventListener('show.bs.modal', function (event) {
+        var boton = event.relatedTarget;
+        if (!boton) return;
+        document.getElementById('eliminarActividadId').value = boton.getAttribute('data-id') || '';
+        document.getElementById('eliminarActividadTitulo').textContent = boton.getAttribute('data-titulo') || '';
+      });
+    })();
+  </script>
 </body>
 
 </html>

@@ -13,9 +13,9 @@ class CertificadoModel {
                          p.Nombre, p.Paterno, p.Materno, ts.DescripSac
                   FROM certificado c
                   JOIN inssacramento i ON c.CodIns = i.CodIns
-                  JOIN personal p ON i.CodPer = p.CodPer
+                  JOIN `personal` p ON i.CodPer = p.CodPer
                   JOIN tiposacramento ts ON i.CodSac = ts.CodSac
-                  JOIN Cargo car ON car.CodCar = p.CodCar
+                  JOIN `cargo` car ON car.CodCar = p.CodCar
                   WHERE c.FechaEmision = ?";
         
         $stmt = $this->db->prepare($query);

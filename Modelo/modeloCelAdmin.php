@@ -71,11 +71,34 @@ class CelebranteAdmin
             $datos['CodTipoItem']
         );
 
-        if (!$stmt->execute()) {
-            throw new Exception("Error al ejecutar el procedimiento: " . $stmt->error);
-        }
+        $this->conn->begin_transaction();
+        try {
+            if (!$stmt->execute()) {
+                throw new Exception("Error al ejecutar el procedimiento: " . $stmt->error);
+            }
+            $stmt->close();
+            while ($this->conn->more_results()) {
+                $this->conn->next_result();
+                $resultado = $this->conn->store_result();
+                if ($resultado) {
+                    $resultado->free();
+                }
+            }
 
-        return true;
+            $actualizar = $this->conn->prepare(
+                'UPDATE `persona` SET SacramentoSolicita = ? WHERE CiPersona = ?'
+            );
+            $actualizar->bind_param('ss', $datos['SacramentoCel'], $datos['CiCel']);
+            if (!$actualizar->execute()) {
+                throw new RuntimeException('No se pudo actualizar el seguimiento de la persona.');
+            }
+            $actualizar->close();
+            $this->conn->commit();
+            return true;
+        } catch (Throwable $e) {
+            $this->conn->rollback();
+            throw $e;
+        }
     }
 
     public function modificarCelebrante($ciCel, $datosCelebrante, $datosInscripcion)
@@ -119,7 +142,7 @@ class DocumentoAdm
 
     public function obtenerDocumentosPorInscripcion($idInscripcion)
     {
-        $sql = "SELECT * FROM Documento WHERE IdInscripcion = ?";
+        $sql = "SELECT * FROM `documento` WHERE IdInscripcion = ?";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param("i", $idInscripcion);
         $stmt->execute();
@@ -128,7 +151,7 @@ class DocumentoAdm
 
     public function registrarDocumento($gestion, $ciCat, $idGrupo, $idInscripcion, $numeroDoc, $detalleDoc, $libroDoc, $paginaDoc, $partidaDoc, $parroquiaDoc)
     {
-        $sql = "INSERT INTO Documento (Gestion, CiCat, IdGrupo, IdInscripcion, NumeroDoc, DetalleDoc, LibroDoc, PaginaDoc, PartidaDoc, ParroquiaDoc)
+        $sql = "INSERT INTO `documento` (Gestion, CiCat, IdGrupo, IdInscripcion, NumeroDoc, DetalleDoc, LibroDoc, PaginaDoc, PartidaDoc, ParroquiaDoc)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param("ssiissssss", $gestion, $ciCat, $idGrupo, $idInscripcion, $numeroDoc, $detalleDoc, $libroDoc, $paginaDoc, $partidaDoc, $parroquiaDoc);
@@ -137,7 +160,7 @@ class DocumentoAdm
 
     public function eliminarDocumento($gestion, $ciCat, $idGrupo, $idInscripcion)
     {
-        $sql = "DELETE FROM Documento WHERE Gestion = ? AND CiCat = ? AND IdGrupo = ? AND IdInscripcion = ?";
+        $sql = "DELETE FROM `documento` WHERE Gestion = ? AND CiCat = ? AND IdGrupo = ? AND IdInscripcion = ?";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param("ssii", $gestion, $ciCat, $idGrupo, $idInscripcion);
         return $stmt->execute();
@@ -155,7 +178,7 @@ class FamiliarAdm
 
     public function obtenerFamiliarPorCi($ciFamiliar)
     {
-        $sql = "SELECT * FROM Familiar WHERE CiFamiliar = ?";
+        $sql = "SELECT * FROM `familiar` WHERE CiFamiliar = ?";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param("s", $ciFamiliar);
         $stmt->execute();
@@ -167,8 +190,8 @@ class FamiliarAdm
         $sql = "SELECT f.CiFamiliar, CONCAT(p.Nombre, ' ', p.ApPaterno, ' ', p.ApMaterno) AS NombreCompleto, 
                        insf.RolFam, insf.Parentesco, p.Contacto 
                 FROM insfamiliar insf 
-                JOIN familiar f ON insf.CiFamiliar = f.CiFamiliar 
-                JOIN persona p ON f.CiFamiliar = p.CiPersona 
+                JOIN `familiar` f ON insf.CiFamiliar = f.CiFamiliar 
+                JOIN `persona` p ON f.CiFamiliar = p.CiPersona 
                 WHERE insf.IdInscripcion = ?";
 
         $stmt = $this->conn->prepare($sql);
@@ -180,7 +203,7 @@ class FamiliarAdm
 
     public function registrarFamiliar($ciFamiliar, $idInscripcion, $rolFam, $parentesco)
     {
-        $sql = "INSERT IGNORE INTO familiar (CiFamiliar) VALUES (?)";
+        $sql = "INSERT IGNORE INTO `familiar` (CiFamiliar) VALUES (?)";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param("s", $ciFamiliar);
         $stmt->execute();

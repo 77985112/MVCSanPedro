@@ -26,8 +26,8 @@ class GrupoModel {
                 g.NombreGrupo,
                 g.Color_Grupo,
                 (SELECT COUNT(*) FROM inscripcion i WHERE i.IdGrupo = g.IdGrupo) as totalInscripciones,
-                (SELECT COUNT(*) FROM asignacion a WHERE a.IdGrupo = g.IdGrupo) as totalAsignaciones
-            FROM grupo g 
+                (SELECT COUNT(*) FROM `asignacion` a WHERE a.IdGrupo = g.IdGrupo) as totalAsignaciones
+            FROM `grupo` g 
             WHERE g.IdGrupo BETWEEN $inicio AND $fin
         ";
         $result = $this->conn->query($sql);
@@ -35,7 +35,7 @@ class GrupoModel {
     }
 
     public function obtenerGrupoPorId($idGrupo) {
-        $sql = "SELECT * FROM grupo WHERE IdGrupo = ?";
+        $sql = "SELECT * FROM `grupo` WHERE IdGrupo = ?";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param("i", $idGrupo);
         $stmt->execute();
@@ -45,7 +45,7 @@ class GrupoModel {
     
     public function actualizarGrupo($idGrupo, $nombre, $color, $santo, $imagen, $frase) {
         
-        $sql = "UPDATE grupo SET NombreGrupo = ?, Color_Grupo = ?, Santo_Grupo = ?, Imagen_Grupo = ?, Frase_Santo = ? WHERE IdGrupo = ?";
+        $sql = "UPDATE `grupo` SET NombreGrupo = ?, Color_Grupo = ?, Santo_Grupo = ?, Imagen_Grupo = ?, Frase_Santo = ? WHERE IdGrupo = ?";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param("sssssi", $nombre, $color, $santo, $imagen, $frase, $idGrupo);
         return $stmt->execute();
@@ -59,11 +59,11 @@ class GrupoModel {
                 a.RolCat AS Rol,
                 c.EstadoCat AS Estado
             FROM 
-                asignacion a
+                `asignacion` a
             JOIN 
                 catequista c ON a.CiCat = c.CiCat
             JOIN 
-                persona p ON c.CiCat = p.CiPersona
+                `persona` p ON c.CiCat = p.CiPersona
             WHERE 
                 a.IdGrupo = ?
         ";
@@ -84,13 +84,13 @@ class GrupoModel {
             FROM 
                 inscripcion i
             INNER JOIN 
-                celebrante c ON i.CiCel = c.CiCel
+                `celebrante` c ON i.CiCel = c.CiCel
             INNER JOIN 
-                persona p ON c.CiCel = p.CiPersona
+                `persona` p ON c.CiCel = p.CiPersona
             INNER JOIN 
-                detalletipoins dti ON i.IdInscripcion = dti.IdInscripcion
+                `detalletipoins` dti ON i.IdInscripcion = dti.IdInscripcion
             INNER JOIN
-            	tipoins ti ON dti.CodTipoItem = ti.CodTipoItem
+            	`tipoins` ti ON dti.CodTipoItem = ti.CodTipoItem
             WHERE 
                 i.IdGrupo = ?
         ";

@@ -11,8 +11,8 @@ $db = $conexion->getConnection();
 
 $sql_celebrantes = "
         SELECT p.CiPersona, CONCAT(p.Nombre, ' ', p.ApPaterno, ' ', p.ApMaterno) AS NombreCompleto
-        FROM persona p
-        INNER JOIN celebrante c ON p.CiPersona = c.CiCel
+        FROM `persona` p
+        INNER JOIN `celebrante` c ON p.CiPersona = c.CiCel
         INNER JOIN inscripcion i ON c.CiCel = i.CiCel
         WHERE i.IdGrupo = $idGrupo
         ORDER BY p.ApPaterno, p.ApMaterno, p.Nombre";

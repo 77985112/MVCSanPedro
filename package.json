@@ -1,0 +1,25 @@
+{
+  "name": "mvcsanpedro",
+  "version": "1.0.0",
+  "description": "Sistema de gestión de la Parroquia San Pedro de Sacaba, desarrollado en PHP con\r MySQLi y MariaDB. Incluye personas, catequesis, reservas, certificados, avisos\r por correo con Brevo y una integración de Google Drive para respaldar PDF.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/77985112/MVCSanPedro.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/77985112/MVCSanPedro/issues"
+  },
+  "homepage": "https://github.com/77985112/MVCSanPedro#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.64.1",
+    "@types/node": "^26.6.5"
+  }
+}

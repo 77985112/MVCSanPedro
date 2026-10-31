@@ -16,9 +16,9 @@ class CatequistaModel
 
         $sql = "SELECT asig.Gestion, c.CiCat, p.Nombre, p.ApPaterno, p.ApMaterno, asig.IdGrupo, c.Sacramento, asig.RolCat, gr.NombreGrupo
                 FROM catequista c
-                INNER JOIN persona p ON c.CiCat = p.CiPersona
-                INNER JOIN asignacion asig ON c.CiCat = asig.CiCat
-                INNER JOIN grupo gr ON asig.IdGrupo = gr.IdGrupo
+                INNER JOIN `persona` p ON c.CiCat = p.CiPersona
+                INNER JOIN `asignacion` asig ON c.CiCat = asig.CiCat
+                INNER JOIN `grupo` gr ON asig.IdGrupo = gr.IdGrupo
                 WHERE c.Sacramento = ?
                 ORDER BY asig.IdGrupo";
 

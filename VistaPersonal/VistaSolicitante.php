@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 require_once '../Controlador/controladorSolicitud.php';
 require_once '../Controlador/ControladorPersona.php';
 
@@ -8,6 +8,35 @@ if (!isset($_SESSION['usuario'])) {
   exit();
 }
 $usuario = $_SESSION['usuario'];
+require_once __DIR__ . '/../Controlador/controladorAcceso.php';
+ControladorAcceso::exigir('certificado');
+if (empty($_SESSION['token_bautizo'])) {
+  $_SESSION['token_bautizo'] = bin2hex(random_bytes(32));
+}
+if (empty($_SESSION['token_confirmacion'])) {
+  $_SESSION['token_confirmacion'] = bin2hex(random_bytes(32));
+}
+if (empty($_SESSION['token_matrimonio'])) {
+  $_SESSION['token_matrimonio'] = bin2hex(random_bytes(32));
+}
+$registroBautizo = $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['registrar_bautizo']);
+$registroConfirmacion = $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['registrar_confirmacion']);
+$registroMatrimonio = $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['registrar_matrimonio']);
+$valorBautizo = function ($campo, $predeterminado = '') use ($registroBautizo) {
+  $valor = $registroBautizo ? ($_POST[$campo] ?? '') : $predeterminado;
+  return htmlspecialchars(is_scalar($valor) ? (string) $valor : '', ENT_QUOTES, 'UTF-8');
+};
+$valorConfirmacion = function ($campo, $predeterminado = '') use ($registroConfirmacion) {
+  $valor = $registroConfirmacion ? ($_POST[$campo] ?? '') : $predeterminado;
+  return htmlspecialchars(is_scalar($valor) ? (string) $valor : '', ENT_QUOTES, 'UTF-8');
+};
+$valorMatrimonio = function ($campo, $predeterminado = '') use ($registroMatrimonio) {
+  $valor = $registroMatrimonio ? ($_POST[$campo] ?? '') : $predeterminado;
+  return htmlspecialchars(is_scalar($valor) ? (string) $valor : '', ENT_QUOTES, 'UTF-8');
+};
+$presbiteroBautizo = ($usuario['DescripCar'] ?? '') === 'Párroco'
+  ? trim(($usuario['Nombre'] ?? '') . ' ' . ($usuario['Paterno'] ?? '') . ' ' . ($usuario['Materno'] ?? '')) : '';
+$presbiteroActual = $presbiteroBautizo;
 
 $controllerPersona = new ControladorPersona();
 $controllerSacramento = new ControladorInsSacramento();
@@ -21,9 +50,16 @@ $persona = null;
 
 if (isset($_GET['ciPersona'])) {
   $ciPersona = $_GET['ciPersona'];
+  if (!is_string($ciPersona) || trim($ciPersona) === '') {
+    echo json_encode(['error' => 'Ingrese una identificación válida']);
+    exit;
+  }
   $persona = $controllerPersona->buscarPersona($ciPersona);
 
   if ($persona) {
+    if (($_GET['datosConfirmacion'] ?? '') === '1') {
+      $persona['BautizoConfirmante'] = $controllerSacramento->BuscarBautizoConfirmante($persona['CiPersona']);
+    }
     echo json_encode($persona);
   } else {
     echo json_encode(['error' => 'Persona no encontrada']);
@@ -36,36 +72,69 @@ if (isset($_GET['ciPersona'])) {
 
 
 if (isset($_GET['bautizo'])) {
-  $certificadoBautizo = $controllerSacramento->VerInsSacramentoBautizo($_GET['ciPersonaBus'], null);
+  $certificadoBautizo = $controllerSacramento->VerInsSacramentoBautizo($_GET['ciPersonaBus'] ?? '');
 }
 if (isset($_GET['confirmacion'])) {
-  $certificadoConfirmacion = $controllerSacramento->VerInsSacramentoConfirmacion($_GET['ciPersonaBus'], null);
+  $certificadoConfirmacion = $controllerSacramento->VerInsSacramentoConfirmacion($_GET['ciPersonaBus'] ?? '');
 }
 if (isset($_GET['matrimonio'])) {
-  $certificadoMatrimonio = $controllerSacramento->VerInsSacramentoMatrimonio($_GET['ciPersonaBus']);
+  $certificadoMatrimonio = $controllerSacramento->VerInsSacramentoMatrimonio($_GET['ciPersonaBus'] ?? '');
 }
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrar_bautizo'])) {
-  if ($controllerSacramento->RegistrarBautizo($_POST)) {
-    $mensaje = "Bautizo registrado con éxito.";
-  } else {
-    $mensaje = "Error al registrar el bautizo.";
+  try {
+    if (!is_string($_POST['token_bautizo'] ?? null) || !hash_equals($_SESSION['token_bautizo'], $_POST['token_bautizo'])) {
+      throw new InvalidArgumentException('La sesión del formulario cambió. Recargue la página e intente nuevamente.');
+    }
+    $datosBautizo = $_POST;
+    $datosBautizo['CodPer'] = $usuario['CodPer'];
+    $codInsBautizo = $controllerSacramento->RegistrarBautizoCompleto($datosBautizo);
+    $_SESSION['token_bautizo'] = bin2hex(random_bytes(32));
+    header('Location: VistaRegistradoBautizo.php?CodIns=' . $codInsBautizo);
+    exit;
+  } catch (InvalidArgumentException $e) {
+    $mensaje = $e->getMessage();
+  } catch (Throwable $e) {
+    error_log('Error al registrar certificado de bautizo: ' . $e->getMessage());
+    $mensaje = 'No se pudo guardar el certificado. Revise los datos e intente nuevamente.';
   }
 }
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrar_confirmacion'])) {
-  if ($controllerSacramento->RegistrarConfirmacion($_POST)) {
-    $mensaje = "Confirmación registrada con éxito.";
-  } else {
-    $mensaje = "Error al registrar la confirmación.";
+  try {
+    if (!is_string($_POST['token_confirmacion'] ?? null) || !hash_equals($_SESSION['token_confirmacion'], $_POST['token_confirmacion'])) {
+      throw new InvalidArgumentException('La sesión del formulario cambió. Recargue la página e intente nuevamente.');
+    }
+    $datosConfirmacion = $_POST;
+    $datosConfirmacion['CodPer'] = $usuario['CodPer'];
+    $codInsConfirmacion = $controllerSacramento->RegistrarConfirmacionCompleto($datosConfirmacion);
+    $_SESSION['token_confirmacion'] = bin2hex(random_bytes(32));
+    header('Location: VistaRegistradoConfirmacion.php?CodIns=' . $codInsConfirmacion);
+    exit;
+  } catch (InvalidArgumentException $e) {
+    $mensaje = $e->getMessage();
+  } catch (Throwable $e) {
+    error_log('Error al registrar certificado de confirmación: ' . $e->getMessage());
+    $mensaje = 'No se pudo guardar el certificado de confirmación. Revise los datos e intente nuevamente.';
   }
 }
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrar_matrimonio'])) {
-  if ($controllerSacramento->RegistrarMatrimonio($_POST)) {
-    $mensaje = "Matrimonio registrado con éxito.";
-  } else {
-    $mensaje = "Error al registrar el matrimonio.";
+  try {
+    if (!is_string($_POST['token_matrimonio'] ?? null) || !hash_equals($_SESSION['token_matrimonio'], $_POST['token_matrimonio'])) {
+      throw new InvalidArgumentException('La sesión del formulario cambió. Recargue la página e intente nuevamente.');
+    }
+    $datosMatrimonio = $_POST;
+    $datosMatrimonio['CodPer'] = $usuario['CodPer'];
+    $codInsMatrimonio = $controllerSacramento->RegistrarMatrimonioCompleto($datosMatrimonio);
+    $_SESSION['token_matrimonio'] = bin2hex(random_bytes(32));
+    header('Location: VistaRegistradoMatrimonio.php?CodIns=' . $codInsMatrimonio);
+    exit;
+  } catch (InvalidArgumentException $e) {
+    $mensaje = $e->getMessage();
+  } catch (Throwable $e) {
+    error_log('Error al registrar certificado de matrimonio: ' . $e->getMessage());
+    $mensaje = 'No se pudo guardar el certificado de matrimonio. Revise los datos e intente nuevamente.';
   }
 }
 ?>
@@ -82,7 +151,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrar_matrimonio']
   <link rel="shortcut icon" href="../assets/images/Icono.png">
   <link rel="stylesheet" type="text/css" href="../assets/vendor/font-awesome/css/all.min.css">
   <link rel="stylesheet" type="text/css" href="../assets/vendor/bootstrap-icons/bootstrap-icons.css">
-  <link rel="stylesheet" type="text/css" href="../assets/css/style.css">
+  <link rel="stylesheet" type="text/css" href="../assets/css/style.css?v=<?php echo filemtime(__DIR__ . '/../assets/css/style.css'); ?>">
+  <link rel="stylesheet" type="text/css" href="../assets/css/logo-cabecera.css?v=<?= filemtime(__DIR__ . '/../assets/css/logo-cabecera.css') ?>">
   <script src="../assets/js/jquery-3.6.4.min.js"></script>
 </head>
 
@@ -92,8 +162,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrar_matrimonio']
     <nav class="navbar navbar-expand-lg">
       <div class="container">
         <a class="navbar-brand" href="VistaPersonal.php">
-          <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png" alt="logo">
-          <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png" alt="logo">
+          <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo.png') ?>" alt="logo">
+          <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo-light.png') ?>" alt="logo">
         </a>
 
         <ul class="nav flex-nowrap align-items-center ms-sm-3 list-unstyled">
@@ -105,13 +175,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrar_matrimonio']
 
           <li class="nav-item ms-2 dropdown">
             <a class="nav-link btn icon-md p-0" href="#" id="profileDropdown" role="button" data-bs-auto-close="outside" data-bs-display="static" data-bs-toggle="dropdown" aria-expanded="false">
-              <img class="avatar-img rounded border border-white border-3" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}"; ?>" alt="">
+              <img class="avatar-img rounded border border-white border-3" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}?v=" . time(); ?>" alt="">
             </a>
             <ul class="dropdown-menu dropdown-animation dropdown-menu-end pt-3 small me-md-n3" aria-labelledby="profileDropdown">
               <li class="px-3">
                 <div class="d-flex align-items-center position-relative">
                   <div class="avatar me-3">
-                    <img class="avatar-img rounded-circle" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}"; ?>" alt="avatar">
+                    <img class="avatar-img rounded-circle" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}?v=" . time(); ?>" alt="avatar">
                   </div>
                   <div>
                     <a class="h6 stretched-link" href="#"><?php echo $usuario['Nombre'] . " " . $usuario['Paterno'] . " " . $usuario['Materno']; ?></a>
@@ -159,7 +229,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrar_matrimonio']
     </nav>
   </header>
   <main>
-    <div class="container">
+    <div class="container personal-dashboard-container">
       <div class="row g-4">
         <div class="col-lg-3">
           <div class="d-flex align-items-center d-lg-none">
@@ -173,20 +243,20 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrar_matrimonio']
             <div class="offcanvas offcanvas-start" tabindex="-1" id="offcanvasSideNavbar">
               <div class="offcanvas-header">
                 <a class="navbar-brand" href="#">
-                  <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png" alt="logo">
-                  <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png" alt="logo">
+                  <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo.png') ?>" alt="logo">
+                  <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo-light.png') ?>" alt="logo">
                 </a>
                 <button type="button" class="btn-close text-reset ms-auto" data-bs-dismiss="offcanvas" aria-label="Close"></button>
               </div>
 
               <div class="offcanvas-body d-block px-2 px-lg-0">
                 <div class="card overflow-hidden">
-                  <div class="h-50px" style="background-image:url(<?php echo ($usuario['FondoPer'] == 'Ninguno' || empty($usuario['FondoPer'])) ? '../assets/images/fondo/Ninguno.jpg' : "../assets/images/fondo/{$usuario['FondoPer']}"; ?>); background-position: center; background-size: cover; background-repeat: no-repeat;">
+                  <div class="h-50px" style="background-image:url(<?php echo ($usuario['FondoPer'] == 'Ninguno' || empty($usuario['FondoPer'])) ? '../assets/images/fondo/Ninguno.jpg' : "../assets/images/fondo/{$usuario['FondoPer']}?v=" . time(); ?>); background-position: center; background-size: cover; background-repeat: no-repeat;">
                   </div>
                   <div class="card-body pt-0">
                     <div class="text-center">
                       <div class="avatar avatar-lg mt-n5 mb-3">
-                        <img class="avatar-img rounded border border-white border-3" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}"; ?>" alt="">
+                        <img class="avatar-img rounded border border-white border-3" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}?v=" . time(); ?>" alt="">
                       </div>
                       <h5 class="mb-0"> <a href="PerfilAdmin.php"><?php echo $usuario['Nombre'] . " " . $usuario['Paterno'] . " " . $usuario['Materno']; ?></a> </h5>
                       <small><?php echo $usuario['DescripCar']; ?></small>
@@ -195,34 +265,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrar_matrimonio']
 
                     <hr>
 
-                    <ul class="nav nav-link-secondary flex-column fw-bold gap-2">
-                      <li class="nav-item">
-                        <a class="nav-link" href="VistaPersonal.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/mensaje.png" alt=""><span>Inicio </span></a>
-                      </li>
-                      <li class="nav-item">
-                        <a class="nav-link" href="VistaPersona.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/nuevo.png" alt=""><span>Persona </span></a>
-                      </li>
-                      <li class="nav-item">
-                        <a class="nav-link" href="VistaReservas.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/instrucciones.png" alt=""><span>Celebración </span></a>
-                      </li>
-                      <?php if ($usuario['DescripCar'] == 'Párroco') { ?>
-                        <li class="nav-item">
-                          <a class="nav-link" href="VistaGesPersonal.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/seguro.png" alt=""><span>Personal</span></a>
-                        </li>
-                        <li class="nav-item">
-                          <a class="nav-link" href="VistaCoordinadorAdmin.php"> <span>🔥 ⚪ Coordinador</span></a>
-                        </li>
-                      <?php } ?>
-                      <li class="nav-item">
-                        <a class="nav-link active" href="VistaSolicitante.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/contrato.png" alt=""><span>Certificado </span></a>
-                      </li>
-                      <?php if ($usuario['DescripCar'] != "Personal") { ?>
-                        <li class="nav-item">
-                          <a class="nav-link" href="VistaEmitidos.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/Emitido.png" alt=""><span>Certificado Emitido </span></a>
-                        </li>
-                      <?php } ?>
-
-                    </ul>
+                    <?php require_once __DIR__ . '/../Controlador/controladorAcceso.php'; ControladorAcceso::renderMenu(); ?>
                   </div>
                   <div class="card-footer text-center py-2">
                     <a class="btn btn-link btn-sm" href="PerfilAdmin.php">Ver mi Perfil</a>
@@ -235,7 +278,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrar_matrimonio']
         </div>
 
         <?php if ($mensaje): ?>
-          <p><?php echo $mensaje; ?></p>
+          <p role="alert"><?php echo htmlspecialchars($mensaje, ENT_QUOTES, 'UTF-8'); ?></p>
         <?php endif; ?>
 
 
@@ -246,7 +289,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrar_matrimonio']
 
               <form method="GET" class="mb-3 d-flex align-items-end">
                 <div class="form-group mb-0 me-2">
-                  <input type="text" class="form-control" name="ciPersonaBus" placeholder="Identificación" value="<?php echo isset($_GET['ciPersona']) ? $_GET['ciPersona'] : ''; ?>" required>
+                  <input type="text" class="form-control" name="ciPersonaBus" placeholder="CI, nombres, apellidos o partida" value="<?php echo htmlspecialchars($_GET['ciPersonaBus'] ?? $_GET['ciPersonaSeleccionada'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" required>
                 </div>
                 <button type="submit" class="btn btn-primary-soft me-2" name="bautizo" href="#tab-1" data-bs-toggle="tooltip" data-bs-placement="top" title="Bautizo">
                   <i class="bi bi-droplet"></i>
@@ -265,13 +308,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrar_matrimonio']
 
             <div class="card-body">
               <ul class="nav nav-tabs nav-bottom-line mb-3">
-                <li class="nav-item"> <a class="nav-link active" data-bs-toggle="tab" href="#tab-1"> Información </a> </li>
-                <li class="nav-item"> <a class="nav-link" data-bs-toggle="tab" href="#tab-2"> Registrar Bautizo </a> </li>
-                <li class="nav-item"> <a class="nav-link" data-bs-toggle="tab" href="#tab-3"> Registrar Confirmación </a> </li>
-                <li class="nav-item"> <a class="nav-link" data-bs-toggle="tab" href="#tab-4"> Registrar Matrimonio </a> </li>
+                <li class="nav-item"> <a class="nav-link <?php echo (!$registroBautizo && !$registroConfirmacion && !$registroMatrimonio) ? 'active' : ''; ?>" data-bs-toggle="tab" href="#tab-1"> Información </a> </li>
+                <li class="nav-item"> <a class="nav-link <?php echo $registroBautizo ? 'active' : ''; ?>" data-bs-toggle="tab" href="#tab-2"> Registrar Bautizo </a> </li>
+                <li class="nav-item"> <a class="nav-link <?php echo $registroConfirmacion ? 'active' : ''; ?>" data-bs-toggle="tab" href="#tab-3"> Registrar Confirmación </a> </li>
+                <li class="nav-item"> <a class="nav-link <?php echo $registroMatrimonio ? 'active' : ''; ?>" data-bs-toggle="tab" href="#tab-4"> Registrar Matrimonio </a> </li>
               </ul>
               <div class="tab-content">
-                <div class="tab-pane show active" id="tab-1">
+                <div class="tab-pane <?php echo (!$registroBautizo && !$registroConfirmacion && !$registroMatrimonio) ? 'show active' : ''; ?>" id="tab-1">
                   <?php if (count($certificadoBautizo) > 0): ?>
                     <h3>Datos de Bautizo Encontradas</h3>
                     <table class="table table-hover">
@@ -290,13 +333,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrar_matrimonio']
                             <td><?php echo $bautizo['DescripSac']; ?></td>
                             <td><?php echo $bautizo['NombreBautizado']; ?></td>
                             <td><?php echo $bautizo['FechaIns']; ?></td>
-                            <td><a class="btn btn-primary-soft" href="registrar_documento.php?CodIns=<?php echo $bautizo['CodIns']; ?>"><i class="bi bi-file-earmark-text"></i></a></td>
+                            <td><a class="btn btn-primary-soft" href="registrar_documento.php?CodIns=<?php echo $bautizo['CodIns']; ?>&amp;buscar=<?php echo rawurlencode($_GET['ciPersonaBus'] ?? ''); ?>&amp;sac=bautizo"><i class="bi bi-file-earmark-text"></i></a></td>
                             <td><a class="btn btn-primary-soft" href="VistaRegistradoBautizo.php?CodIns=<?php echo $bautizo['CodIns']; ?>"><i class="bi bi-eye"></i></a></td>
                           </tr>
                         <?php endforeach; ?>
                       </tbody>
                     </table>
-                  <?php elseif (isset($_POST['buscar_Solicitud_bautizo'])): ?>
+                  <?php elseif (isset($_GET['bautizo'])): ?>
                     <div class="my-sm-5 py-sm-5 text-center">
                       <i class="display-1 text-body-secondary bi bi-calendar2-event"></i>
                       <h4 class="mt-2 mb-3 text-body">Certificado no encontrado</h4>
@@ -321,13 +364,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrar_matrimonio']
                             <td><?php echo $confirmacion['DescripSac']; ?></td>
                             <td><?php echo $confirmacion['Confirmante']; ?></td>
                             <td><?php echo $confirmacion['FechaIns']; ?></td>
-                            <td><a class="btn btn-primary-soft" href="registrar_documento.php?CodIns=<?php echo $confirmacion['CodIns']; ?>"><i class="bi bi-file-earmark-text"></i></a></td>
+                            <td><a class="btn btn-primary-soft" href="registrar_documento.php?CodIns=<?php echo $confirmacion['CodIns']; ?>&amp;buscar=<?php echo rawurlencode($_GET['ciPersonaBus'] ?? ''); ?>&amp;sac=confirmacion"><i class="bi bi-file-earmark-text"></i></a></td>
                             <td><a class="btn btn-primary-soft" href="VistaRegistradoConfirmacion.php?CodIns=<?php echo $confirmacion['CodIns']; ?>"><i class="bi bi-eye"></i></a></td>
                           </tr>
                         <?php endforeach; ?>
                       </tbody>
                     </table>
-                  <?php elseif (isset($_POST['buscar_Solicitud_confirmacion'])): ?>
+                  <?php elseif (isset($_GET['confirmacion'])): ?>
                     <div class="my-sm-5 py-sm-5 text-center">
                       <i class="display-1 text-body-secondary bi bi-calendar2-event"></i>
                       <h4 class="mt-2 mb-3 text-body">Certificado no encontrado</h4>
@@ -354,13 +397,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrar_matrimonio']
                             <td><?php echo $matrimonio['NombreNovio']; ?></td>
                             <td><?php echo $matrimonio['NombreNovia']; ?></td>
                             <td><?php echo $matrimonio['FechaIns']; ?></td>
-                            <td><a class="btn btn-primary-soft" href="registrar_documento.php?CodIns=<?php echo $matrimonio['CodIns']; ?>"><i class="bi bi-file-earmark-text"></i></a></td>
+                            <td><a class="btn btn-primary-soft" href="registrar_documento.php?CodIns=<?php echo $matrimonio['CodIns']; ?>&amp;buscar=<?php echo rawurlencode($_GET['ciPersonaBus'] ?? ''); ?>&amp;sac=matrimonio"><i class="bi bi-file-earmark-text"></i></a></td>
                             <td><a class="btn btn-primary-soft" href="VistaRegistradoMatrimonio.php?CodIns=<?php echo $matrimonio['CodIns']; ?>"><i class="bi bi-eye"></i></a></td>
                           </tr>
                         <?php endforeach; ?>
                       </tbody>
                     </table>
-                  <?php elseif (isset($_POST['buscar_Solicitud_matrimonio'])): ?>
+                  <?php elseif (isset($_GET['matrimonio'])): ?>
                     <div class="my-sm-5 py-sm-5 text-center">
                       <i class="display-1 text-body-secondary bi bi-calendar2-event"></i>
                       <h4 class="mt-2 mb-3 text-body">Certificado no encontrado</h4>
@@ -368,133 +411,418 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrar_matrimonio']
                   <?php endif; ?>
                 </div>
 
-                <div class="tab-pane" id="tab-2">
+                <div class="tab-pane <?php echo $registroBautizo ? 'show active' : ''; ?>" id="tab-2">
 
-                  <form method="POST" class="row g-3">
-                    <input type="hidden" name="CodPer" value="<?php echo $usuario['CodPer']; ?>" required>
-                    <div class="col-sm-6 col-lg-4">
-                      <label class="form-label">Celebrante</label>
-                      <input type="text" class="form-control" name="CiPersonaCelebranteB" placeholder="CI o N° Partida de Nacimiento" required minlength="3" maxlength="15">
-                      <a class="celebranteB btn btn-sm btn-dashed rounded mt-0"><i class="bi bi-plus-circle-dotted me-1" data-bs-toggle="modal" data-bs-target="#MostrarModalBautizo"></i>registrar nuevo</a>
+                  <form method="POST" class="row g-3" id="formCertificadoBautizo" autocomplete="off" data-rellenar="<?php echo $registroBautizo ? '1' : '0'; ?>">
+                    <input type="hidden" name="CodPer" value="<?php echo (int) $usuario['CodPer']; ?>">
+                    <input type="hidden" name="token_bautizo" value="<?php echo htmlspecialchars($_SESSION['token_bautizo'], ENT_QUOTES, 'UTF-8'); ?>">
+                    <div class="col-12">
+                      <p class="text-muted mb-1">Complete los datos de la partida para llenar el certificado PDF. Los campos con * son obligatorios.</p>
+                      <h5>Datos del bautizado y su familia</h5>
                     </div>
                     <div class="col-sm-6 col-lg-4">
-                      <label class="form-label">Identificación del Padre</label>
-                      <input type="text" class="form-control" name="CiPapa" placeholder="CI Papá (opcional)" required minlength="4" maxlength="12">
-                      <a class="papacelebrante btn btn-sm btn-dashed rounded mt-0"><i class="bi bi-plus-circle-dotted me-1" data-bs-toggle="modal" data-bs-target="#MostrarModalDemas"></i>registrar nuevo</a>
+                      <label class="form-label" for="bautizoCiPersonaCelebranteB">Bautizado/a (CI o partida de nacimiento) *</label>
+                      <input type="text" class="form-control" id="bautizoCiPersonaCelebranteB" name="CiPersonaCelebranteB" value="<?php echo $valorBautizo('CiPersonaCelebranteB'); ?>" required maxlength="15" autocomplete="off" data-persona data-persona-bautizo data-modal-persona="MostrarModalBautizo">
+                      <a href="#" class="celebranteB btn btn-sm btn-dashed rounded mt-0" data-registrar-persona><i class="bi bi-plus-circle-dotted me-1"></i>registrar nuevo</a>
+                      <div class="small text-muted" data-nombre-persona aria-live="polite"></div>
                     </div>
                     <div class="col-sm-6 col-lg-4">
-                      <label class="form-label">Identificación de la Madre</label>
-                      <input type="text" class="form-control" name="CiMama" placeholder="CI Mamá (opcional)" required minlength="4" maxlength="12">
-                      <a class="mamacelebrante btn btn-sm btn-dashed rounded mt-0"><i class="bi bi-plus-circle-dotted me-1" data-bs-toggle="modal" data-bs-target="#MostrarModalDemas"></i>registrar nuevo</a>
+                      <label class="form-label" for="bautizoCiPapa">Identificación del padre (opcional)</label>
+                      <input type="text" class="form-control" id="bautizoCiPapa" name="CiPapa" value="<?php echo $valorBautizo('CiPapa'); ?>" maxlength="15" autocomplete="off" data-persona data-persona-bautizo data-modal-persona="MostrarModalDemas">
+                      <a href="#" class="papacelebrante btn btn-sm btn-dashed rounded mt-0" data-registrar-persona><i class="bi bi-plus-circle-dotted me-1"></i>registrar nuevo</a>
+                      <div class="small text-muted" data-nombre-persona aria-live="polite"></div>
                     </div>
                     <div class="col-sm-6 col-lg-4">
-                      <label class="form-label">Identificación del Padrino</label>
-                      <input type="text" class="form-control" name="CiPadrino" placeholder="CI Padrino (opcional)" minlength="4" maxlength="12">
-                      <a class="padrinocelebrante btn btn-sm btn-dashed rounded mt-0"><i class="bi bi-plus-circle-dotted me-1" data-bs-toggle="modal" data-bs-target="#MostrarModalDemas"></i>registrar nuevo</a>
+                      <label class="form-label" for="bautizoCiMama">Identificación de la madre (opcional)</label>
+                      <input type="text" class="form-control" id="bautizoCiMama" name="CiMama" value="<?php echo $valorBautizo('CiMama'); ?>" maxlength="15" autocomplete="off" data-persona data-persona-bautizo data-modal-persona="MostrarModalDemas">
+                      <a href="#" class="mamacelebrante btn btn-sm btn-dashed rounded mt-0" data-registrar-persona><i class="bi bi-plus-circle-dotted me-1"></i>registrar nuevo</a>
+                      <div class="small text-muted" data-nombre-persona aria-live="polite"></div>
                     </div>
                     <div class="col-sm-6 col-lg-4">
-                      <label class="form-label">Identificación de la Madrina</label>
-                      <input type="text" class="form-control" name="CiMadrina" placeholder="CI Madrina (opcional)" minlength="4" maxlength="12">
-                      <a class="madrinacelebrante btn btn-sm btn-dashed rounded mt-0"><i class="bi bi-plus-circle-dotted me-1" data-bs-toggle="modal" data-bs-target="#MostrarModalDemas"></i>registrar nuevo</a>
+                      <label class="form-label" for="bautizoCiPadrino">Identificación del padrino (opcional)</label>
+                      <input type="text" class="form-control" id="bautizoCiPadrino" name="CiPadrino" value="<?php echo $valorBautizo('CiPadrino'); ?>" maxlength="15" autocomplete="off" data-persona data-persona-bautizo data-modal-persona="MostrarModalDemas">
+                      <a href="#" class="padrinocelebrante btn btn-sm btn-dashed rounded mt-0" data-registrar-persona><i class="bi bi-plus-circle-dotted me-1"></i>registrar nuevo</a>
+                      <div class="small text-muted" data-nombre-persona aria-live="polite"></div>
                     </div>
-                    <button type="submit" class="btn btn-success-soft me-2" name="registrar_bautizo"> Registrar Certificado de Bautizo</button>
+                    <div class="col-sm-6 col-lg-4">
+                      <label class="form-label" for="bautizoCiMadrina">Identificación de la madrina (opcional)</label>
+                      <input type="text" class="form-control" id="bautizoCiMadrina" name="CiMadrina" value="<?php echo $valorBautizo('CiMadrina'); ?>" maxlength="15" autocomplete="off" data-persona data-persona-bautizo data-modal-persona="MostrarModalDemas">
+                      <a href="#" class="madrinacelebrante btn btn-sm btn-dashed rounded mt-0" data-registrar-persona><i class="bi bi-plus-circle-dotted me-1"></i>registrar nuevo</a>
+                      <div class="small text-muted" data-nombre-persona aria-live="polite"></div>
+                    </div>
+                    <div class="col-sm-6 col-lg-4">
+                      <label class="form-label" for="bautizoFechaNac">Fecha de nacimiento *</label>
+                      <input type="date" class="form-control" id="bautizoFechaNac" name="FechaNac" value="<?php echo $valorBautizo('FechaNac'); ?>" required>
+                    </div>
+                    <div class="col-12"><small class="text-muted">El nombre se obtiene del CI. La fecha de nacimiento se carga automáticamente; cualquier corrección se guardará en la persona.</small></div>
+                    <div class="col-sm-6 col-lg-8">
+                      <label class="form-label" for="bautizoLugarNac">Lugar de nacimiento *</label>
+                      <input type="text" class="form-control" id="bautizoLugarNac" name="LugarNac" value="<?php echo $valorBautizo('LugarNac', ''); ?>" required maxlength="50">
+                    </div>
+                    <div class="col-12 mt-4"><h5>Parroquia y partida de bautizo</h5></div>
+                    <div class="col-12">
+                      <label class="form-label" for="bautizoNomParroquia">Nombre de la parroquia *</label>
+                      <input type="text" class="form-control" id="bautizoNomParroquia" name="NomParroquia" value="<?php echo $valorBautizo('NomParroquia', 'San Pedro de Sacaba'); ?>" required maxlength="50">
+                    </div>
+                    <div class="col-sm-6 col-lg-4">
+                      <label class="form-label" for="bautizoNroLibro">Libro de bautismos *</label>
+                      <input type="text" class="form-control" id="bautizoNroLibro" name="NroLibro" value="<?php echo $valorBautizo('NroLibro'); ?>" required maxlength="5">
+                    </div>
+                    <div class="col-sm-6 col-lg-4">
+                      <label class="form-label" for="bautizoNroPag">Página de bautismos *</label>
+                      <input type="text" class="form-control" id="bautizoNroPag" name="NroPag" value="<?php echo $valorBautizo('NroPag'); ?>" required maxlength="5">
+                    </div>
+                    <div class="col-sm-6 col-lg-4">
+                      <label class="form-label" for="bautizoNroPart">Número de partida de bautismo *</label>
+                      <input type="text" class="form-control" id="bautizoNroPart" name="NroPart" value="<?php echo $valorBautizo('NroPart'); ?>" required maxlength="5">
+                    </div>
+                    <div class="col-sm-6 col-lg-6">
+                      <label class="form-label" for="bautizoFechaReal">Fecha del bautizo *</label>
+                      <input type="date" class="form-control" id="bautizoFechaReal" name="FechaReal" max="<?php echo date('Y-m-d'); ?>" value="<?php echo $valorBautizo('FechaReal'); ?>" required>
+                    </div>
+                    <div class="col-sm-6 col-lg-6">
+                      <label class="form-label" for="bautizoCelebrantePres">Presbítero que realizó el bautizo *</label>
+                      <input type="text" class="form-control" id="bautizoCelebrantePres" name="CelebrantePres" value="<?php echo $valorBautizo('CelebrantePres'); ?>" required maxlength="50">
+                    </div>
+                    <div class="col-12 mt-4"><h5>Registro civil de nacimiento</h5><p class="text-muted small mb-0">Copie estos datos del certificado de nacimiento. Son distintos del libro y la partida de bautismo.</p></div>
+                    <div class="col-sm-6 col-lg-4">
+                      <label class="form-label" for="bautizoOficialiaCivil">Oficialía de Registro Civil *</label>
+                      <input type="text" class="form-control" id="bautizoOficialiaCivil" name="OficialiaCivil" value="<?php echo $valorBautizo('OficialiaCivil'); ?>" required maxlength="30">
+                    </div>
+                    <div class="col-sm-6 col-lg-4">
+                      <label class="form-label" for="bautizoLibroCivil">Libro del registro civil *</label>
+                      <input type="text" class="form-control" id="bautizoLibroCivil" name="LibroCivil" value="<?php echo $valorBautizo('LibroCivil'); ?>" required maxlength="10">
+                    </div>
+                    <div class="col-sm-6 col-lg-4">
+                      <label class="form-label" for="bautizoPartidaCivil">Partida del registro civil *</label>
+                      <input type="text" class="form-control" id="bautizoPartidaCivil" name="PartidaCivil" value="<?php echo $valorBautizo('PartidaCivil'); ?>" required maxlength="10">
+                    </div>
+                    <div class="col-sm-6 col-lg-6">
+                      <label class="form-label" for="bautizoFolioCivil">Folio o página del registro civil (opcional)</label>
+                      <input type="text" class="form-control" id="bautizoFolioCivil" name="FolioCivil" value="<?php echo $valorBautizo('FolioCivil', ''); ?>" maxlength="10">
+                    </div>
+                    <div class="col-12 mt-4"><h5>Emisión y firma del certificado</h5></div>
+                    <div class="col-sm-6 col-lg-4">
+                      <label class="form-label" for="bautizoNroEmision">Número de emisión *</label>
+                      <input type="number" class="form-control" id="bautizoNroEmision" name="NroEmision" value="<?php echo $valorBautizo('NroEmision'); ?>" required min="1" max="2147483647" step="1">
+                    </div>
+                    <div class="col-sm-6 col-lg-4">
+                      <label class="form-label" for="bautizoFechaEmision">Fecha de emisión *</label>
+                      <input type="date" class="form-control" id="bautizoFechaEmision" name="FechaEmision" max="<?php echo date('Y-m-d'); ?>" value="<?php echo $valorBautizo('FechaEmision', date('Y-m-d')); ?>" required>
+                    </div>
+                    <div class="col-sm-6 col-lg-4">
+                      <label class="form-label" for="bautizoPresbiteroEm">Presbítero que certifica y firma *</label>
+                      <input type="text" class="form-control" id="bautizoPresbiteroEm" name="PresbiteroEm" value="<?php echo $valorBautizo('PresbiteroEm', $presbiteroBautizo); ?>" required maxlength="50">
+                    </div>
+                    <div class="col-12">
+                      <label class="form-label" for="bautizoCertFirmado">Certificado (firmado y rubricado)</label>
+                      <input type="text" class="form-control" id="bautizoCertFirmado" name="CertFirmado" value="<?php echo $valorBautizo('CertFirmado'); ?>" maxlength="60" placeholder="Pbro. que firma la línea «Certifico (Firmado y Rubricado)»">
+                      <small class="text-muted">Se imprime en la línea «Certifico(Firmado y Rubricado)» del PDF, que puede ser otro presbítero. Si lo deja vacío se usa el que certifica; la firma de abajo es siempre el presbítero que certifica.</small>
+                    </div>
+                    <div class="col-12">
+                      <label class="form-label" for="bautizoObservacion">Nota marginal / observación (opcional)</label>
+                      <textarea class="form-control" id="bautizoObservacion" name="Observacion" maxlength="80" rows="2"><?php echo $valorBautizo('Observacion'); ?></textarea>
+                      <small class="text-muted">Si no hay anotaciones, puede escribir «Sin anotaciones marginales».</small>
+                    </div>
+                    <button type="submit" class="btn btn-success-soft me-2" name="registrar_bautizo" value="1">Guardar Certificado de Bautizo</button>
                   </form>
                 </div>
 
-                <div class="tab-pane" id="tab-3">
-                  <form method="POST" class="row g-3">
-                    <input type="hidden" name="CodPer" value="<?php echo $usuario['CodPer']; ?>" required>
+                <div class="tab-pane <?php echo $registroConfirmacion ? 'show active' : ''; ?>" id="tab-3">
+                  <form method="POST" class="row g-3" id="formCertificadoConfirmacion" autocomplete="off" data-rellenar="<?php echo $registroConfirmacion ? '1' : '0'; ?>">
+                    <input type="hidden" name="CodPer" value="<?php echo (int) $usuario['CodPer']; ?>">
+                    <input type="hidden" name="token_confirmacion" value="<?php echo htmlspecialchars($_SESSION['token_confirmacion'], ENT_QUOTES, 'UTF-8'); ?>">
+                    <input type="hidden" name="LugarNac" value="Ninguno">
 
-                    <div class="col-sm-6 col-lg-4">
-                      <label class="form-label">Confirmante</label>
-                      <input type="text" class="form-control" name="CiPersonaCelebranteC" placeholder="CI Confirmante" required minlength="4" maxlength="12">
-                      <a class="celebranteC btn btn-sm btn-dashed rounded mt-0"><i class="bi bi-plus-circle-dotted me-1" data-bs-toggle="modal" data-bs-target="#MostrarModalConfirmante"></i>registrar nuevo</a>
+                    <div class="col-12">
+                      <p class="text-muted mb-1">Complete los datos de la partida para llenar el certificado PDF. Los campos con * son obligatorios.</p>
+                      <h5>Datos del confirmante, padres y padrinos</h5>
                     </div>
 
                     <div class="col-sm-6 col-lg-4">
-                      <label class="form-label">Identificación del Padrino</label>
-                      <input type="text" class="form-control" name="CiPadrino" placeholder="CI Padrino (opcional)" minlength="4" maxlength="12">
-                      <a class="padrinocelebrante btn btn-sm btn-dashed rounded mt-0"><i class="bi bi-plus-circle-dotted me-1" data-bs-toggle="modal" data-bs-target="#MostrarModalDemas"></i>registrar nuevo</a>
+                      <label class="form-label" for="confCiCelebrante">Confirmante (CI) *</label>
+                      <input type="text" class="form-control" id="confCiCelebrante" name="CiPersonaCelebranteC" value="<?php echo $valorConfirmacion('CiPersonaCelebranteC'); ?>" placeholder="CI Confirmante" required minlength="4" maxlength="15" autocomplete="off" data-persona data-modal-persona="MostrarModalConfirmante">
+                      <a href="#" class="celebranteC btn btn-sm btn-dashed rounded mt-0" data-registrar-persona><i class="bi bi-plus-circle-dotted me-1"></i>registrar nuevo</a>
+                      <div class="small text-muted" data-nombre-persona aria-live="polite"></div>
                     </div>
 
                     <div class="col-sm-6 col-lg-4">
-                      <label class="form-label">Identificación de la Madrina</label>
-                      <input type="text" class="form-control" name="CiMadrina" placeholder="CI Madrina (opcional)" minlength="4" maxlength="12">
-                      <a class="madrinacelebrante btn btn-sm btn-dashed rounded mt-0"><i class="bi bi-plus-circle-dotted me-1" data-bs-toggle="modal" data-bs-target="#MostrarModalDemas"></i>registrar nuevo</a>
+                      <label class="form-label" for="confCiPadrino">Padrino (CI, opcional)</label>
+                      <input type="text" class="form-control" id="confCiPadrino" name="CiPadrino" value="<?php echo $valorConfirmacion('CiPadrino'); ?>" placeholder="CI Padrino" minlength="4" maxlength="15" autocomplete="off" data-persona data-modal-persona="MostrarModalDemas">
+                      <a href="#" class="padrinocelebrante btn btn-sm btn-dashed rounded mt-0" data-registrar-persona><i class="bi bi-plus-circle-dotted me-1"></i>registrar nuevo</a>
+                      <div class="small text-muted" data-nombre-persona aria-live="polite"></div>
                     </div>
 
-                    <button type="submit" class="btn btn-success-soft me-2" name="registrar_confirmacion">Registrar Certificado de Confirmación</button>
+                    <div class="col-sm-6 col-lg-4">
+                      <label class="form-label" for="confCiMadrina">Madrina (CI, opcional)</label>
+                      <input type="text" class="form-control" id="confCiMadrina" name="CiMadrina" value="<?php echo $valorConfirmacion('CiMadrina'); ?>" placeholder="CI Madrina" minlength="4" maxlength="15" autocomplete="off" data-persona data-modal-persona="MostrarModalDemas">
+                      <a href="#" class="madrinacelebrante btn btn-sm btn-dashed rounded mt-0" data-registrar-persona><i class="bi bi-plus-circle-dotted me-1"></i>registrar nuevo</a>
+                      <div class="small text-muted" data-nombre-persona aria-live="polite"></div>
+                    </div>
+
+                    <div class="col-sm-6">
+                      <label class="form-label" for="confFechaNac">Fecha de nacimiento registrada</label>
+                      <input type="date" class="form-control" id="confFechaNac" name="FechaNac" readonly aria-describedby="confNacimientoAviso">
+                      <small class="text-muted" id="confNacimientoAviso" aria-live="polite">Se completa automáticamente con la fecha guardada en el registro del confirmante.</small>
+                    </div>
+                    <div class="col-sm-6">
+                      <label class="form-label" for="confEdad">Edad al recibir la confirmación</label>
+                      <input type="text" class="form-control" id="confEdad" readonly placeholder="Se calcula con las dos fechas" aria-live="polite">
+                      <small class="text-muted">Se calcula automáticamente con el nacimiento y la fecha de confirmación.</small>
+                    </div>
+                    <div class="col-sm-6">
+                      <label class="form-label" for="confCiPapa">Padre (CI, opcional)</label>
+                      <input type="text" class="form-control" id="confCiPapa" name="CiPapa" value="<?php echo $valorConfirmacion('CiPapa'); ?>" placeholder="CI del padre" minlength="4" maxlength="15" autocomplete="off" data-persona data-modal-persona="MostrarModalDemas">
+                      <a href="#" class="btn btn-sm btn-dashed rounded mt-0" data-registrar-persona><i class="bi bi-plus-circle-dotted me-1"></i>registrar nuevo</a>
+                      <div class="small text-muted" data-nombre-persona aria-live="polite"></div>
+                    </div>
+                    <div class="col-sm-6">
+                      <label class="form-label" for="confCiMama">Madre (CI, opcional)</label>
+                      <input type="text" class="form-control" id="confCiMama" name="CiMama" value="<?php echo $valorConfirmacion('CiMama'); ?>" placeholder="CI de la madre" minlength="4" maxlength="15" autocomplete="off" data-persona data-modal-persona="MostrarModalDemas">
+                      <a href="#" class="btn btn-sm btn-dashed rounded mt-0" data-registrar-persona><i class="bi bi-plus-circle-dotted me-1"></i>registrar nuevo</a>
+                      <div class="small text-muted" data-nombre-persona aria-live="polite"></div>
+                    </div>
+                    <div class="col-12 mt-4">
+                      <h5>Datos del bautismo</h5>
+                      <p class="text-muted small mb-0" id="confBautizoAviso" aria-live="polite">Al ingresar el CI se buscará su bautismo en San Pedro de Sacaba. Si no está registrado, complete los datos manualmente.</p>
+                    </div>
+                    <div class="col-sm-6">
+                      <label class="form-label" for="confParroquiaBau">Parroquia donde se bautizó *</label>
+                      <input type="text" class="form-control" id="confParroquiaBau" name="ParroquiaBau" value="<?php echo $valorConfirmacion('ParroquiaBau'); ?>" maxlength="30" required>
+                    </div>
+                    <div class="col-sm-6">
+                      <label class="form-label" for="confFechaBau">Fecha de bautizo *</label>
+                      <input type="date" class="form-control" id="confFechaBau" name="FechaBau" value="<?php echo $valorConfirmacion('FechaBau'); ?>" required>
+                    </div>
+                    <div class="col-sm-6 col-lg-4">
+                      <label class="form-label" for="confLibroBau">Libro de bautismos (opcional)</label>
+                      <input type="text" class="form-control" id="confLibroBau" name="LibroBau" value="<?php echo $valorConfirmacion('LibroBau'); ?>" maxlength="10">
+                    </div>
+                    <div class="col-sm-6 col-lg-4">
+                      <label class="form-label" for="confPaginaBau">Página del bautismo (opcional)</label>
+                      <input type="text" class="form-control" id="confPaginaBau" name="PaginaBau" value="<?php echo $valorConfirmacion('PaginaBau'); ?>" maxlength="10">
+                    </div>
+                    <div class="col-sm-6 col-lg-4">
+                      <label class="form-label" for="confPartidaBau">Partida del bautismo (opcional)</label>
+                      <input type="text" class="form-control" id="confPartidaBau" name="PartidaBau" value="<?php echo $valorConfirmacion('PartidaBau'); ?>" maxlength="10">
+                    </div>
+
+                    <div class="col-12 mt-4">
+                      <h5>Partida de confirmación</h5>
+
+                    </div>
+
+                    <div class="col-12">
+                      <label class="form-label" for="confNomParroquia">Nombre de la parroquia *</label>
+                      <input type="text" class="form-control" id="confNomParroquia" name="NomParroquia" value="<?php echo $valorConfirmacion('NomParroquia', 'San Pedro de Sacaba'); ?>" required maxlength="50">
+                    </div>
+                    <div class="col-sm-6 col-lg-4">
+                      <label class="form-label" for="confNroLibro">Libro de confirmaciones *</label>
+                      <input type="text" class="form-control" id="confNroLibro" name="NroLibro" value="<?php echo $valorConfirmacion('NroLibro'); ?>" placeholder="Libro" required maxlength="5">
+                    </div>
+                    <div class="col-sm-6 col-lg-4">
+                      <label class="form-label" for="confNroPag">Página *</label>
+                      <input type="text" class="form-control" id="confNroPag" name="NroPag" value="<?php echo $valorConfirmacion('NroPag'); ?>" placeholder="Página" required maxlength="5">
+                    </div>
+                    <div class="col-sm-6 col-lg-4">
+                      <label class="form-label" for="confNroPart">Número de partida *</label>
+                      <input type="text" class="form-control" id="confNroPart" name="NroPart" value="<?php echo $valorConfirmacion('NroPart'); ?>" placeholder="Partida" required maxlength="5">
+                    </div>
+                    <div class="col-sm-6 col-lg-6">
+                      <label class="form-label" for="confFechaReal">Fecha de la confirmación *</label>
+                      <input type="date" class="form-control" id="confFechaReal" name="FechaReal" max="<?php echo date('Y-m-d'); ?>" value="<?php echo $valorConfirmacion('FechaReal'); ?>" required>
+                    </div>
+                    <div class="col-sm-6 col-lg-6">
+                      <label class="form-label" for="confCelebrantePres">Nombre del Obispo Confirmante *</label>
+                      <input type="text" class="form-control" id="confCelebrantePres" name="CelebrantePres" value="<?php echo $valorConfirmacion('CelebrantePres'); ?>" placeholder="Obispo Confirmante" required maxlength="50">
+                    </div>
+
+                    <div class="col-12 mt-4"><h5>Emisión y firma del certificado</h5></div>
+                    <div class="col-sm-6 col-lg-4">
+                      <label class="form-label" for="confNroEmision">Número de emisión *</label>
+                      <input type="number" class="form-control" id="confNroEmision" name="NroEmision" value="<?php echo $valorConfirmacion('NroEmision'); ?>" required min="1" max="2147483647" step="1">
+                    </div>
+                    <div class="col-sm-6 col-lg-4">
+                      <label class="form-label" for="confFechaEmision">Fecha de emisión *</label>
+                      <input type="date" class="form-control" id="confFechaEmision" name="FechaEmision" max="<?php echo date('Y-m-d'); ?>" value="<?php echo $valorConfirmacion('FechaEmision', date('Y-m-d')); ?>" required>
+                    </div>
+                    <div class="col-sm-6 col-lg-4">
+                      <label class="form-label" for="confPresbiteroEm">El suscrito Pbro. (certifica y firma) *</label>
+                      <input type="text" class="form-control" id="confPresbiteroEm" name="PresbiteroEm" value="<?php echo $valorConfirmacion('PresbiteroEm', $presbiteroActual); ?>" required maxlength="50">
+                      <small class="text-muted">Este mismo nombre aparecerá en el encabezado y en la firma del certificado.</small>
+                    </div>
+                    <div class="col-12">
+                      <label class="form-label" for="confObservacion">Observaciones (opcional)</label>
+                      <textarea class="form-control" id="confObservacion" name="Observacion" maxlength="80" rows="2"><?php echo $valorConfirmacion('Observacion'); ?></textarea>
+                      <small class="text-muted">Si no hay observaciones, puede escribir «Ninguna».</small>
+                    </div>
+
+                    <button type="submit" class="btn btn-success-soft me-2" name="registrar_confirmacion" value="1">Registrar Certificado de Confirmación</button>
                   </form>
 
                 </div>
 
-                <div class="tab-pane" id="tab-4">
+                <div class="tab-pane <?php echo $registroMatrimonio ? 'show active' : ''; ?>" id="tab-4">
 
-                  <form method="POST" class="row g-3">
-                    <br>
-                    <input type="hidden" name="CodPer" placeholder="Código Personal" value="<?php echo $usuario['CodPer']; ?>" required>
+                  <form method="POST" class="row g-3" id="formCertificadoMatrimonio" autocomplete="off" data-rellenar="<?php echo $registroMatrimonio ? '1' : '0'; ?>">
+                    <input type="hidden" name="CodPer" value="<?php echo (int) $usuario['CodPer']; ?>">
+                    <input type="hidden" name="token_matrimonio" value="<?php echo htmlspecialchars($_SESSION['token_matrimonio'], ENT_QUOTES, 'UTF-8'); ?>">
+                    <input type="hidden" name="LugarNac" value="Ninguno">
 
-                    <div class="col-sm-6 col-lg-3">
-                      <label class="form-label">Ci del Novio</label>
-                      <input type="text" class="form-control col-lg-4" name="CiPersonaNovio" placeholder="CI Novio" required minlength="4" maxlength="12">
-                      <a class="novio btn btn-sm btn-dashed rounded mt-0"><i class="bi bi-plus-circle-dotted me-1" data-bs-toggle="modal" data-bs-target="#MostrarModalDemas"></i>registrar nuevo</a>
+                    <div class="col-12">
+                      <p class="text-muted mb-1">Complete los datos de la partida para llenar el certificado PDF. Los campos con * son obligatorios.</p>
+                      <h5>Novios, familia y testigos</h5>
                     </div>
 
                     <div class="col-sm-6 col-lg-3">
-                      <label class="form-label">Ci de la Novia</label>
-                      <input type="text" class="form-control col-lg-4" name="CiPersonaNovia" placeholder="CI Novia" required minlength="4" maxlength="12">
-                      <a class="novia btn btn-sm btn-dashed rounded mt-0"><i class="bi bi-plus-circle-dotted me-1" data-bs-toggle="modal" data-bs-target="#MostrarModalDemas"></i>registrar nuevo</a>
+                      <label class="form-label" for="matCiNovio">CI del Novio *</label>
+                      <input type="text" class="form-control" id="matCiNovio" name="CiPersonaNovio" value="<?php echo $valorMatrimonio('CiPersonaNovio'); ?>" placeholder="CI Novio" required minlength="4" maxlength="15" autocomplete="off" data-persona data-modal-persona="MostrarModalDemas">
+                      <a href="#" class="novio btn btn-sm btn-dashed rounded mt-0" data-registrar-persona><i class="bi bi-plus-circle-dotted me-1"></i>registrar nuevo</a>
+                      <div class="small text-muted" data-nombre-persona aria-live="polite"></div>
                     </div>
 
                     <div class="col-sm-6 col-lg-3">
-                      <label class="form-label">Ci del Papá del Novio</label>
-                      <input type="text" class="form-control col-lg-4" name="CiPaNovio" placeholder="CI Papá Novio" minlength="4" maxlength="12">
-                      <a class="papanovio btn btn-sm btn-dashed rounded mt-0"><i class="bi bi-plus-circle-dotted me-1" data-bs-toggle="modal" data-bs-target="#MostrarModalDemas"></i>registrar nuevo</a>
+                      <label class="form-label" for="matCiNovia">CI de la Novia *</label>
+                      <input type="text" class="form-control" id="matCiNovia" name="CiPersonaNovia" value="<?php echo $valorMatrimonio('CiPersonaNovia'); ?>" placeholder="CI Novia" required minlength="4" maxlength="15" autocomplete="off" data-persona data-modal-persona="MostrarModalDemas">
+                      <a href="#" class="novia btn btn-sm btn-dashed rounded mt-0" data-registrar-persona><i class="bi bi-plus-circle-dotted me-1"></i>registrar nuevo</a>
+                      <div class="small text-muted" data-nombre-persona aria-live="polite"></div>
                     </div>
 
                     <div class="col-sm-6 col-lg-3">
-                      <label class="form-label">Ci de la Mamá del Novio</label>
-                      <input type="text" class="form-control col-lg-4" name="CiMaNovio" placeholder="CI Mamá Novio" maxlength="12">
-                      <a class="mamanovio btn btn-sm btn-dashed rounded mt-0"><i class="bi bi-plus-circle-dotted me-1" data-bs-toggle="modal" data-bs-target="#MostrarModalDemas"></i>registrar nuevo</a>
+                      <label class="form-label" for="matCiPaNovio">CI del Papá del Novio</label>
+                      <input type="text" class="form-control" id="matCiPaNovio" name="CiPaNovio" value="<?php echo $valorMatrimonio('CiPaNovio'); ?>" placeholder="CI Papá Novio" minlength="4" maxlength="15" autocomplete="off" data-persona data-modal-persona="MostrarModalDemas">
+                      <a href="#" class="papanovio btn btn-sm btn-dashed rounded mt-0" data-registrar-persona><i class="bi bi-plus-circle-dotted me-1"></i>registrar nuevo</a>
+                      <div class="small text-muted" data-nombre-persona aria-live="polite"></div>
                     </div>
 
                     <div class="col-sm-6 col-lg-3">
-                      <label class="form-label">Ci del Papá de la Novia</label>
-                      <input type="text" class="form-control col-lg-4" name="CiPaNovia" placeholder="CI Papá Novia" maxlength="12">
-                      <a class="papanovia btn btn-sm btn-dashed rounded mt-0"><i class="bi bi-plus-circle-dotted me-1" data-bs-toggle="modal" data-bs-target="#MostrarModalDemas"></i>registrar nuevo</a>
+                      <label class="form-label" for="matCiMaNovio">CI de la Mamá del Novio</label>
+                      <input type="text" class="form-control" id="matCiMaNovio" name="CiMaNovio" value="<?php echo $valorMatrimonio('CiMaNovio'); ?>" placeholder="CI Mamá Novio" maxlength="15" autocomplete="off" data-persona data-modal-persona="MostrarModalDemas">
+                      <a href="#" class="mamanovio btn btn-sm btn-dashed rounded mt-0" data-registrar-persona><i class="bi bi-plus-circle-dotted me-1"></i>registrar nuevo</a>
+                      <div class="small text-muted" data-nombre-persona aria-live="polite"></div>
                     </div>
 
                     <div class="col-sm-6 col-lg-3">
-                      <label class="form-label">Ci de la Mamá de la Novia</label>
-                      <input type="text" class="form-control col-lg-4" name="CiMaNovia" placeholder="CI Mamá Novia" maxlength="12">
-                      <a class="mamanovia btn btn-sm btn-dashed rounded mt-0"><i class="bi bi-plus-circle-dotted me-1" data-bs-toggle="modal" data-bs-target="#MostrarModalDemas"></i>registrar nuevo</a>
+                      <label class="form-label" for="matCiPaNovia">CI del Papá de la Novia</label>
+                      <input type="text" class="form-control" id="matCiPaNovia" name="CiPaNovia" value="<?php echo $valorMatrimonio('CiPaNovia'); ?>" placeholder="CI Papá Novia" maxlength="15" autocomplete="off" data-persona data-modal-persona="MostrarModalDemas">
+                      <a href="#" class="papanovia btn btn-sm btn-dashed rounded mt-0" data-registrar-persona><i class="bi bi-plus-circle-dotted me-1"></i>registrar nuevo</a>
+                      <div class="small text-muted" data-nombre-persona aria-live="polite"></div>
                     </div>
 
                     <div class="col-sm-6 col-lg-3">
-                      <label class="form-label">Ci del padrino</label>
-                      <input type="text" class="form-control" name="CiPadrino" placeholder="CI Padrino" maxlength="12">
-                      <a class="padrinocelebrante btn btn-sm btn-dashed rounded mt-0"><i class="bi bi-plus-circle-dotted me-1" data-bs-toggle="modal" data-bs-target="#MostrarModalDemas"></i>registrar nuevo</a>
+                      <label class="form-label" for="matCiMaNovia">CI de la Mamá de la Novia</label>
+                      <input type="text" class="form-control" id="matCiMaNovia" name="CiMaNovia" value="<?php echo $valorMatrimonio('CiMaNovia'); ?>" placeholder="CI Mamá Novia" maxlength="15" autocomplete="off" data-persona data-modal-persona="MostrarModalDemas">
+                      <a href="#" class="mamanovia btn btn-sm btn-dashed rounded mt-0" data-registrar-persona><i class="bi bi-plus-circle-dotted me-1"></i>registrar nuevo</a>
+                      <div class="small text-muted" data-nombre-persona aria-live="polite"></div>
                     </div>
 
                     <div class="col-sm-6 col-lg-3">
-                      <label class="form-label">Ci de la Madrina</label>
-                      <input type="text" class="form-control" name="CiMadrina" placeholder="CI Madrina" maxlength="12">
-                      <a class="madrinacelebrante btn btn-sm btn-dashed rounded mt-0"><i class="bi bi-plus-circle-dotted me-1" data-bs-toggle="modal" data-bs-target="#MostrarModalDemas"></i>registrar nuevo</a>
+                      <label class="form-label" for="matCiPadrino">CI del Testigo presencial 1</label>
+                      <input type="text" class="form-control" id="matCiPadrino" name="CiPadrino" value="<?php echo $valorMatrimonio('CiPadrino'); ?>" placeholder="CI Testigo presencial" maxlength="15" autocomplete="off" data-persona data-modal-persona="MostrarModalDemas">
+                      <a href="#" class="padrinocelebrante btn btn-sm btn-dashed rounded mt-0" data-registrar-persona><i class="bi bi-plus-circle-dotted me-1"></i>registrar nuevo</a>
+                      <div class="small text-muted" data-nombre-persona aria-live="polite"></div>
                     </div>
 
                     <div class="col-sm-6 col-lg-3">
-                      <label class="form-label">Testigo del Novio</label>
-                      <input type="text" class="form-control" name="CiTestigoNovio" placeholder="CI Testigo" required minlength="4" maxlength="12">
-                      <a class="testigonovio btn btn-sm btn-dashed rounded mt-0"><i class="bi bi-plus-circle-dotted me-1" data-bs-toggle="modal" data-bs-target="#MostrarModalDemas"></i>registrar nuevo</a>
+                      <label class="form-label" for="matCiMadrina">CI del Testigo presencial 2</label>
+                      <input type="text" class="form-control" id="matCiMadrina" name="CiMadrina" value="<?php echo $valorMatrimonio('CiMadrina'); ?>" placeholder="CI Testigo presencial" maxlength="15" autocomplete="off" data-persona data-modal-persona="MostrarModalDemas">
+                      <a href="#" class="madrinacelebrante btn btn-sm btn-dashed rounded mt-0" data-registrar-persona><i class="bi bi-plus-circle-dotted me-1"></i>registrar nuevo</a>
+                      <div class="small text-muted" data-nombre-persona aria-live="polite"></div>
                     </div>
 
                     <div class="col-sm-6 col-lg-3">
-                      <label class="form-label">Testigo de la Novia</label>
-                      <input type="text" class="form-control" name="CiTestigoNovia" placeholder="CI Testigo" required minlength="4" maxlength="12">
-                      <a class="testigonovia btn btn-sm btn-dashed rounded mt-0"><i class="bi bi-plus-circle-dotted me-1" data-bs-toggle="modal" data-bs-target="#MostrarModalDemas"></i>registrar nuevo</a>
+                      <label class="form-label" for="matCiTestigoNovio">CI del Testigo de información 1 *</label>
+                      <input type="text" class="form-control" id="matCiTestigoNovio" name="CiTestigoNovio" value="<?php echo $valorMatrimonio('CiTestigoNovio'); ?>" placeholder="CI Testigo" required minlength="4" maxlength="15" autocomplete="off" data-persona data-modal-persona="MostrarModalDemas">
+                      <a href="#" class="testigonovio btn btn-sm btn-dashed rounded mt-0" data-registrar-persona><i class="bi bi-plus-circle-dotted me-1"></i>registrar nuevo</a>
+                      <div class="small text-muted" data-nombre-persona aria-live="polite"></div>
                     </div>
 
-                    <button type="submit" class="btn btn-success-soft me-2" name="registrar_matrimonio">Registrar Matrimonio</button>
+                    <div class="col-sm-6 col-lg-3">
+                      <label class="form-label" for="matCiTestigoNovia">CI del Testigo de información 2 *</label>
+                      <input type="text" class="form-control" id="matCiTestigoNovia" name="CiTestigoNovia" value="<?php echo $valorMatrimonio('CiTestigoNovia'); ?>" placeholder="CI Testigo" required minlength="4" maxlength="15" autocomplete="off" data-persona data-modal-persona="MostrarModalDemas">
+                      <a href="#" class="testigonovia btn btn-sm btn-dashed rounded mt-0" data-registrar-persona><i class="bi bi-plus-circle-dotted me-1"></i>registrar nuevo</a>
+                      <div class="small text-muted" data-nombre-persona aria-live="polite"></div>
+                    </div>
+
+                    <div class="col-12 mt-4">
+                      <h5>Partida de matrimonio</h5>
+                      <p class="text-muted small mb-0">Para emitir el PDF deberá registrar además los documentos de bautizo del novio y de la novia (botón «Doc» de la lista) con su parroquia y fecha de bautizo.</p>
+                    </div>
+
+                    <div class="col-sm-6 col-lg-4">
+                      <label class="form-label" for="matNroLibro">Libro de matrimonios *</label>
+                      <input type="text" class="form-control" id="matNroLibro" name="NroLibro" value="<?php echo $valorMatrimonio('NroLibro'); ?>" placeholder="Libro" required maxlength="5">
+                    </div>
+                    <div class="col-sm-6 col-lg-4">
+                      <label class="form-label" for="matNroPag">Folio *</label>
+                      <input type="text" class="form-control" id="matNroPag" name="NroPag" value="<?php echo $valorMatrimonio('NroPag'); ?>" placeholder="Folio" required maxlength="5">
+                    </div>
+                    <div class="col-sm-6 col-lg-4">
+                      <label class="form-label" for="matNroPart">Número de partida *</label>
+                      <input type="text" class="form-control" id="matNroPart" name="NroPart" value="<?php echo $valorMatrimonio('NroPart'); ?>" placeholder="Partida" required maxlength="5">
+                    </div>
+                    <div class="col-sm-6 col-lg-6">
+                      <label class="form-label" for="matFechaReal">Fecha del matrimonio *</label>
+                      <input type="date" class="form-control" id="matFechaReal" name="FechaReal" max="<?php echo date('Y-m-d'); ?>" value="<?php echo $valorMatrimonio('FechaReal'); ?>" required>
+                    </div>
+                    <div class="col-sm-6 col-lg-6">
+                      <label class="form-label" for="matCelebrantePres">Sacerdote que celebra *</label>
+                      <input type="text" class="form-control" id="matCelebrantePres" name="CelebrantePres" value="<?php echo $valorMatrimonio('CelebrantePres'); ?>" placeholder="Sacerdote que celebra" required maxlength="50">
+                    </div>
+
+                    <div class="col-12">
+                      <label class="form-label" for="matImpedimento">Impedimento o dispensa</label>
+                      <input type="text" class="form-control" id="matImpedimento" name="ImpedimentoMat" value="<?php echo $valorMatrimonio('ImpedimentoMat'); ?>" maxlength="80">
+                      <small class="text-muted">Transcriba lo que dice la partida; escriba «Ninguno» solo si corresponde.</small>
+                    </div>
+                    <div class="col-sm-6">
+                      <label class="form-label" for="matFiliacionNovio">Filiación del novio (Hijo…)</label>
+                      <input type="text" class="form-control" id="matFiliacionNovio" name="FiliacionNovio" value="<?php echo $valorMatrimonio('FiliacionNovio'); ?>" maxlength="30">
+                    </div>
+                    <div class="col-sm-6">
+                      <label class="form-label" for="matFiliacionNovia">Filiación de la novia (Hija…)</label>
+                      <input type="text" class="form-control" id="matFiliacionNovia" name="FiliacionNovia" value="<?php echo $valorMatrimonio('FiliacionNovia'); ?>" maxlength="30">
+                    </div>
+                    <div class="col-sm-6">
+                      <label class="form-label" for="matEstadoCivilNovio">Estado civil del novio antes del matrimonio *</label>
+                      <select class="form-select" id="matEstadoCivilNovio" name="EstadoCivilNovio" required>
+                        <option value="">Seleccione según la partida</option>
+                        <option value="Soltero" <?php echo $valorMatrimonio('EstadoCivilNovio') === 'Soltero' ? 'selected' : ''; ?>>Soltero</option>
+                        <option value="Viudo" <?php echo $valorMatrimonio('EstadoCivilNovio') === 'Viudo' ? 'selected' : ''; ?>>Viudo</option>
+                      </select>
+                    </div>
+                    <div class="col-sm-6">
+                      <label class="form-label" for="matEstadoCivilNovia">Estado civil de la novia antes del matrimonio *</label>
+                      <select class="form-select" id="matEstadoCivilNovia" name="EstadoCivilNovia" required>
+                        <option value="">Seleccione según la partida</option>
+                        <option value="Soltera" <?php echo $valorMatrimonio('EstadoCivilNovia') === 'Soltera' ? 'selected' : ''; ?>>Soltera</option>
+                        <option value="Viuda" <?php echo $valorMatrimonio('EstadoCivilNovia') === 'Viuda' ? 'selected' : ''; ?>>Viuda</option>
+                      </select>
+                    </div>
+                    <div class="col-12"><small class="text-muted">El PDF tachará la opción que no corresponda. Indique el estado que tenía cada cónyuge al casarse.</small></div>
+                    <div class="col-12"><small class="text-muted">Copie la filiación de la partida. Los padres y demás datos opcionales no consignados se marcarán con una línea, conservando los puntos de la plantilla. Las edades se calculan con el nacimiento guardado en Persona y la fecha del matrimonio.</small></div>
+
+                    <div class="col-12 mt-4"><h5>Emisión y firma del certificado</h5></div>
+                    <div class="col-sm-6">
+                      <label class="form-label" for="matFechaEmision">Fecha de emisión *</label>
+                      <input type="date" class="form-control" id="matFechaEmision" name="FechaEmision" max="<?php echo date('Y-m-d'); ?>" value="<?php echo $valorMatrimonio('FechaEmision', date('Y-m-d')); ?>" required>
+                    </div>
+                    <div class="col-sm-6">
+                      <label class="form-label" for="matPresbiteroEm">Presbítero que certifica y firma *</label>
+                      <input type="text" class="form-control" id="matPresbiteroEm" name="PresbiteroEm" value="<?php echo $valorMatrimonio('PresbiteroEm', $presbiteroActual); ?>" required maxlength="50">
+                    </div>
+                    <div class="col-12">
+                      <label class="form-label" for="matCertFirmado">Párroco que firma la partida (Fdo)</label>
+                      <input type="text" class="form-control" id="matCertFirmado" name="CertFirmado" value="<?php echo $valorMatrimonio('CertFirmado'); ?>" maxlength="60" placeholder="Párroco que figura en la partida original">
+                      <small class="text-muted">Se imprime en la línea «De que doy de yo el Párroco (Fdo)». Puede ser otro presbítero; si lo deja vacío se usa el que certifica.</small>
+                    </div>
+                    <div class="col-12">
+                      <label class="form-label" for="matObservacion">Observaciones (opcional)</label>
+                      <textarea class="form-control" id="matObservacion" name="Observacion" maxlength="80" rows="2"><?php echo $valorMatrimonio('Observacion'); ?></textarea>
+                      <small class="text-muted">Transcriba las observaciones de la partida. Si no se consigna ese dato, se marcará con una línea.</small>
+                    </div>
+
+                    <button type="submit" class="btn btn-success-soft me-2" name="registrar_matrimonio" value="1">Registrar Certificado de Matrimonio</button>
                   </form>
 
                 </div>
@@ -551,11 +879,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrar_matrimonio']
             </div>
             <div class="form-group col-lg-4">
               <label for="Direccion">Dirección:</label>
-              <input type="text" class="form-control" name="Direccion" placeholder="Dirección">
+              <input type="text" class="form-control" name="Direccion" placeholder="Dirección" autocomplete="new-password">
             </div>
             <div class="form-group col-lg-3">
               <label for="Contacto">Contacto:</label>
-              <input type="text" class="form-control" name="Contacto" placeholder="Número de contacto">
+              <input type="text" class="form-control" name="Contacto" placeholder="Número de contacto" autocomplete="new-password">
+            </div>
+            <div class="form-group col-lg-4">
+              <label for="Correo">Correo electrónico:</label>
+              <input type="email" class="form-control" name="Correo" placeholder="Correo electrónico (opcional)" autocomplete="new-password">
             </div>
             <div class="form-group col-lg-3">
               <label for="Estado_per">Estado Civil:</label>
@@ -638,11 +970,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrar_matrimonio']
             </div>
             <div class="form-group col-lg-4">
               <label for="Direccion">Dirección:</label>
-              <input type="text" class="form-control" name="Direccion" placeholder="Dirección">
+              <input type="text" class="form-control" name="Direccion" placeholder="Dirección" autocomplete="new-password">
             </div>
             <div class="form-group col-lg-3">
               <label for="Contacto">Contacto:</label>
-              <input type="text" class="form-control" name="Contacto" placeholder="Número de contacto">
+              <input type="text" class="form-control" name="Contacto" placeholder="Número de contacto" autocomplete="new-password">
+            </div>
+            <div class="form-group col-lg-4">
+              <label for="Correo">Correo electrónico:</label>
+              <input type="email" class="form-control" name="Correo" placeholder="Correo electrónico (opcional)" autocomplete="new-password">
             </div><br>
             <button type="submit" name="crear" class="btn btn-success-soft">Registrar</button>
           </form>
@@ -694,11 +1030,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrar_matrimonio']
             </div>
             <div class="form-group col-lg-4">
               <label for="Direccion">Dirección:</label>
-              <input type="text" class="form-control" name="Direccion" placeholder="Dirección">
+              <input type="text" class="form-control" name="Direccion" placeholder="Dirección" autocomplete="new-password">
             </div>
             <div class="form-group col-lg-3">
               <label for="Contacto">Contacto:</label>
-              <input type="text" class="form-control" name="Contacto" placeholder="Número de contacto">
+              <input type="text" class="form-control" name="Contacto" placeholder="Número de contacto" autocomplete="new-password">
+            </div>
+            <div class="form-group col-lg-4">
+              <label for="Correo">Correo electrónico:</label>
+              <input type="email" class="form-control" name="Correo" placeholder="Correo electrónico (opcional)" autocomplete="new-password">
             </div><br>
             <button type="submit" name="crear" class="btn btn-success-soft">Registrar</button>
           </form>
@@ -707,388 +1047,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrar_matrimonio']
     </div>
   </div>
   <script>
-    $(document).ready(function() {
-      $('input[name="CiPersonaCelebranteB"]').on('input', function() {
-        var ciPersona = $(this).val();
-        if (ciPersona.length >= 3 || ciPersona.length <= 0) {
-          $.ajax({
-            url: '',
-            type: 'GET',
-            data: {
-              ciPersona: ciPersona
-            },
-            success: function(response) {
-              var persona = JSON.parse(response);
-              if (persona.error) {
-                $('.celebranteB').html(
-                  `<i class="bi bi-plus-circle-dotted me-1" data-bs-toggle="modal" data-bs-target="#MostrarModalBautizo"></i>registrar nuevo`
-                );
-              } else {
-                var EstadoP = `${persona.Estado_per}`;
-                var formP = `${persona.Nombre} ${persona.ApPaterno} ${persona.ApMaterno || ''}`;
 
-                if (EstadoP === "Soltero" || EstadoP === "Soltera") {
-                  $('.celebranteB').html(formP);
-                } else if (EstadoP === "Casado") {
-                  $('.celebranteB').html('La persona no se registrará.');
-                } else if (EstadoP === "Casada") {
-                  $('.celebranteB').html('La persona no se registrará.');
-                } else {
-                  $('.celebranteB').html(
-                    `<i class="bi bi-plus-circle-dotted me-1" data-bs-toggle="modal" data-bs-target="#MostrarModalBautizo"></i>verificar o registrar`
-                  );
-                }
-              }
-            }
-          });
-
-        }
-      });
-
-      $('input[name="CiPersonaCelebranteC"]').on('input', function() {
-        var ciPersona = $(this).val();
-        if (ciPersona.length >= 6 || ciPersona.length <= 0) {
-          $.ajax({
-            url: '',
-            type: 'GET',
-            data: {
-              ciPersona: ciPersona
-            },
-            success: function(response) {
-              var persona = JSON.parse(response);
-              if (persona.error) {
-                $('.celebranteC').html(
-                  `<i class="bi bi-plus-circle-dotted me-1" data-bs-toggle="modal" data-bs-target="#MostrarModalConfirmante"></i>registrar nuevo`
-                );
-              } else {
-                var EstadoPC = `${persona.Estado_per}`;
-                var formPC = `${persona.Nombre} ${persona.ApPaterno} ${persona.ApMaterno || ''}`;
-
-                if (EstadoPC === "Soltero" || EstadoPC === "Soltera") {
-                  $('.celebranteC').html(formPC);
-                } else if (EstadoPC === "Casado") {
-                  $('.celebranteC').html('La persona no se registrará.');
-                } else if (EstadoPC === "Casada") {
-                  $('.celebranteC').html('La persona no se registrará.');
-                } else {
-                  $('.celebranteC').html(
-                    `<i class="bi bi-plus-circle-dotted me-1" data-bs-toggle="modal" data-bs-target="#MostrarModalConfirmante"></i>verificar o registrar`
-                  );
-                }
-              }
-            }
-          });
-
-        }
-      });
-      $('input[name="CiPapa"]').on('input', function() {
-        var ciPersona = $(this).val();
-        if (ciPersona.length >= 6 || ciPersona.length <= 0) {
-          $.ajax({
-            url: '',
-            type: 'GET',
-            data: {
-              ciPersona: ciPersona
-            },
-            success: function(response) {
-              var persona = JSON.parse(response);
-              if (persona.error) {
-                $('.papacelebrante').html(
-                  `<i class="bi bi-plus-circle-dotted me-1" data-bs-toggle="modal" data-bs-target="#MostrarModalDemas"></i>registrar nuevo`
-                );
-              } else {
-                var form = `${persona.Nombre} ${persona.ApPaterno} ${persona.ApMaterno || ''}`;
-                $('.papacelebrante').html(form);
-              }
-            }
-          });
-        }
-      });
-      $('input[name="CiMama"]').on('input', function() {
-        var ciPersona = $(this).val();
-        if (ciPersona.length >= 6 || ciPersona.length <= 0) {
-          $.ajax({
-            url: '',
-            type: 'GET',
-            data: {
-              ciPersona: ciPersona
-            },
-            success: function(response) {
-              var persona = JSON.parse(response);
-              if (persona.error) {
-                $('.mamacelebrante').html(
-                  `<i class="bi bi-plus-circle-dotted me-1" data-bs-toggle="modal" data-bs-target="#MostrarModalDemas"></i>registrar nuevo`
-                );
-              } else {
-                var form = `${persona.Nombre} ${persona.ApPaterno} ${persona.ApMaterno || ''}`;
-                $('.mamacelebrante').html(form);
-              }
-            }
-          });
-        }
-      });
-      $('input[name="CiPadrino"]').on('input', function() {
-        var ciPersona = $(this).val();
-        if (ciPersona.length >= 6 || ciPersona.length <= 0) {
-          $.ajax({
-            url: '',
-            type: 'GET',
-            data: {
-              ciPersona: ciPersona
-            },
-            success: function(response) {
-              var persona = JSON.parse(response);
-              if (persona.error) {
-                $('.padrinocelebrante').html(
-                  `<i class="bi bi-plus-circle-dotted me-1" data-bs-toggle="modal" data-bs-target="#MostrarModalDemas"></i>registrar nuevo`
-                );
-              } else {
-                var form = `${persona.Nombre} ${persona.ApPaterno} ${persona.ApMaterno || ''}`;
-                $('.padrinocelebrante').html(form);
-              }
-            }
-          });
-        }
-      });
-      $('input[name="CiMadrina"]').on('input', function() {
-        var ciPersona = $(this).val();
-        if (ciPersona.length >= 6 || ciPersona.length <= 0) {
-          $.ajax({
-            url: '',
-            type: 'GET',
-            data: {
-              ciPersona: ciPersona
-            },
-            success: function(response) {
-              var persona = JSON.parse(response);
-              if (persona.error) {
-                $('.madrinacelebrante').html(
-                  `<i class="bi bi-plus-circle-dotted me-1" data-bs-toggle="modal" data-bs-target="#MostrarModalDemas"></i>registrar nuevo`
-                );
-              } else {
-                var form = `${persona.Nombre} ${persona.ApPaterno} ${persona.ApMaterno || ''}`;
-                $('.madrinacelebrante').html(form);
-              }
-            }
-          });
-        }
-      });
-      $('input[name="CiPaNovio"]').on('input', function() {
-        var ciPersona = $(this).val();
-        if (ciPersona.length >= 6 || ciPersona.length <= 0) {
-          $.ajax({
-            url: '',
-            type: 'GET',
-            data: {
-              ciPersona: ciPersona
-            },
-            success: function(response) {
-              var persona = JSON.parse(response);
-              if (persona.error) {
-                $('.papanovio').html(
-                  `<i class="bi bi-plus-circle-dotted me-1" data-bs-toggle="modal" data-bs-target="#MostrarModalDemas"></i>registrar nuevo`
-                );
-              } else {
-                var form = `${persona.Nombre} ${persona.ApPaterno} ${persona.ApMaterno || ''}`;
-                $('.papanovio').html(form);
-              }
-            }
-          });
-        }
-      });
-      $('input[name="CiMaNovio"]').on('input', function() {
-        var ciPersona = $(this).val();
-        if (ciPersona.length >= 6 || ciPersona.length <= 0) {
-          $.ajax({
-            url: '',
-            type: 'GET',
-            data: {
-              ciPersona: ciPersona
-            },
-            success: function(response) {
-              var persona = JSON.parse(response);
-              if (persona.error) {
-                $('.mamanovio').html(
-                  `<i class="bi bi-plus-circle-dotted me-1" data-bs-toggle="modal" data-bs-target="#MostrarModalDemas"></i>registrar nuevo`
-                );
-              } else {
-                var form = `${persona.Nombre} ${persona.ApPaterno} ${persona.ApMaterno || ''}`;
-                $('.mamanovio').html(form);
-              }
-            }
-          });
-        }
-      });
-      $('input[name="CiPaNovia"]').on('input', function() {
-        var ciPersona = $(this).val();
-        if (ciPersona.length >= 6 || ciPersona.length <= 0) {
-          $.ajax({
-            url: '',
-            type: 'GET',
-            data: {
-              ciPersona: ciPersona
-            },
-            success: function(response) {
-              var persona = JSON.parse(response);
-              if (persona.error) {
-                $('.papanovia').html(
-                  `<i class="bi bi-plus-circle-dotted me-1" data-bs-toggle="modal" data-bs-target="#MostrarModalDemas"></i>registrar nuevo`
-                );
-              } else {
-                var form = `${persona.Nombre} ${persona.ApPaterno} ${persona.ApMaterno || ''}`;
-                $('.papanovia').html(form);
-              }
-            }
-          });
-        }
-      });
-      $('input[name="CiMaNovia"]').on('input', function() {
-        var ciPersona = $(this).val();
-        if (ciPersona.length >= 6 || ciPersona.length <= 0) {
-          $.ajax({
-            url: '',
-            type: 'GET',
-            data: {
-              ciPersona: ciPersona
-            },
-            success: function(response) {
-              var persona = JSON.parse(response);
-              if (persona.error) {
-                $('.mamanovia').html(
-                  `<i class="bi bi-plus-circle-dotted me-1" data-bs-toggle="modal" data-bs-target="#MostrarModalDemas"></i>registrar nuevo`
-                );
-              } else {
-                var form = `${persona.Nombre} ${persona.ApPaterno} ${persona.ApMaterno || ''}`;
-                $('.mamanovia').html(form);
-              }
-            }
-          });
-        }
-      });
-      $('input[name="CiTestigoNovio"]').on('input', function() {
-        var ciPersona = $(this).val();
-        if (ciPersona.length >= 6 || ciPersona.length <= 0) {
-          $.ajax({
-            url: '',
-            type: 'GET',
-            data: {
-              ciPersona: ciPersona
-            },
-            success: function(response) {
-              var persona = JSON.parse(response);
-              if (persona.error) {
-                $('.testigonovio').html(
-                  `<i class="bi bi-plus-circle-dotted me-1" data-bs-toggle="modal" data-bs-target="#MostrarModalDemas"></i>registrar nuevo`
-                );
-              } else {
-                var form = `${persona.Nombre} ${persona.ApPaterno} ${persona.ApMaterno || ''}`;
-                $('.testigonovio').html(form);
-              }
-            }
-          });
-        }
-      });
-      $('input[name="CiTestigoNovia"]').on('input', function() {
-        var ciPersona = $(this).val();
-        if (ciPersona.length >= 6 || ciPersona.length <= 0) {
-          $.ajax({
-            url: '',
-            type: 'GET',
-            data: {
-              ciPersona: ciPersona
-            },
-            success: function(response) {
-              var persona = JSON.parse(response);
-              if (persona.error) {
-                $('.testigonovia').html(
-                  `<i class="bi bi-plus-circle-dotted me-1" data-bs-toggle="modal" data-bs-target="#MostrarModalDemas"></i>registrar nuevo`
-                );
-              } else {
-                var form = `${persona.Nombre} ${persona.ApPaterno} ${persona.ApMaterno || ''}`;
-                $('.testigonovia').html(form);
-              }
-            }
-          });
-        }
-      });
-
-
-
-      $('input[name="CiPersonaNovio"]').on('input', function() {
-        var ciPersona = $(this).val();
-        if (ciPersona.length >= 6 || ciPersona.length <= 0) {
-          $.ajax({
-            url: '',
-            type: 'GET',
-            data: {
-              ciPersona: ciPersona
-            },
-            success: function(response) {
-              var persona = JSON.parse(response);
-              if (persona.error) {
-                $('.novio').html(
-                  `<i class="bi bi-plus-circle-dotted me-1" data-bs-toggle="modal" data-bs-target="#MostrarModalDemas"></i>registrar nuevo`
-                );
-              } else {
-                var GeneroNovio = `${persona.Sexo}`;
-                var EstadoPNovio = `${persona.Estado_per}`;
-                var formNovio = `${persona.Nombre} ${persona.ApPaterno} ${persona.ApMaterno || ''}`;
-
-                if (GeneroNovio === "Varon" && EstadoPNovio === "Soltero") {
-                  $('.novio').html(formNovio);
-                } else if (GeneroNovio === "Mujer") {
-                  $('.novio').html('La persona es mujer.');
-                } else if (EstadoPNovio === "Casado") {
-                  $('.novio').html('La persona ya está casado.');
-                } else {
-                  $('.novio').html(
-                    `<i class="bi bi-plus-circle-dotted me-1" data-bs-toggle="modal" data-bs-target="#MostrarModalDemas"></i>verificar o registrar`
-                  );
-                }
-              }
-            }
-          });
-        }
-      });
-      $('input[name="CiPersonaNovia"]').on('input', function() {
-        var ciPersona = $(this).val();
-        if (ciPersona.length >= 6 || ciPersona.length <= 0) {
-          $.ajax({
-            url: '',
-            type: 'GET',
-            data: {
-              ciPersona: ciPersona
-            },
-            success: function(response) {
-              var persona = JSON.parse(response);
-              if (persona.error) {
-                $('.novia').html(
-                  `<i class="bi bi-plus-circle-dotted me-1" data-bs-toggle="modal" data-bs-target="#MostrarModalDemas"></i>registrar nuevo`
-                );
-              } else {
-                var GeneroNovia = `${persona.Sexo}`;
-                var EstadoPNovia = `${persona.Estado_per}`;
-                var formNovia = `${persona.Nombre} ${persona.ApPaterno} ${persona.ApMaterno || ''}`;
-
-                if (GeneroNovia === "Mujer" && EstadoPNovia === "Soltera") {
-                  $('.novia').html(formNovia);
-                } else if (GeneroNovia === "Varon") {
-                  $('.novia').html('La persona es varon.');
-                } else if (EstadoPNovia === "Casada") {
-                  $('.novia').html('La persona ya está casada.');
-                } else {
-                  $('.novia').html(
-                    `<i class="bi bi-plus-circle-dotted me-1" data-bs-toggle="modal" data-bs-target="#MostrarModalDemas"></i>verificar o registrar`
-                  );
-                }
-              }
-            }
-          });
-        }
-      });
-    });
-
-    document.getElementById('toggleFormBtn').addEventListener('click', function() {
+    document.getElementById('toggleFormBtn')?.addEventListener('click', function() {
       const formReserva = document.getElementById('formReservaBautizo');
 
       if (formReserva.style.display === 'none' || formReserva.style.display === '') {
@@ -1098,7 +1058,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrar_matrimonio']
       }
     });
 
-    document.getElementById('toggleFormBtn2').addEventListener('click', function() {
+    document.getElementById('toggleFormBtn2')?.addEventListener('click', function() {
       const formReserva = document.getElementById('formReservaMatrimonio');
 
       if (formReserva.style.display === 'none' || formReserva.style.display === '') {
@@ -1107,7 +1067,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrar_matrimonio']
         formReserva.style.display = 'none';
       }
     });
-    document.getElementById('toggleFormBtn3').addEventListener('click', function() {
+    document.getElementById('toggleFormBtn3')?.addEventListener('click', function() {
       const formReserva = document.getElementById('formReservaMisa');
 
       if (formReserva.style.display === 'none' || formReserva.style.display === '') {
@@ -1115,22 +1075,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrar_matrimonio']
       } else {
         formReserva.style.display = 'none';
       }
-    });
-
-    const inputTime = document.getElementById('HoraReal');
-
-    inputTime.addEventListener('input', function() {
-      const timeValue = inputTime.value;
-      let [hours, minutes] = timeValue.split(':').map(Number);
-
-      if (minutes >= 0 && minutes < 30) {
-        minutes = 0;
-      } else {
-        minutes = 30;
-      }
-
-      const formattedTime = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
-      inputTime.value = formattedTime;
     });
   </script>
 
@@ -1193,6 +1137,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrar_matrimonio']
         .then(function(response) { return response.json(); })
         .then(function(data) {
           if (data.success) {
+            document.dispatchEvent(new CustomEvent('persona-certificado-registrada', { detail: { ciPersona: data.ciPersona, modalId: modalId } }));
             alert(data.message);
             form.reset();
             var modal = bootstrap.Modal.getInstance(document.getElementById(modalId));
@@ -1236,6 +1181,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrar_matrimonio']
     document.getElementById('FechaNacC').setAttribute('max', `${yearC}-${monthC}-${dayC}`);
   </script>
   <script src="../assets/vendor/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="../assets/js/certificado-persona.js?v=<?php echo filemtime(__DIR__ . '/../assets/js/certificado-persona.js'); ?>"></script>
   <script src="../assets/js/functions.js"></script>
   <script src="../assets/js/tema.js"></script>
 </body>

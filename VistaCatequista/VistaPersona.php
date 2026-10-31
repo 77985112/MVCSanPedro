@@ -10,14 +10,19 @@ $Catequista = $_SESSION['CiPersona'];
 
 
 $controller = new ControladorPersona();
+$mensajePersona = '';
+$errorPersona = '';
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['crear'])) {
-	$controller->crearPersona($_POST);
+	if ($controller->crearPersona($_POST)) {
+		$mensajePersona = '<strong>Persona registrada correctamente.</strong> CI: ' . htmlspecialchars($controller->obtenerCiPersonaRegistrada() ?? ($_POST['CiPersona'] ?? ''));
+	} else {
+		$errorPersona = $controller->obtenerError() ?: 'No se pudo registrar la persona. Verifique los datos e intente nuevamente.';
+	}
 }
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['actualizar'])) {
 	$controller->actualizarPersona($_POST);
-	echo "Persona actualizada con éxito.";
 	header("Location: VistaPersona.php");
 	exit;
 }
@@ -39,7 +44,7 @@ function getActiveNotifications($conn)
     $sql = "SELECT n.idNotificacion, n.TituloNot, n.DetalleNot, n.FechaNotFin, CONCAT(p.Nombre, ' ', p.ApPaterno) AS datoscat 
             FROM notificaciones n 
             INNER JOIN catequista c ON n.CiNotificador = c.CiCat 
-            INNER JOIN persona p ON c.CiCat = p.CiPersona 
+            INNER JOIN `persona` p ON c.CiCat = p.CiPersona 
             WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ?
             ORDER BY n.FechaNotFin ASC";
 
@@ -72,6 +77,7 @@ $activeNotifications = getActiveNotifications($conn);
 	<link rel="stylesheet" type="text/css" href="../assets/vendor/font-awesome/css/all.min.css">
 	<link rel="stylesheet" type="text/css" href="../assets/vendor/bootstrap-icons/bootstrap-icons.css">
 	<link rel="stylesheet" type="text/css" href="../assets/css/style.css">
+	<link rel="stylesheet" type="text/css" href="../assets/css/logo-cabecera.css?v=<?= filemtime(__DIR__ . '/../assets/css/logo-cabecera.css') ?>">
 	<script src="../assets/js/jquery-3.6.4.min.js"></script>
 </head>
 
@@ -80,8 +86,8 @@ $activeNotifications = getActiveNotifications($conn);
 		<nav class="navbar navbar-expand-lg">
 			<div class="container">
 				<a class="navbar-brand" href="VistaCatequista.php">
-					<img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png" alt="logo">
-					<img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png" alt="logo">
+					<img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo.png') ?>" alt="logo">
+					<img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo-light.png') ?>" alt="logo">
 				</a>
 
 				<ul class="nav flex-nowrap align-items-center ms-sm-3 list-unstyled">
@@ -126,13 +132,13 @@ $activeNotifications = getActiveNotifications($conn);
 
 					<li class="nav-item ms-2 dropdown">
 						<a class="nav-link btn icon-md p-0" href="#" id="profileDropdown" role="button" data-bs-auto-close="outside" data-bs-display="static" data-bs-toggle="dropdown" aria-expanded="false">
-							<img class="avatar-img rounded border border-white border-3" src="<?php echo ($Catequista['ImagenCat'] == 'Ninguno' || empty($Catequista['ImagenCat'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$Catequista['ImagenCat']}"; ?>" alt="">
+							<img class="avatar-img rounded border border-white border-3" src="<?php echo ($Catequista['ImagenCat'] == 'Ninguno' || empty($Catequista['ImagenCat'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$Catequista['ImagenCat']}?v=" . time(); ?>" alt="">
 						</a>
 						<ul class="dropdown-menu dropdown-animation dropdown-menu-end pt-3 small me-md-n3" aria-labelledby="profileDropdown">
 							<li class="px-3">
 								<div class="d-flex align-items-center position-relative">
 									<div class="avatar me-3">
-										<img class="avatar-img rounded-circle" src="<?php echo ($Catequista['ImagenCat'] == 'Ninguno' || empty($Catequista['ImagenCat'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$Catequista['ImagenCat']}"; ?>" alt="avatar">
+										<img class="avatar-img rounded-circle" src="<?php echo ($Catequista['ImagenCat'] == 'Ninguno' || empty($Catequista['ImagenCat'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$Catequista['ImagenCat']}?v=" . time(); ?>" alt="avatar">
 									</div>
 									<div>
 										<a class="h6 stretched-link" href="#"><?php echo $Catequista['Nombre'] . " " . $Catequista['ApPaterno'] . " " . $Catequista['ApMaterno']; ?></a>
@@ -204,20 +210,20 @@ $activeNotifications = getActiveNotifications($conn);
 						<div class="offcanvas offcanvas-start" tabindex="-1" id="offcanvasSideNavbar">
 							<div class="offcanvas-header">
 								<a class="navbar-brand" href="#">
-									<img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png" alt="logo">
-									<img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png" alt="logo">
+									<img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo.png') ?>" alt="logo">
+									<img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo-light.png') ?>" alt="logo">
 								</a>
 								<button type="button" class="btn-close text-reset ms-auto" data-bs-dismiss="offcanvas" aria-label="Close"></button>
 							</div>
 
 							<div class="offcanvas-body d-block px-2 px-lg-0">
 								<div class="card overflow-hidden">
-									<div class="h-50px" style="background-image:url(<?php echo ($Catequista['FondoCat'] == 'Ninguno' || empty($Catequista['FondoCat'])) ? '../assets/images/fondo/Ninguno.jpg' : "../assets/images/fondo/{$Catequista['FondoCat']}"; ?>); background-position: center; background-size: cover; background-repeat: no-repeat;">
+									<div class="h-50px" style="background-image:url(<?php echo ($Catequista['FondoCat'] == 'Ninguno' || empty($Catequista['FondoCat'])) ? '../assets/images/fondo/Ninguno.jpg' : "../assets/images/fondo/{$Catequista['FondoCat']}?v=" . time(); ?>); background-position: center; background-size: cover; background-repeat: no-repeat;">
 									</div>
 									<div class="card-body pt-0">
 										<div class="text-center">
 											<div class="avatar avatar-lg mt-n5 mb-3">
-												<img class="avatar-img rounded border border-white border-3" src="<?php echo ($Catequista['ImagenCat'] == 'Ninguno' || empty($Catequista['ImagenCat'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$Catequista['ImagenCat']}"; ?>" alt="">
+												<img class="avatar-img rounded border border-white border-3" src="<?php echo ($Catequista['ImagenCat'] == 'Ninguno' || empty($Catequista['ImagenCat'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$Catequista['ImagenCat']}?v=" . time(); ?>" alt="">
 											</div>
 											<h5 class="mb-0"> <a href="PerfilCatequista.php"><?php echo $Catequista['Nombre'] . " " . $Catequista['ApPaterno'] . " " . $Catequista['ApMaterno']; ?></a> </h5>
 
@@ -298,6 +304,19 @@ $activeNotifications = getActiveNotifications($conn);
 
 				<div class="col-md-8 col-lg-6 vstack gap-4">
 
+					<?php if ($mensajePersona): ?>
+						<div class="alert alert-success alert-dismissible fade show" role="alert">
+							<?php echo $mensajePersona; ?>
+							<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+						</div>
+					<?php endif; ?>
+					<?php if ($errorPersona): ?>
+						<div class="alert alert-danger alert-dismissible fade show" role="alert">
+							<strong>Error:</strong> <?php echo htmlspecialchars($errorPersona); ?>
+							<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+						</div>
+					<?php endif; ?>
+
 					<div class="card h-100">
 
 						<div class="card-header d-sm-flex align-items-center text-center justify-content-sm-between border-0 pb-0">
@@ -349,11 +368,11 @@ $activeNotifications = getActiveNotifications($conn);
 									</div>
 									<div class="col-sm-6 col-lg-6 form-group">
 										<label class="form-label">Dirección:</label>
-										<input type="text" class="form-control" id="Direccion" name="Direccion" value="<?php echo $persona['Direccion']; ?>">
+										<input type="text" class="form-control" id="Direccion" name="Direccion" value="<?php echo $persona['Direccion']; ?>" autocomplete="new-password">
 									</div>
 									<div class="col-sm-6 col-lg-4 form-group">
 										<label class="form-label">Contacto:</label>
-										<input type="text" class="form-control" id="Contacto" name="Contacto" value="<?php echo $persona['Contacto']; ?>">
+										<input type="text" class="form-control" id="Contacto" name="Contacto" value="<?php echo $persona['Contacto']; ?>" autocomplete="new-password">
 									</div>
 									<div class="col-sm-6 col-lg-4 form-group">
 										<label class="form-label">Estado Civil:</label>
@@ -370,6 +389,10 @@ $activeNotifications = getActiveNotifications($conn);
 											<option value="Viudo" <?php if ($persona['Estado_per'] == "Viudo") echo 'selected'; ?>>Viudo</option>
 											<option value="Viuda" <?php if ($persona['Estado_per'] == "Viuda") echo 'selected'; ?>>Viuda</option>
 										</select>
+									</div>
+																		<div class="col-sm-6 col-lg-4 form-group">
+									  <label class="form-label">Correo electrónico:</label>
+									  <input type="email" class="form-control" id="Correo" name="Correo" value="<?php echo $persona['Correo'] ?? ''; ?>" placeholder="Correo electrónico (opcional)" autocomplete="new-password">
 									</div>
 
 									<br>
@@ -402,49 +425,39 @@ $activeNotifications = getActiveNotifications($conn);
 					<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
 				</div>
 				<div class="modal-body">
-					<form method="POST" class="row g-3">
-						<div class="form-group col-sm-1 col-lg-2">
-							<label for="CiPersona">CiPersona:</label>
-							<input type="text" class="form-control" name="CiPersona" placeholder="CI Persona" required>
+					<form method="POST" enctype="multipart/form-data" class="row g-3" onsubmit="return validarApellidosPersona(this)">
+						<div class="col-lg-2">
+							<label class="form-label"><span class="text-danger">*</span> CI:</label>
+							<input type="text" class="form-control" name="CiPersona" placeholder="CI Persona" maxlength="15" required>
 						</div>
-						<div class="form-group col-sm-2 col-lg-3">
-							<label for="Nombre">Nombre completo:</label>
-							<input type="text" class="form-control" name="Nombre" placeholder="Nombre Completo" required>
+						<div class="col-lg-4">
+							<label class="form-label"><span class="text-danger">*</span> Nombre:</label>
+							<input type="text" class="form-control" name="Nombre" placeholder="Nombre" maxlength="25" required>
 						</div>
-						<div class="form-group col-sm-2 col-lg-2">
-							<label for="ApPaterno">Apellido Paterno:</label>
-							<input type="text" class="form-control" name="ApPaterno" placeholder="Apellido Paterno" required>
+						<div class="col-lg-3">
+							<label class="form-label">Apellido Paterno:</label>
+							<input type="text" class="form-control" name="ApPaterno" placeholder="Apellido Paterno" maxlength="20">
 						</div>
-						<div class="form-group col-sm-2 col-lg-2">
-							<label for="ApMaterno">Apellido Materno:</label>
-							<input type="text" class="form-control" name="ApMaterno" placeholder="Apellido Materno">
+						<div class="col-lg-3">
+							<label class="form-label">Apellido Materno:</label>
+							<input type="text" class="form-control" name="ApMaterno" placeholder="Apellido Materno" maxlength="20">
 						</div>
-						<div class="form-group col-sm-2 col-lg-2">
-							<label class="form-label">Sexo:</label>
-							<div>
-								<input type="radio" name="Sexo" value="Varon" checked>
-								<label for="varon">Varon</label>
-								&nbsp;&nbsp;&nbsp;
-								<input type="radio" name="Sexo" value="Mujer">
-								<label for="mujer">Mujer</label>
-							</div>
+						<div class="col-lg-3">
+							<label class="form-label"><span class="text-danger">*</span> Sexo:</label>
+							<select class="form-select" name="Sexo" required>
+								<option value="">Seleccionar...</option>
+								<option value="Varon">Varón</option>
+								<option value="Mujer">Mujer</option>
+							</select>
 						</div>
-						<br>
-						<div class="form-group col-lg-2">
-							<label for="FechaNac">Fecha de Nacimiento:</label>
-							<input type="date" class="form-control" name="FechaNac">
+						<div class="col-lg-3">
+							<label class="form-label"><span class="text-danger">*</span> Fecha de Nacimiento:</label>
+							<input type="date" class="form-control" name="FechaNac" required>
 						</div>
-						<div class="form-group col-lg-4">
-							<label for="Direccion">Dirección:</label>
-							<input type="text" class="form-control" name="Direccion" placeholder="Dirección">
-						</div>
-						<div class="form-group col-lg-3">
-							<label for="Contacto">Contacto:</label>
-							<input type="text" class="form-control" name="Contacto" placeholder="Número de contacto">
-						</div>
-						<div class="form-group col-lg-3">
-							<label for="Estado_per">Estado Civil:</label>
-							<select name="Estado_per" class="form-control" required>
+						<div class="col-lg-3">
+							<label class="form-label"><span class="text-danger">*</span> Estado Civil:</label>
+							<select name="Estado_per" class="form-select" required>
+								<option value="">Seleccionar...</option>
 								<option value="Soltero">Soltero</option>
 								<option value="Soltera">Soltera</option>
 								<option value="Casado">Casado</option>
@@ -452,14 +465,63 @@ $activeNotifications = getActiveNotifications($conn);
 								<option value="Viudo">Viudo</option>
 								<option value="Viuda">Viuda</option>
 							</select>
-						</div><br>
-						<button type="submit" name="crear" class="btn btn-success-soft">Registrar</button>
+						</div>
+						<div class="col-lg-3">
+							<label class="form-label"><span class="text-danger">*</span> Sacramento que solicita:</label>
+							<select name="SacramentoSolicita" class="form-select" required>
+								<option value="">Seleccionar...</option>
+								<option value="Bautizo">Bautizo</option>
+								<option value="Primera Comunión">Primera Comunión</option>
+								<option value="Confirmación">Confirmación</option>
+								<option value="Matrimonio">Matrimonio</option>
+								<option value="Reserva de misa">Reserva de misa</option>
+								<option value="Solo registro pastoral">Solo registro pastoral</option>
+							</select>
+						</div>
+						<div class="col-lg-3">
+							<label class="form-label">Zona / Sector:</label>
+							<input type="text" class="form-control" name="ZonaSector" placeholder="Ej: San Pedro Alto" maxlength="80">
+						</div>
+						<div class="col-lg-4">
+							<label class="form-label">Dirección:</label>
+							<input type="text" class="form-control" name="Direccion" placeholder="Ej: a dos cuadras del mercado, casa azul" maxlength="40" autocomplete="new-password">
+						</div>
+						<div class="col-lg-2">
+							<label class="form-label"><span class="text-danger">*</span> Contacto:</label>
+							<input type="text" class="form-control" name="Contacto" placeholder="Número de contacto" maxlength="10" required autocomplete="new-password">
+						</div>
+						<div class="col-lg-3">
+							<label class="form-label">Teléfono alternativo:</label>
+							<input type="text" class="form-control" name="TelefonoAlternativo" placeholder="Familiar o pareja" maxlength="15" autocomplete="new-password">
+						</div>
+						<div class="col-lg-4">
+							<label class="form-label">Correo electrónico:</label>
+							<input type="email" class="form-control" name="Correo" placeholder="Correo electrónico (opcional)" maxlength="50" autocomplete="new-password">
+						</div>
+						<div class="col-12">
+							<label class="form-label">Observaciones pastorales:</label>
+							<textarea class="form-control" name="Observaciones" rows="2" placeholder="Notas internas del párroco o secretaría"></textarea>
+						</div>
+						<div class="col-12 d-flex align-items-center justify-content-between">
+							<small class="text-muted"><span class="text-danger">*</span> Campos obligatorios</small>
+							<button type="submit" name="crear" class="btn btn-success-soft">Registrar</button>
+						</div>
 					</form>
 				</div>
 			</div>
 		</div>
 	</div>
 
+
+	<script>
+		function validarApellidosPersona(form) {
+			if (form.ApPaterno.value.trim() === '' && form.ApMaterno.value.trim() === '') {
+				alert('Ingrese al menos un apellido (paterno o materno).');
+				return false;
+			}
+			return true;
+		}
+	</script>
 
 	<script>
 		$(document).ready(function() {

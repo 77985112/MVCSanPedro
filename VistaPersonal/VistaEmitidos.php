@@ -5,13 +5,100 @@ if (!isset($_SESSION['usuario'])) {
     exit();
 }
 $usuario = $_SESSION['usuario'];
+require_once __DIR__ . '/../Controlador/controladorAcceso.php';
+ControladorAcceso::exigir('emitidos');
 
 require_once '../Controlador/ControladorCertificadoCal.php';
+require_once '../Controlador/controladorGoogleDrive.php';
 
 $controller = new CertificadoController();
 $reservasMatrimonio = [];
 $reservasBautizo = [];
 $reservasMisa = [];
+
+if (empty($_SESSION['csrf_drive'])) {
+    $_SESSION['csrf_drive'] = bin2hex(random_bytes(32));
+}
+
+$drive = new ControladorGoogleDrive();
+$estaConectado = $drive->estaConectado();
+$archivosDrive = [];
+$mensajeDrive = '';
+$tipoMensajeDrive = '';
+
+if (isset($_GET['drive'])) {
+    if ($_GET['drive'] === 'conectado') {
+        $mensajeDrive = 'Google Drive se conectó correctamente.';
+        $tipoMensajeDrive = 'success';
+        $estaConectado = true;
+    } elseif ($_GET['drive'] === 'error') {
+        $mensajeDrive = 'No se pudo conectar Google Drive: ' . ($_GET['msg'] ?? 'error desconocido');
+        $tipoMensajeDrive = 'danger';
+    }
+}
+
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && isset($_POST['accion_drive'])) {
+    $tokenDrive = $_POST['csrf_drive'] ?? '';
+    if (!is_string($tokenDrive) || !hash_equals($_SESSION['csrf_drive'], $tokenDrive)) {
+        $mensajeDrive = 'La sesión del formulario venció. Actualiza la página e inténtalo nuevamente.';
+        $tipoMensajeDrive = 'danger';
+    } elseif ($_POST['accion_drive'] === 'desconectar') {
+        $drive->desconectar();
+        $estaConectado = false;
+        $mensajeDrive = 'El respaldo automático en Google Drive quedó desactivado.';
+        $tipoMensajeDrive = 'warning';
+    } elseif ($_POST['accion_drive'] === 'eliminar' && $estaConectado) {
+        try {
+            $fileId = trim((string) ($_POST['fileId'] ?? ''));
+            if ($fileId === '') {
+                throw new RuntimeException('No se identificó el archivo.');
+            }
+            $drive->eliminarArchivo($fileId);
+            $mensajeDrive = 'El archivo se eliminó de Google Drive.';
+            $tipoMensajeDrive = 'success';
+        } catch (Throwable $e) {
+            $mensajeDrive = 'No se pudo eliminar el archivo de Google Drive.';
+            $tipoMensajeDrive = 'danger';
+        }
+    }
+}
+
+if (!$estaConectado && $mensajeDrive === '') {
+    $errorDrive = $drive->obtenerErrorConexion();
+    if ($errorDrive) {
+        $mensajeDrive = $errorDrive;
+        $tipoMensajeDrive = 'warning';
+    }
+}
+
+if ($estaConectado) {
+    try {
+        // Los certificados se guardan en una carpeta por sacramento. Se listan
+        // solo los PDF para que el botón eliminar actúe sobre un certificado y
+        // no sobre la carpeta que los contiene.
+        $archivosDrive = [];
+        foreach (['Confirmacion', 'Bautizo', 'Matrimonio'] as $carpetaDrive) {
+            foreach ($drive->listarArchivos($carpetaDrive, 20) as $archivoDrive) {
+                if (strtolower((string) $archivoDrive->getMimeType()) !== 'application/pdf') {
+                    continue;
+                }
+                $archivosDrive[] = $archivoDrive;
+            }
+        }
+        usort($archivosDrive, function ($a, $b) {
+            return strcmp((string) $b->getCreatedTime(), (string) $a->getCreatedTime());
+        });
+        $archivosDrive = array_slice($archivosDrive, 0, 20);
+    } catch (Throwable $e) {
+        $estaConectado = false;
+        $mensajeDrive = 'No se pudo consultar Google Drive. Vuelve a conectar la cuenta.';
+        $tipoMensajeDrive = 'danger';
+    }
+}
+
+$ultimoRespaldoDrive = !empty($archivosDrive)
+    ? date('d/m/Y H:i', strtotime($archivosDrive[0]->getCreatedTime()))
+    : '';
 ?>
 
 <!DOCTYPE html>
@@ -25,7 +112,8 @@ $reservasMisa = [];
     <link rel="shortcut icon" href="../assets/images/Icono.png">
     <link rel="stylesheet" type="text/css" href="../assets/vendor/font-awesome/css/all.min.css">
     <link rel="stylesheet" type="text/css" href="../assets/vendor/bootstrap-icons/bootstrap-icons.css">
-    <link rel="stylesheet" type="text/css" href="../assets/css/style.css">
+    <link rel="stylesheet" type="text/css" href="../assets/css/style.css?v=<?php echo filemtime(__DIR__ . '/../assets/css/style.css'); ?>">
+    <link rel="stylesheet" type="text/css" href="../assets/css/logo-cabecera.css?v=<?= filemtime(__DIR__ . '/../assets/css/logo-cabecera.css') ?>">
     <script src="../assets/js/jquery-3.6.4.min.js"></script>
     <style>
         .btn-separado {
@@ -196,16 +284,121 @@ $reservasMisa = [];
         #monthDisplay {
             font-weight: bold;
         }
+
+        .drive-respaldo {
+            border: 1px solid var(--bs-border-color);
+            border-radius: 12px;
+            background: var(--bs-body-bg);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+            margin-top: 1rem;
+            overflow: hidden;
+        }
+
+        .drive-respaldo-principal {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1.25rem;
+        }
+
+        .drive-respaldo-icono {
+            width: 56px;
+            height: 56px;
+            flex: 0 0 56px;
+            display: grid;
+            place-items: center;
+            border-radius: 12px;
+            background: #eef4ff;
+            color: #0d6efd;
+            font-size: 1.7rem;
+        }
+
+        .drive-respaldo-info {
+            min-width: 220px;
+            flex: 1 1 320px;
+        }
+
+        .drive-estado {
+            display: inline-flex;
+            align-items: center;
+            gap: .35rem;
+            border-radius: 999px;
+            padding: .25rem .65rem;
+            font-size: .78rem;
+            font-weight: 700;
+        }
+
+        .drive-estado.conectado {
+            color: #146c43;
+            background: #d1e7dd;
+        }
+
+        .drive-estado.desconectado {
+            color: #6c757d;
+            background: #e9ecef;
+        }
+
+        .drive-estado.local {
+            color: #084298;
+            background: #cfe2ff;
+        }
+
+        .drive-respaldo-acciones {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: .75rem;
+            flex: 1 1 420px;
+        }
+
+        .drive-switch {
+            display: flex;
+            align-items: center;
+            gap: .55rem;
+            margin: 0;
+            white-space: nowrap;
+        }
+
+        .drive-switch .form-check-input {
+            width: 2.7rem;
+            height: 1.35rem;
+            margin: 0;
+            cursor: pointer;
+        }
+
+        .drive-detalles {
+            border-top: 1px solid var(--bs-border-color);
+            padding: 1rem 1.25rem 1.25rem;
+        }
+
+        @media (max-width: 991.98px) {
+            .drive-respaldo-principal,
+            .drive-respaldo-acciones {
+                flex-wrap: wrap;
+            }
+
+            .drive-respaldo-acciones {
+                justify-content: flex-start;
+            }
+        }
     </style>
     <script>
         function generarPDFPorFecha() {
             const fecha = document.getElementById('fecha').value;
+            if (!fecha) {
+                alert('Seleccione una fecha en el calendario.');
+                return;
+            }
             const url = `ReporteSacFec.php?fecha=${fecha}&descripcion=todos`;
             window.open(url, '_blank');
         }
 
         function generarPDFPorFechaMes() {
             const fecha = document.getElementById('fecha').value;
+            if (!fecha) {
+                alert('Seleccione una fecha en el calendario.');
+                return;
+            }
             const url = `ReporteSacFec.php?fecha=${fecha}&descripcion=mes`;
             window.open(url, '_blank');
         }
@@ -217,8 +410,8 @@ $reservasMisa = [];
         <nav class="navbar navbar-expand-lg">
             <div class="container">
                 <a class="navbar-brand" href="VistaPersonal.php">
-                    <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png" alt="logo">
-                    <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png" alt="logo">
+                    <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo.png') ?>" alt="logo">
+                    <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo-light.png') ?>" alt="logo">
                 </a>
 
                 <ul class="nav flex-nowrap align-items-center ms-sm-3 list-unstyled">
@@ -230,13 +423,13 @@ $reservasMisa = [];
 
                     <li class="nav-item ms-2 dropdown">
                         <a class="nav-link btn icon-md p-0" href="#" id="profileDropdown" role="button" data-bs-auto-close="outside" data-bs-display="static" data-bs-toggle="dropdown" aria-expanded="false">
-                            <img class="avatar-img rounded border border-white border-3" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}"; ?>" alt="">
+                            <img class="avatar-img rounded border border-white border-3" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}?v=" . time(); ?>" alt="">
                         </a>
                         <ul class="dropdown-menu dropdown-animation dropdown-menu-end pt-3 small me-md-n3" aria-labelledby="profileDropdown">
                             <li class="px-3">
                                 <div class="d-flex align-items-center position-relative">
                                     <div class="avatar me-3">
-                                        <img class="avatar-img rounded-circle" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}"; ?>" alt="avatar">
+                                        <img class="avatar-img rounded-circle" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}?v=" . time(); ?>" alt="avatar">
                                     </div>
                                     <div>
                                         <a class="h6 stretched-link" href="#"><?php echo $usuario['Nombre'] . " " . $usuario['Paterno'] . " " . $usuario['Materno']; ?></a>
@@ -286,7 +479,7 @@ $reservasMisa = [];
 
 
     <main>
-        <div class="container">
+        <div class="container personal-dashboard-container">
             <div class="row g-4">
                 <div class="col-lg-3">
                     <div class="d-flex align-items-center d-lg-none">
@@ -300,20 +493,20 @@ $reservasMisa = [];
                         <div class="offcanvas offcanvas-start" tabindex="-1" id="offcanvasSideNavbar">
                             <div class="offcanvas-header">
                                 <a class="navbar-brand" href="#">
-                                    <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png" alt="logo">
-                                    <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png" alt="logo">
+                                    <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo.png') ?>" alt="logo">
+                                    <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo-light.png') ?>" alt="logo">
                                 </a>
                                 <button type="button" class="btn-close text-reset ms-auto" data-bs-dismiss="offcanvas" aria-label="Close"></button>
                             </div>
 
                             <div class="offcanvas-body d-block px-2 px-lg-0">
                                 <div class="card overflow-hidden">
-                                    <div class="h-50px" style="background-image:url(<?php echo ($usuario['FondoPer'] == 'Ninguno' || empty($usuario['FondoPer'])) ? '../assets/images/fondo/Ninguno.jpg' : "../assets/images/fondo/{$usuario['FondoPer']}"; ?>); background-position: center; background-size: cover; background-repeat: no-repeat;">
+                                    <div class="h-50px" style="background-image:url(<?php echo ($usuario['FondoPer'] == 'Ninguno' || empty($usuario['FondoPer'])) ? '../assets/images/fondo/Ninguno.jpg' : "../assets/images/fondo/{$usuario['FondoPer']}?v=" . time(); ?>); background-position: center; background-size: cover; background-repeat: no-repeat;">
                                     </div>
                                     <div class="card-body pt-0">
                                         <div class="text-center">
                                             <div class="avatar avatar-lg mt-n5 mb-3">
-                                                <img class="avatar-img rounded border border-white border-3" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}"; ?>" alt="">
+                                                <img class="avatar-img rounded border border-white border-3" src="<?php echo ($usuario['PerfilPer'] == 'Ninguno' || empty($usuario['PerfilPer'])) ? '../assets/images/avatar/Ninguno.png' : "../assets/images/avatar/{$usuario['PerfilPer']}?v=" . time(); ?>" alt="">
                                             </div>
                                             <h5 class="mb-0"> <a href="PerfilAdmin.php"><?php echo $usuario['Nombre'] . " " . $usuario['Paterno'] . " " . $usuario['Materno']; ?></a> </h5>
                                             <small><?php echo $usuario['DescripCar']; ?></small>
@@ -322,33 +515,7 @@ $reservasMisa = [];
 
                                         <hr>
 
-                                        <ul class="nav nav-link-secondary flex-column fw-bold gap-2">
-                                            <li class="nav-item">
-                                                <a class="nav-link" href="VistaPersonal.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/mensaje.png" alt=""><span>Inicio </span></a>
-                                            </li>
-                                            <li class="nav-item">
-                                                <a class="nav-link" href="VistaPersona.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/nuevo.png" alt=""><span>Persona </span></a>
-                                            </li>
-                                            <li class="nav-item">
-                                                <a class="nav-link" href="VistaReservas.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/instrucciones.png" alt=""><span>Celebración </span></a>
-                                            </li>
-                                            <?php if ($usuario['DescripCar'] == 'Párroco') { ?>
-                                                <li class="nav-item">
-                                                    <a class="nav-link" href="VistaGesPersonal.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/seguro.png" alt=""><span>Personal</span></a>
-                                                </li>
-                                                <li class="nav-item">
-                                                    <a class="nav-link" href="VistaCoordinadorAdmin.php"> <span>🔥 ⚪ Coordinador</span></a>
-                                                </li>
-                                            <?php } ?>
-                                            <li class="nav-item">
-                                                <a class="nav-link" href="VistaSolicitante.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/contrato.png" alt=""><span>Certificado </span></a>
-                                            </li>
-                                            <?php if ($usuario['DescripCar'] != "Personal") { ?>
-                                                <li class="nav-item">
-                                                    <a class="nav-link active" href="VistaEmitidos.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/Emitido.png" alt=""><span>Certificado Emitido </span></a>
-                                                </li>
-                                            <?php } ?>
-                                        </ul>
+                                        <?php require_once __DIR__ . '/../Controlador/controladorAcceso.php'; ControladorAcceso::renderMenu(); ?>
                                     </div>
                                     <div class="card-footer text-center py-2">
                                         <a class="btn btn-link btn-sm" href="PerfilAdmin.php">Ver mi Perfil</a>
@@ -396,6 +563,151 @@ $reservasMisa = [];
                                             </div>
                                         </div>
                                     </div>
+
+                                    <section class="drive-respaldo" id="respaldo-drive" aria-labelledby="tituloRespaldoDrive">
+                                        <div class="drive-respaldo-principal">
+                                            <div class="drive-respaldo-icono" aria-hidden="true">
+                                                <i class="bi bi-cloud-arrow-up-fill"></i>
+                                            </div>
+
+                                            <div class="drive-respaldo-info">
+                                                <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                                                    <h5 class="mb-0" id="tituloRespaldoDrive">Respaldo en Google Drive</h5>
+                                                    <?php if ($estaConectado): ?>
+                                                        <span class="drive-estado conectado"><i class="bi bi-check-circle-fill"></i> Conectado</span>
+                                                    <?php else: ?>
+                                                        <span class="drive-estado desconectado"><i class="bi bi-dash-circle-fill"></i> Desconectado</span>
+                                                    <?php endif; ?>
+                                                    <span class="drive-estado local"><i class="bi bi-hdd-fill"></i> Copia local activa</span>
+                                                </div>
+                                                <div class="small text-body-secondary">
+                                                    <?php if ($estaConectado && $ultimoRespaldoDrive): ?>
+                                                        Último respaldo: <?php echo htmlspecialchars($ultimoRespaldoDrive); ?>
+                                                    <?php elseif ($estaConectado): ?>
+                                                        Cuenta conectada, todavía sin certificados respaldados.
+                                                    <?php else: ?>
+                                                        Activa Drive para respaldar los certificados al generarlos.
+                                                    <?php endif; ?>
+                                                </div>
+                                                <div class="small text-body-secondary mt-1">Copia local: <strong>respaldos/certificados</strong>. Drive conserva una segunda copia en la nube.</div>
+                                            </div>
+
+                                            <div class="drive-respaldo-acciones">
+                                                <?php if ($estaConectado): ?>
+                                                    <form method="POST" class="drive-switch" id="formDesconectarDrive">
+                                                        <input type="hidden" name="csrf_drive" value="<?php echo htmlspecialchars($_SESSION['csrf_drive']); ?>">
+                                                        <input type="hidden" name="accion_drive" value="desconectar">
+                                                        <label class="form-check-label" for="driveAutomatico">Respaldo automático</label>
+                                                        <input class="form-check-input" type="checkbox" role="switch" id="driveAutomatico" checked>
+                                                    </form>
+                                                    <button type="button" class="btn btn-outline-primary" data-bs-toggle="collapse" data-bs-target="#driveDetalles" aria-expanded="false" aria-controls="driveDetalles">
+                                                        <i class="bi bi-gear me-1"></i>Configurar Drive
+                                                    </button>
+                                                    <a href="VistaEmitidos.php#respaldo-drive" class="btn btn-primary">
+                                                        <i class="bi bi-arrow-clockwise me-1"></i>Actualizar lista
+                                                    </a>
+                                                <?php else: ?>
+                                                    <?php $urlDrive = $drive->obtenerUrlConexion(); ?>
+                                                    <?php if ($urlDrive !== ''): ?>
+                                                        <div class="drive-switch">
+                                                            <label class="form-check-label" for="driveAutomatico">Respaldo automático</label>
+                                                            <input class="form-check-input js-conectar-drive" type="checkbox" role="switch" id="driveAutomatico"
+                                                                data-url="<?php echo htmlspecialchars($urlDrive, ENT_QUOTES, 'UTF-8'); ?>">
+                                                        </div>
+                                                        <a href="<?php echo htmlspecialchars($urlDrive, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-primary">
+                                                            <i class="bi bi-google me-1"></i>Conectar Drive
+                                                        </a>
+                                                    <?php else: ?>
+                                                        <div class="drive-switch">
+                                                            <label class="form-check-label">Respaldo automático</label>
+                                                            <span class="badge bg-secondary">No disponible</span>
+                                                        </div>
+                                                        <button type="button" class="btn btn-secondary" disabled title="El respaldo en Google Drive no está configurado en este servidor.">
+                                                            <i class="bi bi-google me-1"></i>Conectar Drive
+                                                        </button>
+                                                    <?php endif; ?>
+                                                <?php endif; ?>
+                                            </div>
+                                        </div>
+
+                                        <?php if ($estaConectado): ?>
+                                            <div class="alert alert-warning mt-3 mb-0 d-none" id="confirmarDesconectarDrive" role="alert">
+                                                <div class="d-flex flex-wrap align-items-center gap-2">
+                                                    <span class="me-auto"><i class="bi bi-exclamation-triangle me-1"></i>¿Desactivar el respaldo automático y desconectar Google Drive?</span>
+                                                    <button type="submit" form="formDesconectarDrive" class="btn btn-sm btn-warning">Aceptar</button>
+                                                    <button type="button" class="btn btn-sm btn-light border" data-cancelar-desconectar>Cancelar</button>
+                                                </div>
+                                            </div>
+                                        <?php endif; ?>
+
+                                        <?php if ($mensajeDrive): ?>
+                                            <div class="px-3 pb-3">
+                                                <div class="alert alert-<?php echo htmlspecialchars($tipoMensajeDrive); ?> mb-0" role="alert">
+                                                    <?php echo htmlspecialchars($mensajeDrive); ?>
+                                                </div>
+                                            </div>
+                                        <?php endif; ?>
+
+                                        <?php if ($estaConectado): ?>
+                                            <div class="collapse" id="driveDetalles">
+                                                <div class="drive-detalles">
+                                                    <div class="d-flex justify-content-between align-items-center gap-2 mb-3">
+                                                        <div>
+                                                            <h6 class="mb-1"><i class="bi bi-folder2-open me-1"></i>Archivos respaldados</h6>
+                                                            <span class="small text-body-secondary">Últimos <?php echo count($archivosDrive); ?> archivos encontrados.</span>
+                                                        </div>
+                                                    </div>
+
+                                                    <?php if (!empty($archivosDrive)): ?>
+                                                        <div class="table-responsive">
+                                                            <table class="table table-sm table-hover align-middle mb-0">
+                                                                <thead>
+                                                                    <tr>
+                                                                        <th>Archivo</th>
+                                                                        <th>Fecha</th>
+                                                                        <th class="text-end">Acción</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody>
+                                                                    <?php foreach ($archivosDrive as $archivoDrive): ?>
+                                                                        <tr>
+                                                                            <td><i class="bi bi-file-earmark-pdf text-danger me-1"></i><?php echo htmlspecialchars($archivoDrive->getName()); ?></td>
+                                                                            <td><?php echo date('d/m/Y H:i', strtotime($archivoDrive->getCreatedTime())); ?></td>
+                                                                            <td class="text-end">
+                                                                                <form method="POST" class="d-inline-flex align-items-center gap-1 js-eliminar-drive">
+                                                                                    <input type="hidden" name="csrf_drive" value="<?php echo htmlspecialchars($_SESSION['csrf_drive']); ?>">
+                                                                                    <input type="hidden" name="accion_drive" value="eliminar">
+                                                                                    <input type="hidden" name="fileId" value="<?php echo htmlspecialchars($archivoDrive->getId()); ?>">
+                                                                                    <button type="button" class="btn btn-sm btn-outline-danger js-pedir-eliminar" title="Eliminar de Drive">
+                                                                                        <i class="bi bi-trash"></i>
+                                                                                    </button>
+                                                                                    <span class="js-confirmar-eliminar d-none align-items-center gap-1">
+                                                                                        <span class="small text-danger fw-semibold">¿Eliminar?</span>
+                                                                                        <button type="submit" class="btn btn-sm btn-danger">
+                                                                                            <i class="bi bi-check-lg"></i> Sí
+                                                                                        </button>
+                                                                                        <button type="button" class="btn btn-sm btn-secondary-soft js-cancelar-eliminar">
+                                                                                            <i class="bi bi-x-lg"></i> No
+                                                                                        </button>
+                                                                                    </span>
+                                                                                </form>
+                                                                            </td>
+                                                                        </tr>
+                                                                    <?php endforeach; ?>
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    <?php else: ?>
+                                                        <div class="text-center text-body-secondary py-3">
+                                                            <i class="bi bi-inbox fs-3 d-block mb-1"></i>
+                                                            No hay certificados respaldados todavía.
+                                                        </div>
+                                                    <?php endif; ?>
+                                                </div>
+                                            </div>
+                                        <?php endif; ?>
+                                    </section>
+
                                     <div class="col-sm-12 col-lg-12 d-flex py-3">
                                         <a href="VistaReporteEmitidos.php" class="btn btn-primary-soft w-100" target="_blank">
                                             <i class="bi bi-file-text"></i> Generar Reporte Emitidos Anual
@@ -466,7 +778,9 @@ $reservasMisa = [];
 
             const firstDayOfMonth = new Date(currentYear, currentMonthIndex, 1).getDay();
             const daysInMonth = new Date(currentYear, currentMonthIndex + 1, 0).getDate();
-            let currentDay = new Date().getDate();
+            const hoy = new Date();
+            const diaSeleccionado = currentMonthIndex === hoy.getMonth() && currentYear === hoy.getFullYear()
+                ? hoy.getDate() : 1;
 
             const adjustedFirstDay = (firstDayOfMonth + 6) % 7;
             for (let i = 0; i < adjustedFirstDay; i++) {
@@ -491,11 +805,12 @@ $reservasMisa = [];
 
                 weekContainer.appendChild(dayDiv);
 
-                if (day === currentDay && currentMonthIndex === new Date().getMonth() && currentYear === new Date().getFullYear()) {
+                if (day === diaSeleccionado) {
                     toggleSelection(dayDiv);
                 }
             }
 
+            showReminders(diaSeleccionado);
             highlightReservedDays(currentMonthIndex + 1, currentYear);
         }
 
@@ -604,6 +919,79 @@ $reservasMisa = [];
         displayMonth();
         document.getElementById('prevMonth').addEventListener('click', () => changeMonth('prev'));
         document.getElementById('nextMonth').addEventListener('click', () => changeMonth('next'));
+    </script>
+
+    <script>
+        (function () {
+            var interruptor = document.querySelector('.js-conectar-drive');
+            if (!interruptor) return;
+
+            interruptor.addEventListener('change', function () {
+                if (interruptor.checked && interruptor.dataset.url) {
+                    window.location.href = interruptor.dataset.url;
+                }
+            });
+        })();
+    </script>
+
+    <script>
+        (function () {
+            document.querySelectorAll('.js-eliminar-drive').forEach(function (formulario) {
+                var boton = formulario.querySelector('.js-pedir-eliminar');
+                var grupo = formulario.querySelector('.js-confirmar-eliminar');
+                var cancelar = formulario.querySelector('.js-cancelar-eliminar');
+                if (!boton || !grupo) return;
+
+                boton.addEventListener('click', function (evento) {
+                    evento.preventDefault();
+                    document.querySelectorAll('.js-confirmar-eliminar').forEach(function (otro) {
+                        if (otro !== grupo) {
+                            otro.classList.add('d-none');
+                            otro.classList.remove('d-inline-flex');
+                        }
+                    });
+                    grupo.classList.remove('d-none');
+                    grupo.classList.add('d-inline-flex');
+                });
+
+                if (cancelar) {
+                    cancelar.addEventListener('click', function () {
+                        grupo.classList.add('d-none');
+                        grupo.classList.remove('d-inline-flex');
+                    });
+                }
+            });
+        })();
+    </script>
+
+    <script>
+        (function () {
+            var interruptor = document.getElementById('driveAutomatico');
+            var panel = document.getElementById('confirmarDesconectarDrive');
+            if (!interruptor || !panel) {
+                return;
+            }
+
+            interruptor.addEventListener('change', function () {
+                if (interruptor.checked) {
+                    return;
+                }
+                interruptor.checked = true;
+                panel.classList.remove('d-none');
+                var confirmar = panel.querySelector('button[type="submit"]');
+                if (confirmar) {
+                    confirmar.focus();
+                }
+            });
+
+            var cancelar = panel.querySelector('[data-cancelar-desconectar]');
+            if (cancelar) {
+                cancelar.addEventListener('click', function () {
+                    panel.classList.add('d-none');
+                    interruptor.focus();
+                });
+            }
+        })();
     </script>
 
     <script src="../assets/vendor/bootstrap/dist/js/bootstrap.bundle.min.js"></script>

@@ -21,7 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt->bind_param("ssssisi", $ciCel, $sacramento, $usuarioCel, $claveCel, $idGrupo, $preValor, $codTipoItem);
 
         if ($stmt->execute()) {
-            $result = $conexion->query("SELECT CONCAT(percel.Nombre, ' ', percel.ApPaterno,' ', percel.ApMaterno) AS Celebrante, celebrante.UsuarioCel as usuario, celebrante.ClaveCel as clave, ins.IdInscripcion as idins FROM Celebrante INNER JOIN inscripcion ins ON ins.CiCel = celebrante.CiCel INNER JOIN persona percel ON percel.CiPersona = celebrante.CiCel WHERE celebrante.CiCel = '$ciCel'");
+            $result = $conexion->query("SELECT CONCAT(percel.Nombre, ' ', percel.ApPaterno,' ', percel.ApMaterno) AS Celebrante, celebrante.UsuarioCel as usuario, celebrante.ClaveCel as clave, ins.IdInscripcion as idins FROM `celebrante` INNER JOIN inscripcion ins ON ins.CiCel = celebrante.CiCel INNER JOIN `persona` percel ON percel.CiPersona = celebrante.CiCel WHERE celebrante.CiCel = '$ciCel'");
             
             if ($row = $result->fetch_assoc()) {
                 $response["celebrantes"][] = $row;

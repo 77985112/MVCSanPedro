@@ -12,9 +12,9 @@ class CatequistaSac {
     public function getCatequistasComunion() {
         $sql = "SELECT catequista.CiCat, CONCAT(persona.Nombre, ' ', persona.ApPaterno, ' ', persona.ApMaterno) AS NombreCompleto, catequista.ImagenCat, catequista.Sacramento, asig.RolCat, gr.NombreGrupo
                 FROM catequista 
-                INNER JOIN persona ON catequista.CiCat = persona.CiPersona
-                INNER JOIN Asignacion asig ON catequista.CiCat = asig.CiCat
-                INNER JOIN Grupo gr ON asig.IdGrupo = gr.IdGrupo
+                INNER JOIN `persona` ON catequista.CiCat = persona.CiPersona
+                INNER JOIN `asignacion` asig ON catequista.CiCat = asig.CiCat
+                INNER JOIN `grupo` gr ON asig.IdGrupo = gr.IdGrupo
                 WHERE catequista.EstadoCat = 'Activo' AND catequista.Sacramento = 'Primera Comunión'";
                 
                 $stmt = $this->conn->prepare($sql);
@@ -33,9 +33,9 @@ class CatequistaSac {
     public function getCatequistasConfirmacion() {
         $sql = "SELECT catequista.CiCat, CONCAT(persona.Nombre, ' ', persona.ApPaterno, ' ', persona.ApMaterno) AS NombreCompleto, catequista.ImagenCat, catequista.Sacramento, asig.RolCat, gr.NombreGrupo
                 FROM catequista 
-                INNER JOIN persona ON catequista.CiCat = persona.CiPersona
-                INNER JOIN Asignacion asig ON catequista.CiCat = asig.CiCat
-                INNER JOIN Grupo gr ON asig.IdGrupo = gr.IdGrupo
+                INNER JOIN `persona` ON catequista.CiCat = persona.CiPersona
+                INNER JOIN `asignacion` asig ON catequista.CiCat = asig.CiCat
+                INNER JOIN `grupo` gr ON asig.IdGrupo = gr.IdGrupo
                 WHERE catequista.EstadoCat = 'Activo' AND catequista.Sacramento = 'Confirmación'";
                 
                 $stmt = $this->conn->prepare($sql);
