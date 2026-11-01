@@ -680,7 +680,7 @@ foreach ($aniosGrafico as $anio) {
                                             <h3>Mantén seguros los accesos</h3>
                                             <p>Actualiza tu contraseña en caso necesario.</p>
                                             <?php if ($puedePersonal): ?>
-                                                <a href="VistaGesPersonal.php">Ir a Personal <i class="bi bi-arrow-right"></i></a>
+                                                <a href="vistaGesPersonal.php">Ir a Personal <i class="bi bi-arrow-right"></i></a>
                                             <?php endif; ?>
                                         </div>
                                     </section>

@@ -96,7 +96,7 @@ class ControladorAcceso {
             'inicio'      => ['VistaPersonal.php', 'Inicio', 'img', '../assets/images/icon/mensaje.png'],
             'persona'     => ['VistaPersona.php', 'Persona', 'img', '../assets/images/icon/nuevo.png'],
             'celebracion' => ['VistaReservas.php', 'Celebración', 'img', '../assets/images/icon/instrucciones.png'],
-            'personal'    => ['VistaGesPersonal.php', 'Personal', 'img', '../assets/images/icon/seguro.png'],
+            'personal'    => ['vistaGesPersonal.php', 'Personal', 'img', '../assets/images/icon/seguro.png'],
             'coordinador' => ['VistaCoordinadorAdmin.php', 'Coordinadores', 'flama', '🔥'],
             'certificado' => ['VistaSolicitante.php', 'Certificado', 'img', '../assets/images/icon/contrato.png'],
             'emitidos'    => ['VistaEmitidos.php', 'Certificado Emitido', 'img', '../assets/images/icon/Emitido.png'],
