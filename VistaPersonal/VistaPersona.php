@@ -414,11 +414,6 @@ if (isset($_GET['ciActualizada']) && $_GET['ciActualizada'] === '1') {
                   </div>
                   <div class="col-sm-6 col-lg-4 form-group">
                     <label class="form-label">Estado Civil:</label>
-                    <input type="text" class="form-control" name="Estado_per" value="<?php echo $persona['Estado_per']; ?>" readonly>
-                  </div>
-
-                  <div class="col-sm-6 col-lg-3 me-2">
-                    <label class="form-label" class="form-control">Nuevo Estado Civil:</label>
                     <select class="form-control" name="Estado_per2" data-search-enabled="true">
                       <option value="Soltero" <?php if ($persona['Estado_per'] == "Soltero") echo 'selected'; ?>>Soltero</option>
                       <option value="Soltera" <?php if ($persona['Estado_per'] == "Soltera") echo 'selected'; ?>>Soltera</option>

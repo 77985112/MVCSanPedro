@@ -149,6 +149,8 @@ $meses = array("Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "
                                             list($imagenActividad, $videoActividad) = ControladorActividad::archivosActividad($actividad);
                                             $rutaImagen = $imagenActividad !== null ? '../assets/images/events/' . rawurlencode($imagenActividad) : null;
                                             $rutaVideo = $videoActividad !== null ? '../assets/images/events/' . rawurlencode($videoActividad) : null;
+                                            $videoUrl = ControladorActividad::videoEmbedUrl($actividad['VideoUrl'] ?? null);
+                                            $hayVideo = $rutaVideo !== null || $videoUrl !== null;
                                             $rutasGaleria = array_map(static function ($nombreArchivo) {
                                                 return '../assets/images/events/' . rawurlencode($nombreArchivo);
                                             }, ControladorActividad::imagenesActividad($actividad));
@@ -157,7 +159,7 @@ $meses = array("Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "
                                             <div class="carousel-item<?php echo $esPrincipal ? ' active' : ''; ?>" data-actividad-numero="<?php echo $numeroActividad; ?>" role="group" aria-roledescription="diapositiva" aria-label="Actividad <?php echo $numeroActividad; ?>: <?php echo $escaparActividad($actividad['TituloActividad']); ?>" aria-hidden="<?php echo $esPrincipal ? 'false' : 'true'; ?>"<?php echo !$esPrincipal ? ' inert' : ''; ?>>
                                                 <article class="actividad-destacada" aria-labelledby="<?php echo $idMedio; ?>-titulo">
                                                     <div class="actividad-escena">
-                                                        <div class="actividad-archivo" data-actividad-fotos="<?php echo htmlspecialchars(json_encode($rutasGaleria, JSON_UNESCAPED_SLASHES), ENT_QUOTES, 'UTF-8'); ?>"<?php echo count($rutasGaleria) > 1 ? ' tabindex="0" role="group" aria-label="Fotos de la actividad"' : ''; ?> id="<?php echo $idMedio; ?>-imagen"<?php echo !$rutaImagen && $rutaVideo ? ' hidden' : ''; ?>>
+                                                        <div class="actividad-archivo" data-actividad-fotos="<?php echo htmlspecialchars(json_encode($rutasGaleria, JSON_UNESCAPED_SLASHES), ENT_QUOTES, 'UTF-8'); ?>"<?php echo count($rutasGaleria) > 1 ? ' tabindex="0" role="group" aria-label="Fotos de la actividad"' : ''; ?> id="<?php echo $idMedio; ?>-imagen"<?php echo !$rutaImagen && $hayVideo ? ' hidden' : ''; ?>>
                                                             <img class="actividad-fondo" id="<?php echo $idMedio; ?>-foto" src="<?php echo $rutaImagen ?: '../assets/images/events/Generico.png'; ?>" alt="Imagen de <?php echo $escaparActividad($actividad['TituloActividad']); ?>" loading="<?php echo $esPrincipal ? 'eager' : 'lazy'; ?>" draggable="false">
                                                             <?php if (count($rutasGaleria) > 1): ?>
                                                                 <div class="actividad-galeria-controles">
@@ -167,12 +169,16 @@ $meses = array("Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "
                                                                 </div>
                                                             <?php endif; ?>
                                                         </div>
-                                                        <?php if ($rutaVideo): ?>
+                                                        <?php if ($videoUrl): ?>
+                                                            <div class="actividad-archivo" id="<?php echo $idMedio; ?>-video"<?php echo $rutaImagen ? ' hidden' : ''; ?>>
+                                                                <iframe class="actividad-embed" src="<?php echo htmlspecialchars($videoUrl, ENT_QUOTES, 'UTF-8'); ?>" title="Video de <?php echo $escaparActividad($actividad['TituloActividad']); ?>" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
+                                                            </div>
+                                                        <?php elseif ($rutaVideo): ?>
                                                             <div class="actividad-archivo" id="<?php echo $idMedio; ?>-video"<?php echo $rutaImagen ? ' hidden' : ''; ?>>
                                                                 <video class="actividad-fondo" src="<?php echo $rutaVideo; ?>" controls playsinline preload="<?php echo $rutaImagen ? 'none' : 'metadata'; ?>" aria-label="Video de <?php echo $escaparActividad($actividad['TituloActividad']); ?>">Su navegador no puede reproducir este video. <a href="<?php echo $rutaVideo; ?>">Abrir video</a></video>
                                                             </div>
                                                         <?php endif; ?>
-                                                        <?php if ($rutaImagen && $rutaVideo): ?>
+                                                        <?php if ($rutaImagen && $hayVideo): ?>
                                                             <div class="actividad-selector-medios" role="group" aria-label="Archivos de la actividad <?php echo $numeroActividad; ?>">
                                                                 <button type="button" data-actividad-medio aria-controls="<?php echo $idMedio; ?>-imagen" aria-pressed="true"><i class="bi bi-image" aria-hidden="true"></i> <?php echo count($rutasGaleria) > 1 ? 'Fotos' : 'Imagen'; ?></button>
                                                                 <button type="button" data-actividad-medio aria-controls="<?php echo $idMedio; ?>-video" aria-pressed="false"><i class="bi bi-play-circle" aria-hidden="true"></i> Video</button>
@@ -231,7 +237,7 @@ $meses = array("Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "
                                                 <?php if ($imagenMiniatura): ?>
                                                     <img class="actividad-mini-imagen" src="../assets/images/events/<?php echo rawurlencode($imagenMiniatura); ?>" alt="" loading="lazy" draggable="false">
                                                 <?php else: ?>
-                                                    <span class="actividad-mini-imagen actividad-mini-vacia"><i class="bi <?php echo $videoMiniatura ? 'bi-play-circle' : 'bi-calendar2-event'; ?>" aria-hidden="true"></i></span>
+                                                    <span class="actividad-mini-imagen actividad-mini-vacia"><i class="bi <?php echo ($videoMiniatura || !empty($actividad['VideoUrl'])) ? 'bi-play-circle' : 'bi-calendar2-event'; ?>" aria-hidden="true"></i></span>
                                                 <?php endif; ?>
                                                 <span class="actividad-mini-texto">
                                                     <?php if ($principalMiniatura): ?><span class="actividad-mini-reciente"><i class="bi bi-star-fill" aria-hidden="true"></i> Última publicación</span><?php endif; ?>

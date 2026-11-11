@@ -60,9 +60,9 @@ class AsistenciaApoderadoController
         return $this->modelo->obtenerIdReunionPorFechaYGrupo($fecha);
     }
 
-    public function obtenerReunion()
+    public function obtenerReunion($sacramento)
     {
-        return $this->modelo->obtenerReunion();
+        return $this->modelo->obtenerReunion($sacramento);
     }
 
     public function RegistrarReu($data)

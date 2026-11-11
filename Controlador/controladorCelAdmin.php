@@ -16,8 +16,34 @@ class CelebranteControllerAdmin {
         return $this->celebranteModel->buscarCelebrante($ciCel,$SacramentoCel);
     }
 
+    public function buscarCelebrantes($termino, $SacramentoCel) {
+        return $this->celebranteModel->buscarCelebrantes($termino, $SacramentoCel);
+    }
+
     public function registrarCelebrante($datos) {
+        // La contraseña se guarda cifrada; el primer ingreso obliga a cambiarla.
+        if (!empty($datos['ClaveCel'])) {
+            $datos['ClaveCel'] = password_hash((string) $datos['ClaveCel'], PASSWORD_DEFAULT);
+        }
         return $this->celebranteModel->registrarCelebrante($datos);
+    }
+
+    /** Genera una contraseña de un solo uso legible para imprimir en el ticket. */
+    public function generarClaveTemporal() {
+        return 'Tmp' . strtoupper(bin2hex(random_bytes(4)));
+    }
+
+    /** Genera y guarda una nueva clave de un solo uso para un catequizando existente. */
+    public function restablecerClaveCelebrante($ciCel, $sacramento) {
+        $registro = $this->celebranteModel->buscarCelebrante($ciCel, $sacramento);
+        if (!$registro) {
+            return false;
+        }
+        $nueva = $this->generarClaveTemporal();
+        if (!$this->celebranteModel->restablecerClave($ciCel, password_hash($nueva, PASSWORD_DEFAULT))) {
+            return false;
+        }
+        return ['clave' => $nueva, 'registro' => $registro];
     }
 
     public function modificarCelebrante($ciCel, $datosCelebrante, $datosInscripcion) {
@@ -42,8 +68,20 @@ class ControladorCelAdm {
         return $this->documentoModel->obtenerDocumentosPorInscripcion($idInscripcion);
     }
 
-    public function registrarDocumento($gestion, $ciCat, $idGrupo, $idInscripcion, $numeroDoc, $detalleDoc, $libroDoc, $paginaDoc, $partidaDoc, $parroquiaDoc) {
-        return $this->documentoModel->registrarDocumento($gestion, $ciCat, $idGrupo, $idInscripcion, $numeroDoc, $detalleDoc, $libroDoc, $paginaDoc, $partidaDoc, $parroquiaDoc);
+    public function verDatosInscripcion($idInscripcion) {
+        return $this->documentoModel->obtenerDatosInscripcion($idInscripcion);
+    }
+
+    public function verBautizoLocal($ciCel) {
+        return $this->documentoModel->obtenerBautizoLocalPorCi($ciCel);
+    }
+
+    public function registrarDocumento($gestion, $ciCat, $idGrupo, $idInscripcion, $numeroDoc, $detalleDoc, $libroDoc, $paginaDoc, $partidaDoc, $parroquiaDoc, $fechaDoc = '') {
+        return $this->documentoModel->registrarDocumento($gestion, $ciCat, $idGrupo, $idInscripcion, $numeroDoc, $detalleDoc, $libroDoc, $paginaDoc, $partidaDoc, $parroquiaDoc, $fechaDoc);
+    }
+
+    public function actualizarDocumentosPresentados($gestion, $ciCat, $idGrupo, $idInscripcion, array $presentados, $fechaBautizo = '') {
+        return $this->documentoModel->actualizarDocumentosPresentados($gestion, $ciCat, $idGrupo, $idInscripcion, $presentados, $fechaBautizo);
     }
 
     public function eliminarDocumento($gestion, $ciCat, $idGrupo, $idInscripcion) {
@@ -64,6 +102,18 @@ class ControladorCelAdm {
 
     public function eliminarFamiliar($ciFamiliar, $idInscripcion) {
         return $this->familiarModel->eliminarFamiliar($ciFamiliar, $idInscripcion);
+    }
+
+    public function verPadrinosManuales($idInscripcion) {
+        return $this->familiarModel->obtenerPadrinosManuales($idInscripcion);
+    }
+
+    public function registrarPadrinoManual($idInscripcion, $rolFam, $nombre, $apellido, $estadoCivil) {
+        return $this->familiarModel->registrarPadrinoManual($idInscripcion, $rolFam, $nombre, $apellido, $estadoCivil);
+    }
+
+    public function eliminarPadrinoManual($idPadrino, $idInscripcion) {
+        return $this->familiarModel->eliminarPadrinoManual($idPadrino, $idInscripcion);
     }
 }
 ?>

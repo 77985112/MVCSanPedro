@@ -8,7 +8,7 @@ $Catequista = $_SESSION['CiPersona'];
 
 require_once '../Controlador/controladorReunion.php';
 $contReu = new AsistenciaApoderadoModel;
-$ReunionAll = $contReu->obtenerReunion();
+$ReunionAll = $contReu->obtenerReunion($Catequista['Sacramento']);
 
 
 require_once '../Conexion/Conexion.php';
@@ -24,11 +24,12 @@ function getActiveNotifications($conn)
             FROM notificaciones n 
             INNER JOIN catequista c ON n.CiNotificador = c.CiCat 
             INNER JOIN `persona` p ON c.CiCat = p.CiPersona 
-            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ?
+            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ? AND n.Sacramento = ?
             ORDER BY n.FechaNotFin ASC";
 
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("s", $currentDateTime);
+    $sacramentoActual = $_SESSION['CiPersona']['Sacramento'] ?? '';
+    $stmt->bind_param("ss", $currentDateTime, $sacramentoActual);
     $stmt->execute();
     $result = $stmt->get_result();
 
@@ -138,11 +139,6 @@ $activeNotifications = getActiveNotifications($conn);
                             </li>
                             <li>
                                 <a class="dropdown-item" href="ReunionesCat.php"><i class="fa-fw bi bi-calendar2-check me-2"></i>Fecha de Reuniones</a>
-                            </li>
-                            <li>
-                                <a class="dropdown-item" href="Documentos.php">
-                                    <i class="fa-fw bi bi-card-text me-2"></i>
-                                </a>
                             </li>
                             <li>
                                 <a class="dropdown-item" href="Reglamento.php">

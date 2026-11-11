@@ -38,14 +38,26 @@ if ($result->num_rows > 0) {
     $_SESSION['CiPersona']['Imagen_Grupo'] = $row['Imagen_Grupo'];
     $_SESSION['CiPersona']['Frase_Santo'] = $row['Frase_Santo'];
 
-    error_log(print_r($response, true));
     echo json_encode($response);
 } else {
     $error = ['error' => 'No se encontraron datos'];
-    error_log(print_r($error, true));
     echo json_encode($error);
 }
 
 $stmt->close();
+
+// Permisos que el titular del grupo haya asignado a este catequista.
+$stmtPerm = $conn->prepare("SELECT PuedeAsistenciaApoderados, PuedePuntajeExamenes, PuedeRegistrarCatequizandos
+                            FROM permisos_catequista WHERE CiCat = ? LIMIT 1");
+if ($stmtPerm) {
+    $stmtPerm->bind_param("s", $Persona);
+    $stmtPerm->execute();
+    $perm = $stmtPerm->get_result()->fetch_assoc();
+    $stmtPerm->close();
+    $_SESSION['CiPersona']['PuedeAsistenciaApoderados'] = (int) ($perm['PuedeAsistenciaApoderados'] ?? 0);
+    $_SESSION['CiPersona']['PuedePuntajeExamenes'] = (int) ($perm['PuedePuntajeExamenes'] ?? 0);
+    $_SESSION['CiPersona']['PuedeRegistrarCatequizandos'] = (int) ($perm['PuedeRegistrarCatequizandos'] ?? 0);
+}
+
 $conn->close();
 exit();

@@ -8,7 +8,7 @@ $Catequista = $_SESSION['CiPersona'];
 
 require_once '../Controlador/controladorReunion.php';
 $contReu = new AsistenciaApoderadoModel;
-$ReunionAll = $contReu->obtenerReunion();
+$ReunionAll = $contReu->obtenerReunion($Catequista['Sacramento']);
 
 require_once '../Controlador/controladorCatCoor.php';
 $contCats = new CatsController();
@@ -16,6 +16,9 @@ $catequistas = $contCats->index($Catequista['CiCat']);
 $catsacramento = $contCats->CatequsitasSac($Catequista['Sacramento']);
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrarReu'])) {
+    // El sacramento se toma de la sesión para que cada coordinador cree
+    // únicamente reuniones de su propio sacramento.
+    $_POST['Sacramento'] = $Catequista['Sacramento'];
     if ($contReu->RegistrarReu($_POST)) {
         header("Location: " . $_SERVER['PHP_SELF']);
         exit();
@@ -37,11 +40,12 @@ function getActiveNotifications($conn)
             FROM notificaciones n 
             INNER JOIN catequista c ON n.CiNotificador = c.CiCat 
             INNER JOIN `persona` p ON c.CiCat = p.CiPersona 
-            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ?
+            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ? AND n.Sacramento = ?
             ORDER BY n.FechaNotFin ASC";
 
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("s", $currentDateTime);
+    $sacramentoActual = $_SESSION['CiPersona']['Sacramento'] ?? '';
+    $stmt->bind_param("ss", $currentDateTime, $sacramentoActual);
     $stmt->execute();
     $result = $stmt->get_result();
 
@@ -151,11 +155,6 @@ $activeNotifications = getActiveNotifications($conn);
                                 <a class="dropdown-item" href="ReunionesCat.php"><i class="fa-fw bi bi-calendar2-check me-2"></i>Fecha de Reuniones</a>
                             </li>
                             <li>
-                                <a class="dropdown-item" href="Documentos.php">
-                                    <i class="fa-fw bi bi-card-text me-2"></i>Documentación
-                                </a>
-                            </li>
-                            <li>
                                 <a class="dropdown-item" href="Reglamento.php">
                                     <i class="fa-fw bi bi-list-check me-2"></i>Reglamento
                                 </a>
@@ -236,17 +235,7 @@ $activeNotifications = getActiveNotifications($conn);
                                 <a class="nav-link" href="VistaPersona.php"> <i class="<bi bi-person-vcard nav-icon"></i> <span class="nav-text">Persona </span></a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link" href="Configuracion.php"> <i class="bi bi-gear-wide-connected nav-icon"></i> <span class="nav-text">Configuración </span></a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link" href="VistaTodosCat.php"> <i class="bi bi-calendar-check nav-icon"></i> <span class="nav-text">Listado Catequistas</span></a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link" href="VistaTodosCat.php"> <i class="bi bi-file-earmark-text nav-icon"></i> <span class="nav-text">Reporte </span></a>
-                            </li>
-                            <h6 class="nav-text badge bg-primary text-white mt-2 me-2 border border-white border-3 rounded"><i class="bi bi-caret-down-fill"></i>&nbsp;&nbsp; Publico</h6>
-                            <li class="nav-item">
-                                <a class="nav-link" href="VistaMensajeCoor.php"> <i class="bi bi-file-earmark-text nav-icon"></i> <span class="nav-text">Mensaje Público</span></a>
+                                <a class="nav-link" href="VistaTodosCat.php"> <i class="bi bi-calendar-check nav-icon"></i> <span class="nav-text">Reporte Activos Inactivos</span></a>
                             </li>
                         </ul>
                     </div>
@@ -280,7 +269,7 @@ $activeNotifications = getActiveNotifications($conn);
 
                                     <div class="col-sm-8 col-lg-2">
                                         <label class="form-label">Hora de Reunión</label>
-                                        <input type="time" class="form-control" name="HoraR" id="horaR" required>
+                                        <input type="time" class="form-control" name="HoraR" id="horaR" min="17:00" max="22:00" step="60" required>
                                     </div>
 
                                     <div class="col-sm-12 col-lg-12">
@@ -401,25 +390,22 @@ $activeNotifications = getActiveNotifications($conn);
     </main>
     <script>
         const today = new Date();
-        const tomorrow = new Date(today);
-        tomorrow.setDate(today.getDate() + 1);
 
         const fechaInput = document.getElementById('fechaR');
 
-        const year = tomorrow.getFullYear();
-        const month = String(tomorrow.getMonth() + 1).padStart(2, '0');
-        const day = String(tomorrow.getDate()).padStart(2, '0');
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
 
+        // Se permite registrar la reunión desde la fecha actual en adelante.
         fechaInput.min = `${year}-${month}-${day}`;
-        const horaInput = document.getElementById('horaR');
 
-        horaInput.addEventListener('change', function() {
-            const [hours, minutes] = this.value.split(':').map(Number);
-            this.value = `${String(hours).padStart(2, '0')}:30`;
-            if (minutes >= 30) {
-                this.value = `${String(hours).padStart(2, '0')}:00`;
-            }
-        });
+        // Horario permitido para reuniones: de 17:00 a 22:00 (5 a 10 pm).
+        // No se modifica automáticamente la hora elegida por el usuario.
+        const horaInput = document.getElementById('horaR');
+        horaInput.min = '17:00';
+        horaInput.max = '22:00';
+        horaInput.step = '60';
     </script>
     <script>
         $(document).ready(function() {

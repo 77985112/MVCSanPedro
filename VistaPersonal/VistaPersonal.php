@@ -10,7 +10,7 @@ unset($_SESSION['acceso_denegado']);
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($_POST) && empty($_FILES)
     && (int) ($_SERVER['CONTENT_LENGTH'] ?? 0) > 0) {
     http_response_code(413);
-    exit('El archivo supera el límite de carga. Use una imagen de hasta 5 MB o un video de hasta 100 MB.');
+    exit('El archivo supera el límite de carga. Use una imagen de hasta 2 MB o un video de hasta 10 MB.');
 }
 
 
@@ -23,7 +23,10 @@ $esAutorActividad = static function ($actividad) use ($usuario) {
     return (int) ($actividad['CodPer'] ?? 0) === (int) ($usuario['CodPer'] ?? 0);
 };
 $puedeEditarActividad = static function ($actividad) use ($controller, $esAutorActividad, $puedeGestionarParroquia) {
-    return ($esAutorActividad($actividad) || $puedeGestionarParroquia)
+    // Las actividades de Primera Comunión y Confirmación las edita su
+    // coordinador; en este panel solo se editan las de Parroquia.
+    return ($actividad['TipoActividad'] ?? '') === 'Parroquia'
+        && ($esAutorActividad($actividad) || $puedeGestionarParroquia)
         && ControladorActividad::esActividadEditable($actividad);
 };
 $puedeEliminarActividad = static function ($actividad) use ($esAutorActividad, $puedeGestionarParroquia) {
@@ -33,7 +36,7 @@ $errorActividad = '';
 $actividadPublicada = !empty($_SESSION['actividad_parroquia_publicada']);
 unset($_SESSION['actividad_parroquia_publicada']);
 $valoresActividad = array_fill_keys(
-    ['TituloActividad', 'DetalleActividad', 'FechaActividad', 'HoraAct', 'LugarAct'], ''
+    ['TituloActividad', 'DetalleActividad', 'FechaActividad', 'HoraAct', 'LugarAct', 'VideoUrl'], ''
 );
 if (empty($_SESSION['csrf_actividad_parroquia'])) {
   $_SESSION['csrf_actividad_parroquia'] = bin2hex(random_bytes(32));
@@ -247,7 +250,7 @@ $actividadesTodas = $controller->obtenerActividades();
 
                     <hr>
 
-                    <?php require_once __DIR__ . '/../Controlador/controladorAcceso.php'; ControladorAcceso::renderMenu(['drive' => true]); ?>
+                    <?php require_once __DIR__ . '/../Controlador/controladorAcceso.php'; ControladorAcceso::renderMenu(); ?>
                   </div>
                   <div class="card-footer text-center py-2">
                     <a class="btn btn-link btn-sm" href="PerfilAdmin.php">Ver mi Perfil</a>
@@ -509,10 +512,16 @@ $actividadesTodas = $controller->obtenerActividades();
                 <input type="text" class="form-control" id="parroquiaLugarAct" name="LugarAct" maxlength="<?php echo ControladorActividad::LIMITE_LUGAR; ?>" placeholder="Ej: Plaza principal de Sacaba" value="<?php echo $valorActividad('LugarAct'); ?>" required>
               </div>
               <div class="col-12">
-                <label class="form-label">Imagen o video *</label>
+                <label class="form-label" for="parroquiaVideoUrl">Enlace de video (YouTube, TikTok o Facebook)</label>
+                <input type="url" class="form-control" id="parroquiaVideoUrl" name="VideoUrl" maxlength="255" placeholder="https://www.youtube.com/watch?v=..." value="<?php echo $valorActividad('VideoUrl'); ?>">
+                <div class="form-text">Opcional. También puede subir un video MP4/WebM.</div>
+                <div id="previewVideoUrlParroquia" class="mt-2"></div>
+              </div>
+              <div class="col-12">
+                <label class="form-label">Imagen, video o enlace *</label>
                 <div class="row g-3 align-items-end">
                   <div class="col-sm-6">
-                    <label class="form-label small text-muted mb-1" for="parroquiaNuevaImagen">Imágenes (máx. 7)</label>
+                    <label class="form-label small text-muted mb-1" for="parroquiaNuevaImagen">Imágenes (máx. 5)</label>
                     <input type="file" class="form-control" id="parroquiaNuevaImagen" name="NuevaImagenActividad[]" multiple accept=".jpg,.jpeg,.png,image/jpeg,image/png" data-actividad-imagen="previewActividadParroquia" data-actividad-grupo="actividadParroquia" data-actividad-requerido="true" data-actividad-maximas="<?php echo ControladorActividad::MAXIMO_IMAGENES; ?>">
                   </div>
                   <div class="col-sm-6">
@@ -522,6 +531,7 @@ $actividadesTodas = $controller->obtenerActividades();
                   </div>
                 </div>
                 <div id="previewActividadParroquia" class="d-flex flex-wrap gap-2 mt-3"></div>
+                <div class="form-text mt-2">Puede adjuntar imágenes, un video o pegar un enlace de YouTube, TikTok o Facebook.</div>
               </div>
             </form>
           </div>
@@ -532,6 +542,70 @@ $actividadesTodas = $controller->obtenerActividades();
         </div>
       </div>
     </div>
+    <script>
+      // Vista previa del video por enlace de la actividad de Parroquia.
+      (function () {
+        var campo = document.getElementById('parroquiaVideoUrl');
+        var caja = document.getElementById('previewVideoUrlParroquia');
+        if (!campo || !caja) return;
+
+        function embed(url) {
+          var u;
+          try { u = new URL(url); } catch (e) { return null; }
+          var host = u.hostname.toLowerCase().replace(/^www\./, '');
+          var ruta = u.pathname || '';
+          var m;
+
+          if (['youtube.com', 'm.youtube.com', 'youtube-nocookie.com'].indexOf(host) >= 0) {
+            var id = u.searchParams.get('v') || '';
+            if (!id && (m = ruta.match(/^\/(?:shorts|embed|live|v)\/([A-Za-z0-9_-]{6,20})/))) id = m[1];
+            return /^[A-Za-z0-9_-]{6,20}$/.test(id) ? 'https://www.youtube.com/embed/' + id : null;
+          }
+          if (host === 'youtu.be') {
+            m = ruta.match(/^\/([A-Za-z0-9_-]{6,20})/);
+            return m ? 'https://www.youtube.com/embed/' + m[1] : null;
+          }
+          if (host === 'tiktok.com' || host === 'm.tiktok.com') {
+            m = ruta.match(/\/video\/(\d{6,25})/);
+            return m ? 'https://www.tiktok.com/embed/v2/' + m[1] : null;
+          }
+          if (['facebook.com', 'm.facebook.com', 'web.facebook.com', 'fb.watch'].indexOf(host) >= 0) {
+            return 'https://www.facebook.com/plugins/video.php?href=' + encodeURIComponent(url) + '&show_text=false';
+          }
+          return null;
+        }
+
+        function actualizar() {
+          var valor = campo.value.trim();
+          caja.replaceChildren();
+          if (!valor) return;
+
+          var src = embed(valor);
+          if (!src) {
+            var error = document.createElement('div');
+            error.className = 'form-text text-danger';
+            error.textContent = 'Use un enlace de YouTube, TikTok o Facebook.';
+            caja.appendChild(error);
+            return;
+          }
+
+          var marco = document.createElement('iframe');
+          marco.src = src;
+          marco.className = 'w-100 rounded';
+          marco.style.cssText = 'height:340px;border:0;background:#101722;';
+          marco.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share');
+          marco.setAttribute('allowfullscreen', '');
+          marco.setAttribute('loading', 'lazy');
+          marco.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+          marco.title = 'Vista previa del video';
+          caja.appendChild(marco);
+        }
+
+        campo.addEventListener('input', actualizar);
+        campo.addEventListener('change', actualizar);
+        actualizar();
+      })();
+    </script>
   <?php endif; ?>
 
   <div class="modal fade" id="modalEliminarActividad" tabindex="-1" aria-labelledby="tituloEliminarActividad" aria-hidden="true">
@@ -604,6 +678,7 @@ $actividadesTodas = $controller->obtenerActividades();
     <?php endif; ?>
   </script>
   <script src="../assets/js/actividad-multimedia.js?v=<?php echo filemtime(__DIR__ . '/../assets/js/actividad-multimedia.js'); ?>"></script>
+    <script src="../assets/js/actividad-compresion.js?v=<?php echo filemtime(__DIR__ . '/../assets/js/actividad-compresion.js'); ?>"></script>
   <script>
     (function () {
       var modal = document.getElementById('modalEliminarActividad');

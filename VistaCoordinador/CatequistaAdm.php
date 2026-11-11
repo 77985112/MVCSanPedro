@@ -6,6 +6,8 @@ if (!isset($_SESSION['CiPersona'])) {
     exit();
 }
 $Catequista = $_SESSION['CiPersona'];
+require_once __DIR__ . '/../Controlador/controladorAccesoCatequista.php';
+ControladorAccesoCatequista::exigirCambioClave();
 
 require_once '../Controlador/controladorCatCoor.php';
 $contCats = new CatsController();
@@ -14,27 +16,102 @@ $catsacramentoCoor  = $contCats->CatequsitasSac($Catequista['Sacramento']);
 
 require_once '../Controlador/controladorCatAdmin.php';
 $controller = new CatequistaController();
-$CatSinG = $controller->buscarCatSinGr($Catequista['Sacramento']);
+$todosCatequistas = $controller->obtenerTodosPorSacramento($Catequista['Sacramento']);
+
+require_once '../Controlador/controladorGrupos.php';
+$grupoController = new GrupoController();
+$gruposSacramento = $grupoController->mostrarDatosPorSacramento($Catequista['Sacramento']);
 
 
 $mensaje = '';
 $mensaje1 = '';
+$mensajeBusqueda = '';
 $catadm = null;
+$mostrarTicket = false;
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['Buscar_Catequista'])) {
-    $CiCat = $_POST['CiCatequista'];
-    $SacAdm = $_POST['SacAdm'];
+$normalizarBusqueda = function ($texto) {
+    $texto = mb_strtolower((string) $texto, 'UTF-8');
+    return strtr($texto, [
+        'á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ü' => 'u', 'ñ' => 'n',
+    ]);
+};
 
-    $catadm = $controller->buscarCatequista($CiCat, $SacAdm);
+// Generar una nueva clave de un solo uso para un catequista existente.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['restablecer_clave_cat'])) {
+    $ciReset = trim((string) ($_POST['CiCat'] ?? ''));
+    $resultado = $controller->restablecerClaveCatequista($ciReset, $Catequista['Sacramento']);
 
+    if ($resultado !== false) {
+        $registro = $resultado['registro'];
+        $_SESSION['registroCatequista'] = [
+            'Nombre' => $registro['CiCat'] ?? $ciReset,
+            'NombreCompleto' => $registro['NombreCompleto'] ?? $ciReset,
+            'NombreGrupo' => !empty($registro['NombreGrupo']) ? $registro['NombreGrupo'] : 'Sin grupo',
+            'Sacramento' => $registro['Sacramento'] ?? $Catequista['Sacramento'],
+            'UsuarioCat' => $registro['UsuarioCat'] ?? '',
+            'ClaveCat' => $resultado['clave']
+        ];
+        header("Location: tiketCat.php?t=" . time());
+        exit;
+    }
+
+    $mensaje1 = 'No se pudo generar la nueva contraseña. Intenta nuevamente.';
+    $catadm = $controller->buscarCatequista($ciReset, $Catequista['Sacramento']);
+}
+
+// Ver un catequista desde el icono del ojito.
+if (isset($_GET['ver'])) {
+    $catadm = $controller->buscarCatequista(trim((string) $_GET['ver']), $Catequista['Sacramento']);
     if (!$catadm) {
         $mensaje1 = "No se encontró catequista con los datos proporcionados.";
     }
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['Buscar_Catequista'])) {
+    $textoBusqueda = trim((string) ($_POST['CiCatequista'] ?? ''));
+
+    if ($textoBusqueda === '') {
+        $mensaje1 = 'Escribe el CI, nombre o apellido del catequista.';
+    } else {
+        $textoNormalizado = $normalizarBusqueda($textoBusqueda);
+        $coincidencias = array_values(array_filter($todosCatequistas, function ($cat) use ($normalizarBusqueda, $textoNormalizado) {
+            $campos = [
+                $cat['CiCat'] ?? '',
+                $cat['Nombre'] ?? '',
+                $cat['ApPaterno'] ?? '',
+                $cat['ApMaterno'] ?? '',
+                trim(($cat['Nombre'] ?? '') . ' ' . ($cat['ApPaterno'] ?? '') . ' ' . ($cat['ApMaterno'] ?? '')),
+            ];
+
+            foreach ($campos as $campo) {
+                if (strpos($normalizarBusqueda($campo), $textoNormalizado) !== false) {
+                    return true;
+                }
+            }
+            return false;
+        }));
+
+        if (count($coincidencias) === 1) {
+            $catadm = $controller->buscarCatequista($coincidencias[0]['CiCat'], $Catequista['Sacramento']);
+            if (!$catadm) {
+                $mensaje1 = 'No se encontró catequista con los datos proporcionados.';
+            }
+        } elseif (count($coincidencias) > 1) {
+            $todosCatequistas = $coincidencias;
+            $mensajeBusqueda = 'Se encontraron ' . count($coincidencias) . ' catequistas para "' . $textoBusqueda . '". Selecciona uno con el ojito.';
+        } else {
+            $todosCatequistas = [];
+            $mensaje1 = 'No se encontró ningún catequista con ese CI, nombre o apellido.';
+        }
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['modificar'])) {
     $CiCat = $_POST['CiCat'];
+    $usuarioNuevo = trim((string) ($_POST['UsuarioCat'] ?? ''));
+    $fechaFinCat = trim((string) ($_POST['FechaFinCat'] ?? ''));
     $datosCatequista = [
+        'UsuarioCat' => $usuarioNuevo,
         'Sacramento' => $_POST['Sacramento'],
         'EstadoCat' => $_POST['EstadoCat'],
         'ImagenCat' => $_POST['ImagenCat'],
@@ -45,44 +122,74 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['modificar'])) {
     $datosAsignacion = [
         'IdGrupo' => $_POST['IdGrupo'],
         'FechaIniCat' => $_POST['FechaIniCat'],
-        'FechaFinCat' => $_POST['FechaFinCat'],
+        'FechaFinCat' => $fechaFinCat === '' ? null : $fechaFinCat,
         'RolCat' => $_POST['RolCat']
     ];
-    $controller->modificarCatequista($CiCat, $datosCatequista, $datosAsignacion);
-    echo "Catequista modificado correctamente.";
+
+    // Mantener la ficha visible si hay un error de validacion.
+    $catadm = $controller->buscarCatequista($CiCat, $Catequista['Sacramento']);
+
+    if ($usuarioNuevo === '') {
+        $mensaje1 = 'Escribe el usuario del catequista.';
+    } elseif (!$controller->usuarioDisponible($usuarioNuevo, $CiCat)) {
+        $mensaje1 = 'Ese usuario ya lo usa otro catequista.';
+    } else {
+        $controller->modificarCatequista($CiCat, $datosCatequista, $datosAsignacion);
+        $catadm = $controller->buscarCatequista($CiCat, $Catequista['Sacramento']);
+        $todosCatequistas = $controller->obtenerTodosPorSacramento($Catequista['Sacramento']);
+
+        $mensaje = 'Catequista modificado correctamente.';
+    }
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['registrar'])) {
     $CiCatNuevo = $_POST['CiCatNuevo'];
+    $idGrupoNuevo = (int) ($_POST['IdGrupo'] ?? 0);
+    $grupoPermitido = false;
+    foreach ($gruposSacramento as $grupoOpcion) {
+        if ((int) $grupoOpcion['IdGrupo'] === $idGrupoNuevo) {
+            $grupoPermitido = true;
+            break;
+        }
+    }
 
     if ($controller->buscarCatequista($CiCatNuevo, $_POST['Sacramento'])) {
         $mensaje1 = "<strong>Error:</strong> El catequista con CI {$CiCatNuevo} ya existe.";
+    } elseif (!$grupoPermitido) {
+        $mensaje1 = "Selecciona un grupo válido de {$Catequista['Sacramento']}.";
     } else {
+        $claveTemporal = $controller->generarClaveTemporal();
         $datos = [
             'CiCat' => $CiCatNuevo,
             'Sacramento' => $_POST['Sacramento'],
             'UsuarioCat' => $CiCatNuevo,
-            'ClaveCat' => $CiCatNuevo,
+            'ClaveCat' => $claveTemporal,
             'EstadoCat' => 'Activo',
             'ImagenCat' => 'Ninguno',
             'FondoCat' => 'Ninguno',
             'PoderCat' => 'Inabilitado',
             'FraseCat' => 'La catequesis es como la lluvia que empapa el suelo y hace crecer las semillas.',
             'Gestion' => date('Y-m-d'),
-            'IdGrupo' => $_POST['IdGrupo'],
+            'IdGrupo' => $idGrupoNuevo,
             'FechaAsigCat' => date('Y-m-d'),
             'FechaIniCat' => $_POST['FechaIniCat'],
             'FechaFinCat' => null,
             'RolCat' => 'Catequista'
         ];
 
-        if ($controller->registrarCatequista($datos) == false) {
+        if ($controller->registrarCatequista($datos) === true) {
+            $registro = $controller->buscarCatequista($CiCatNuevo, $datos['Sacramento']);
             $_SESSION['registroCatequista'] = [
-                'Nombre' => $CiCatNuevo,
-                'UsuarioCat' => $CiCatNuevo,
-                'ClaveCat' => $CiCatNuevo
+                'Nombre' => $registro['CiCat'] ?? $CiCatNuevo,
+                'NombreCompleto' => $registro['NombreCompleto'] ?? $CiCatNuevo,
+                'NombreGrupo' => !empty($registro['NombreGrupo']) ? $registro['NombreGrupo'] : 'Sin grupo',
+                'Sacramento' => $registro['Sacramento'] ?? $datos['Sacramento'],
+                'UsuarioCat' => $datos['UsuarioCat'],
+                'ClaveCat' => $claveTemporal
             ];
-            $mensaje = "<strong>Catequista registrado con éxito.</strong> Nombre: {$CiCatNuevo}, Usuario: {$CiCatNuevo}, Clave: {$CiCatNuevo}";
+            $mensaje = "<strong>Catequista registrado con éxito.</strong> Nombre: {$CiCatNuevo}, Usuario: {$CiCatNuevo}. Se generó una contraseña de un solo uso; use el ticket.";
+            $mostrarTicket = true;
+            $todosCatequistas = $controller->obtenerTodosPorSacramento($Catequista['Sacramento']);
         } else {
             $mensaje1 = "No se pudo registrar al catequista.";
         }
@@ -116,11 +223,12 @@ function getActiveNotifications($conn)
             FROM notificaciones n 
             INNER JOIN catequista c ON n.CiNotificador = c.CiCat 
             INNER JOIN `persona` p ON c.CiCat = p.CiPersona 
-            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ?
+            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ? AND n.Sacramento = ?
             ORDER BY n.FechaNotFin ASC";
 
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("s", $currentDateTime);
+    $sacramentoActual = $_SESSION['CiPersona']['Sacramento'] ?? '';
+    $stmt->bind_param("ss", $currentDateTime, $sacramentoActual);
     $stmt->execute();
     $result = $stmt->get_result();
 
@@ -255,11 +363,6 @@ $activeNotifications = getActiveNotifications($conn);
                                 <a class="dropdown-item" href="ReunionesCat.php"><i class="fa-fw bi bi-calendar2-check me-2"></i>Fecha de Reuniones</a>
                             </li>
                             <li>
-                                <a class="dropdown-item" href="Documentos.php">
-                                    <i class="fa-fw bi bi-card-text me-2"></i>Documentación
-                                </a>
-                            </li>
-                            <li>
                                 <a class="dropdown-item" href="Reglamento.php">
                                     <i class="fa-fw bi bi-list-check me-2"></i>Reglamento
                                 </a>
@@ -340,17 +443,7 @@ $activeNotifications = getActiveNotifications($conn);
                                 <a class="nav-link" href="VistaPersona.php"> <i class="<bi bi-person-vcard nav-icon"></i> <span class="nav-text">Persona </span></a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link" href="Configuracion.php"> <i class="bi bi-gear-wide-connected nav-icon"></i> <span class="nav-text">Configuración </span></a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link" href="VistaTodosCat.php"> <i class="bi bi-calendar-check nav-icon"></i> <span class="nav-text">Listado Catequistas</span></a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link" href="VistaTodosCat.php"> <i class="bi bi-file-earmark-text nav-icon"></i> <span class="nav-text">Reporte </span></a>
-                            </li>
-                            <h6 class="nav-text badge bg-primary text-white mt-2 me-2 border border-white border-3 rounded"><i class="bi bi-caret-down-fill"></i>&nbsp;&nbsp; Publico</h6>
-                            <li class="nav-item">
-                                <a class="nav-link" href="VistaMensajeCoor.php"> <i class="bi bi-file-earmark-text nav-icon"></i> <span class="nav-text">Mensaje Público</span></a>
+                                <a class="nav-link" href="VistaTodosCat.php"> <i class="bi bi-calendar-check nav-icon"></i> <span class="nav-text">Reporte Activos Inactivos</span></a>
                             </li>
                         </ul>
                     </div>
@@ -366,7 +459,7 @@ $activeNotifications = getActiveNotifications($conn);
                                 <h1 class="h4 card-title">Gestionar mis catequistas</h1>
 
                                 <form method="POST" action="" class="mb-1 d-flex align-items-end">
-                                    <input type="text" class="form-control me-2" name="CiCatequista" placeholder="Identificación de Catequista" required>
+                                    <input type="text" class="form-control me-2" name="CiCatequista" placeholder="CI, nombre o apellido" required>
                                     <input type="hidden" name="SacAdm" value="<?php echo $Catequista['Sacramento']; ?>" required>
 
                                     <button type="submit" class="btn btn-primary-soft me-2" name="Buscar_Catequista" href="#tab-1" data-bs-toggle="tooltip" data-bs-placement="top" title="Buscar"><i class="bi bi-search"></i></button>
@@ -377,7 +470,9 @@ $activeNotifications = getActiveNotifications($conn);
                             <?php if ($mensaje): ?>
                                 <div class="alert alert-success" role="alert">
                                     <?php echo $mensaje; ?>
-                                    <a href="tiketCat.php" target="_blank" class="btn btn-xs btn-success mt-2 mt-lg-0 ms-lg-4">Generar ticket</a>
+                                    <?php if ($mostrarTicket): ?>
+                                        <a href="tiketCat.php?t=<?php echo time(); ?>" target="_blank" class="btn btn-xs btn-success mt-2 mt-lg-0 ms-lg-4">Generar ticket</a>
+                                    <?php endif; ?>
                                 </div>
                             <?php endif; ?>
                             <?php if ($mensaje1) : ?>
@@ -385,11 +480,25 @@ $activeNotifications = getActiveNotifications($conn);
                                     <?php echo $mensaje1; ?>
                                 </div>
                             <?php endif; ?>
+                            <?php if ($mensajeBusqueda): ?>
+                                <div class="alert alert-info" role="alert">
+                                    <?php echo htmlspecialchars($mensajeBusqueda); ?>
+                                </div>
+                            <?php endif; ?>
 
 
                             <div class="card-body col-lg-12 p-4">
                                 <hr>
                                 <?php if (isset($catadm)): ?>
+                                    <div class="mb-3 d-flex flex-wrap gap-2">
+                                        <a href="CatequistaAdm.php" class="btn btn-sm btn-light"><i class="bi bi-arrow-left me-1"></i>Volver al listado</a>
+                                        <form method="POST" class="d-inline" target="_blank">
+                                            <input type="hidden" name="CiCat" value="<?= htmlspecialchars($catadm['CiCat']) ?>">
+                                            <button type="submit" name="restablecer_clave_cat" class="btn btn-sm btn-warning-soft">
+                                                <i class="bi bi-key me-1"></i>Nueva clave de un solo uso
+                                            </button>
+                                        </form>
+                                    </div>
                                     <form method="POST" action="" class="row g-3">
                                         <input type="hidden" name="CiCat" value="<?= $catadm['CiCat'] ?>">
                                         <input type="hidden" name="ImagenCat" value="<?= $catadm['ImagenCat'] ?>">
@@ -448,59 +557,23 @@ $activeNotifications = getActiveNotifications($conn);
                                         </div>
                                         <div class="col-sm-6 col-lg-2 me-2">
                                             <label class="form-label" class="form-control">Grupo Actual</label>
-                                            <?php if ($catadm['Sacramento'] == 'Primera Comunión'): ?>
-
-                                                <select class="form-control" name="IdGrupo" data-search-enabled="true">
-                                                    <option value="1" <?php if ($catadm['IdGrupo'] == "1") echo 'selected'; ?>>Sin Grupo</option>
-                                                    <option value="2" <?php if ($catadm['IdGrupo'] == "2") echo 'selected'; ?>>Grupo 01</option>
-                                                    <option value="3" <?php if ($catadm['IdGrupo'] == "3") echo 'selected'; ?>>Grupo 02</option>
-                                                    <option value="4" <?php if ($catadm['IdGrupo'] == "4") echo 'selected'; ?>>Grupo 03</option>
-                                                    <option value="5" <?php if ($catadm['IdGrupo'] == "5") echo 'selected'; ?>>Grupo 04</option>
-                                                    <option value="6" <?php if ($catadm['IdGrupo'] == "6") echo 'selected'; ?>>Grupo 05</option>
-                                                    <option value="7" <?php if ($catadm['IdGrupo'] == "7") echo 'selected'; ?>>Grupo 06</option>
-                                                    <option value="8" <?php if ($catadm['IdGrupo'] == "8") echo 'selected'; ?>>Grupo 07</option>
-                                                    <option value="9" <?php if ($catadm['IdGrupo'] == "9") echo 'selected'; ?>>Grupo 08</option>
-                                                    <option value="10" <?php if ($catadm['IdGrupo'] == "10") echo 'selected'; ?>>Grupo 09</option>
-                                                    <option value="11" <?php if ($catadm['IdGrupo'] == "11") echo 'selected'; ?>>Grupo 10</option>
-                                                    <option value="12" <?php if ($catadm['IdGrupo'] == "12") echo 'selected'; ?>>Grupo 11</option>
-                                                    <option value="13" <?php if ($catadm['IdGrupo'] == "13") echo 'selected'; ?>>Grupo 12</option>
-                                                    <option value="14" <?php if ($catadm['IdGrupo'] == "14") echo 'selected'; ?>>Grupo 13</option>
-                                                    <option value="15" <?php if ($catadm['IdGrupo'] == "15") echo 'selected'; ?>>Grupo 14</option>
-                                                    <option value="16" <?php if ($catadm['IdGrupo'] == "16") echo 'selected'; ?>>Grupo 15</option>
-                                                    <option value="17" <?php if ($catadm['IdGrupo'] == "17") echo 'selected'; ?>>Grupo 16</option>
-                                                    <option value="18" <?php if ($catadm['IdGrupo'] == "18") echo 'selected'; ?>>Grupo 17</option>
-                                                    <option value="19" <?php if ($catadm['IdGrupo'] == "19") echo 'selected'; ?>>Grupo 18</option>
-                                                    <option value="20" <?php if ($catadm['IdGrupo'] == "20") echo 'selected'; ?>>Grupo 19</option>
-                                                    <option value="21" <?php if ($catadm['IdGrupo'] == "21") echo 'selected'; ?>>Grupo 20</option>
-                                                    <option value="43" <?php if ($catadm['IdGrupo'] == "43") echo 'selected'; ?>>Pendiente</option>
-                                                </select>
-
-                                            <?php elseif ($catadm['Sacramento'] == 'Confirmación'): ?>
-                                                <select class="form-control" name="IdGrupo" data-search-enabled="true">
-                                                    <option value="22" <?php if ($catadm['IdGrupo'] == "22") echo 'selected'; ?>>Sin Grupo</option>
-                                                    <option value="23" <?php if ($catadm['IdGrupo'] == "23") echo 'selected'; ?>>Grupo 01</option>
-                                                    <option value="24" <?php if ($catadm['IdGrupo'] == "24") echo 'selected'; ?>>Grupo 02</option>
-                                                    <option value="25" <?php if ($catadm['IdGrupo'] == "25") echo 'selected'; ?>>Grupo 03</option>
-                                                    <option value="26" <?php if ($catadm['IdGrupo'] == "26") echo 'selected'; ?>>Grupo 04</option>
-                                                    <option value="27" <?php if ($catadm['IdGrupo'] == "27") echo 'selected'; ?>>Grupo 05</option>
-                                                    <option value="28" <?php if ($catadm['IdGrupo'] == "28") echo 'selected'; ?>>Grupo 06</option>
-                                                    <option value="29" <?php if ($catadm['IdGrupo'] == "29") echo 'selected'; ?>>Grupo 07</option>
-                                                    <option value="30" <?php if ($catadm['IdGrupo'] == "30") echo 'selected'; ?>>Grupo 08</option>
-                                                    <option value="31" <?php if ($catadm['IdGrupo'] == "31") echo 'selected'; ?>>Grupo 09</option>
-                                                    <option value="32" <?php if ($catadm['IdGrupo'] == "32") echo 'selected'; ?>>Grupo 10</option>
-                                                    <option value="33" <?php if ($catadm['IdGrupo'] == "33") echo 'selected'; ?>>Grupo 11</option>
-                                                    <option value="34" <?php if ($catadm['IdGrupo'] == "34") echo 'selected'; ?>>Grupo 12</option>
-                                                    <option value="35" <?php if ($catadm['IdGrupo'] == "35") echo 'selected'; ?>>Grupo 13</option>
-                                                    <option value="36" <?php if ($catadm['IdGrupo'] == "36") echo 'selected'; ?>>Grupo 14</option>
-                                                    <option value="37" <?php if ($catadm['IdGrupo'] == "37") echo 'selected'; ?>>Grupo 15</option>
-                                                    <option value="38" <?php if ($catadm['IdGrupo'] == "38") echo 'selected'; ?>>Grupo 16</option>
-                                                    <option value="39" <?php if ($catadm['IdGrupo'] == "39") echo 'selected'; ?>>Grupo 17</option>
-                                                    <option value="40" <?php if ($catadm['IdGrupo'] == "40") echo 'selected'; ?>>Grupo 18</option>
-                                                    <option value="41" <?php if ($catadm['IdGrupo'] == "41") echo 'selected'; ?>>Grupo 19</option>
-                                                    <option value="42" <?php if ($catadm['IdGrupo'] == "42") echo 'selected'; ?>>Grupo 20</option>
-                                                    <option value="43" <?php if ($catadm['IdGrupo'] == "43") echo 'selected'; ?>>Pendiente</option>
-                                                </select>
-                                            <?php endif; ?>
+                                            <?php
+                                            $idGrupoActual = (int) ($catadm['IdGrupo'] ?? 0);
+                                            $idsGruposValidos = array_map('intval', array_column($gruposSacramento, 'IdGrupo'));
+                                            $grupoActualEsSinGrupo = !in_array($idGrupoActual, $idsGruposValidos, true);
+                                            ?>
+                                            <select class="form-control" name="IdGrupo" data-search-enabled="true">
+                                                <?php if ($grupoActualEsSinGrupo): ?>
+                                                    <option value="<?php echo $idGrupoActual; ?>" selected>
+                                                        <?php echo in_array($idGrupoActual, [1, 22], true) ? 'Sin Grupo' : 'Grupo actual'; ?>
+                                                    </option>
+                                                <?php endif; ?>
+                                                <?php foreach ($gruposSacramento as $grupoOpcion): ?>
+                                                    <option value="<?php echo (int) $grupoOpcion['IdGrupo']; ?>" <?php if ($idGrupoActual === (int) $grupoOpcion['IdGrupo']) echo 'selected'; ?>>
+                                                        Grupo <?php echo htmlspecialchars($grupoOpcion['NombreGrupo']); ?>
+                                                    </option>
+                                                <?php endforeach; ?>
+                                            </select>
                                         </div>
                                         <input type="hidden" name="FechaIniCat" value="<?= $catadm['FechaIniCat'] ?>">
 
@@ -519,6 +592,11 @@ $activeNotifications = getActiveNotifications($conn);
                                             </select>
                                         </div>
 
+                                        <div class="col-sm-6 col-lg-3 form-group">
+                                            <label class="form-label">Usuario</label>
+                                            <input type="text" class="form-control" name="UsuarioCat" value="<?php echo htmlspecialchars($catadm['UsuarioCat']); ?>" required>
+                                        </div>
+
                                         <hr>
 
                                         <br>
@@ -528,34 +606,65 @@ $activeNotifications = getActiveNotifications($conn);
 
                                 <?php if (!isset($catadm)): ?>
 
-                                    <div class="my-sm-5 py-5 text-center">
-                                        <h4>Lista de catequistas sin grupo de "<?php echo $Catequista['Sacramento']; ?>"</h4>
-                                        <p>Para asignar un catequista a un grupo en especifico, deberá realizarlo de manera individual</p>
-                                        <?php if (empty($CatSinG)) : ?>
-                                            <table class="table table-striped table-hover col-lg-12 align-items-center">
+                                    <div class="my-sm-5 py-5">
+                                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                                            <div>
+                                                <h4 class="mb-1">Catequistas registrados de "<?php echo htmlspecialchars($Catequista['Sacramento']); ?>"</h4>
+                                                <p class="text-muted mb-0">Ordenados por grupo.</p>
+                                            </div>
+                                            <span class="badge bg-primary"><?php echo count($todosCatequistas); ?> registrados</span>
+                                        </div>
+                                        <div class="table-responsive">
+                                            <table class="table table-striped table-hover align-middle">
                                                 <thead class="table-dark">
                                                     <tr>
-                                                        <th>Identificación</th>
-                                                        <th>Nombre Completo</th>
-                                                        <th>Rol Asignado</th>
+                                                        <th>Grupo</th>
+                                                        <th>CI</th>
+                                                        <th>Nombre</th>
+                                                        <th>Apellidos</th>
+                                                        <th>Contacto</th>
+                                                        <th>Usuario</th>
+                                                        <th>Contraseña</th>
+                                                        <th>Rol</th>
+                                                        <th>Estado</th>
+                                                        <th class="text-end">Ver</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
-                                                    <?php foreach ($CatSinG as $ca): ?>
-                                                        <?php if ($ca['RolCat'] != 'Coordinador'): ?>
-                                                            <tr>
-                                                                <td><?php echo htmlspecialchars($ca['CiCat']); ?></td>
-                                                                <td><?php echo htmlspecialchars($ca['NombreCompleto']); ?></td>
-                                                                <td><?php echo htmlspecialchars($ca['RolCat']); ?></td>
-                                                            </tr>
-                                                        <?php endif; ?>
+                                                    <?php foreach ($todosCatequistas as $cat): ?>
+                                                        <tr>
+                                                            <td>
+                                                                <?php if (!empty($cat['NombreGrupo'])): ?>
+                                                                    <span class="badge bg-secondary">Grupo <?php echo htmlspecialchars($cat['NombreGrupo']); ?></span>
+                                                                <?php else: ?>
+                                                                    <span class="badge bg-light text-dark">Sin grupo</span>
+                                                                <?php endif; ?>
+                                                            </td>
+                                                            <td><?php echo htmlspecialchars($cat['CiCat']); ?></td>
+                                                            <td><?php echo htmlspecialchars($cat['Nombre']); ?></td>
+                                                            <td><?php echo htmlspecialchars(trim(($cat['ApPaterno'] ?? '') . ' ' . ($cat['ApMaterno'] ?? ''))); ?></td>
+                                                            <td><?php echo htmlspecialchars($cat['Contacto'] ?? ''); ?></td>
+                                                            <td><?php echo htmlspecialchars($cat['UsuarioCat']); ?></td>
+                                                            <td><span class="text-muted">&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;</span></td>
+                                                            <td><?php echo htmlspecialchars($cat['RolCat'] ?? ''); ?></td>
+                                                            <td>
+                                                                <span class="badge <?php echo $cat['EstadoCat'] === 'Activo' ? 'bg-success' : 'bg-danger'; ?>">
+                                                                    <?php echo htmlspecialchars($cat['EstadoCat']); ?>
+                                                                </span>
+                                                            </td>
+                                                            <td class="text-end">
+                                                                <a href="CatequistaAdm.php?ver=<?php echo urlencode($cat['CiCat']); ?>" class="btn btn-sm btn-primary-soft" title="Ver catequista">
+                                                                    <i class="bi bi-eye"></i>
+                                                                </a>
+                                                            </td>
+                                                        </tr>
                                                     <?php endforeach; ?>
+                                                    <?php if (empty($todosCatequistas)): ?>
+                                                        <tr><td colspan="10" class="text-center text-muted py-4">No hay catequistas registrados.</td></tr>
+                                                    <?php endif; ?>
                                                 </tbody>
                                             </table>
-                                        <?php else : ?>
-                                            <i class="display-1 text-body-secondary bi bi-calendar2-event"></i>
-                                            <h4 class="mt-2 mb-3 text-body">No hay catequistas</h4>
-                                        <?php endif; ?>
+                                        </div>
                                     </div>
                                 <?php endif; ?>
                             </div>
@@ -654,7 +763,7 @@ $activeNotifications = getActiveNotifications($conn);
                 <div class="modal-body">
                     <form method="POST" class="row g-1">
 
-                        <div class="form-group col-sm-1 col-lg-5">
+                        <div class="form-group col-12 col-lg-5">
                             <label class="form-label">CI del Catequista</label>
                             <input type="text" class="form-control" id="CiCatNuevo" name="CiCatNuevo" placeholder="CI Persona">
                             <a class="catequista btn btn-sm btn-dashed rounded mt-0" href="VistaPersona.php"> <i class="bi bi-plus-circle-dotted me-1"></i>registrar a la Persona</a>
@@ -662,62 +771,18 @@ $activeNotifications = getActiveNotifications($conn);
 
                         <input type="hidden" name="Sacramento" value="<?php echo $Catequista['Sacramento']; ?>">
 
-                        <div class="col-sm-6 col-lg-3">
+                        <div class="col-12 col-sm-6 col-lg-3">
                             <label class="form-label">Asignar Grupo</label>
-                            <?php if ($Catequista['Sacramento'] == 'Primera Comunión'): ?>
-
-                                <select class="form-control" name="IdGrupo" data-search-enabled="true">
-                                    <option value="1">Sin Grupo</option>
-                                    <option value="2">Grupo 01</option>
-                                    <option value="3">Grupo 02</option>
-                                    <option value="4">Grupo 03</option>
-                                    <option value="5">Grupo 04</option>
-                                    <option value="6">Grupo 05</option>
-                                    <option value="7">Grupo 06</option>
-                                    <option value="8">Grupo 07</option>
-                                    <option value="9">Grupo 08</option>
-                                    <option value="10">Grupo 09</option>
-                                    <option value="11">Grupo 10</option>
-                                    <option value="12">Grupo 11</option>
-                                    <option value="13">Grupo 12</option>
-                                    <option value="14">Grupo 13</option>
-                                    <option value="15">Grupo 14</option>
-                                    <option value="16">Grupo 15</option>
-                                    <option value="17">Grupo 16</option>
-                                    <option value="18">Grupo 17</option>
-                                    <option value="19">Grupo 18</option>
-                                    <option value="20">Grupo 19</option>
-                                    <option value="21">Grupo 20</option>
-                                </select>
-
-                            <?php elseif ($catequista['Sacramento'] == 'Confirmación'): ?>
-                                <select class="form-control" name="IdGrupo" data-search-enabled="true">
-                                    <option value="22">Sin Grupo</option>
-                                    <option value="23">Grupo 01</option>
-                                    <option value="24">Grupo 02</option>
-                                    <option value="25">Grupo 03</option>
-                                    <option value="26">Grupo 04</option>
-                                    <option value="27">Grupo 05</option>
-                                    <option value="28">Grupo 06</option>
-                                    <option value="29">Grupo 07</option>
-                                    <option value="30">Grupo 08</option>
-                                    <option value="31">Grupo 09</option>
-                                    <option value="32">Grupo 10</option>
-                                    <option value="33">Grupo 11</option>
-                                    <option value="34">Grupo 12</option>
-                                    <option value="35">Grupo 13</option>
-                                    <option value="36">Grupo 14</option>
-                                    <option value="37">Grupo 15</option>
-                                    <option value="38">Grupo 16</option>
-                                    <option value="39">Grupo 17</option>
-                                    <option value="40">Grupo 18</option>
-                                    <option value="41">Grupo 19</option>
-                                    <option value="42">Grupo 20</option>
-                                </select>
-
-                            <?php endif; ?>
+                            <select class="form-control" name="IdGrupo" data-search-enabled="true" required>
+                                <option value="">Seleccionar grupo…</option>
+                                <?php foreach ($gruposSacramento as $grupoOpcion): ?>
+                                    <option value="<?php echo (int) $grupoOpcion['IdGrupo']; ?>">
+                                        Grupo <?php echo htmlspecialchars($grupoOpcion['NombreGrupo']); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
                         </div>
-                        <div class="form-group col-lg-4">
+                        <div class="form-group col-12 col-sm-6 col-lg-4">
                             <label for="FechaNac" class="form-label">Fecha de Inicio:</label>
                             <input type="date" class="form-control" name="FechaIniCat" required><br>
                         </div>

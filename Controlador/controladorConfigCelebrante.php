@@ -59,24 +59,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 
     if (isset($_POST['cambiarContracat'])) {
-        $CActual = $_POST['ActualC'];
-        $CNuevo1 = $_POST['NuevoC1'];
-        $CNuevo2 = $_POST['NuevoC2'];
+        $CActual = (string) ($_POST['ActualC'] ?? '');
+        $CNuevo1 = (string) ($_POST['NuevoC1'] ?? '');
+        $CNuevo2 = (string) ($_POST['NuevoC2'] ?? '');
 
-        if ($CActual == $celebrante->ClaveCel) {
-            if ($CNuevo1 == $CNuevo2) {
-                if ($celebrante->updatePassword($CNuevo2)) {
-                    header("Location: ../logout.php");
-                    exit;
-                } else {
-                    echo "Error al actualizar la contraseña.";
-                }
-            } else {
-                echo "Las nuevas contraseñas no coinciden.";
+        // En el primer ingreso con una clave de un solo uso no se pide la clave
+        // actual: el catequizando ya se autenticó con ella.
+        $verificarActual = empty($_SESSION['CiPersona']['DebeCambiarClave']);
+
+        if (!$verificarActual || $celebrante->verifyPassword($CActual)) {
+            if ($CNuevo1 === '') {
+                $_SESSION['errorClave'] = 'La nueva contraseña no puede estar vacía.';
+                header("Location: Configuracion.php");
+                exit;
             }
-        } else {
-            echo "La contraseña actual no es válida.";
+            if ($CNuevo1 !== $CNuevo2) {
+                $_SESSION['errorClave'] = 'Las nuevas contraseñas no coinciden.';
+                header("Location: Configuracion.php");
+                exit;
+            }
+            if ($celebrante->updatePassword(password_hash($CNuevo1, PASSWORD_DEFAULT))) {
+                unset($_SESSION['CiPersona']['ClaveCel']);
+                $_SESSION['CiPersona']['DebeCambiarClave'] = 0;
+                $_SESSION['mensajeClave'] = 'Contraseña cambiada correctamente.';
+                header("Location: Configuracion.php");
+                exit;
+            }
+            $_SESSION['errorClave'] = 'No se pudo actualizar la contraseña.';
+            header("Location: Configuracion.php");
+            exit;
         }
+
+        $_SESSION['errorClave'] = 'La contraseña actual no es válida.';
+        header("Location: Configuracion.php");
+        exit;
     }
 
     if (isset($_POST['EliminarCount'])) {

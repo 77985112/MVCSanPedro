@@ -10,7 +10,7 @@ ControladorAcceso::exigir('inicio');
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($_POST) && empty($_FILES)
     && (int) ($_SERVER['CONTENT_LENGTH'] ?? 0) > 0) {
     http_response_code(413);
-    exit('El archivo supera el límite de carga. Use una imagen de hasta 5 MB o un video de hasta 100 MB.');
+    exit('El archivo supera el límite de carga. Use una imagen de hasta 2 MB o un video de hasta 10 MB.');
 }
 
 
@@ -279,7 +279,7 @@ $mes = $fecha->format('d') . " de " . $meses[$fecha->format('n') - 1];
                             </div>
                             <div class="col-sm-6">
                                 <?php $imagenesActuales = ControladorActividad::imagenesActividad($actividad); $filasExtras = $actividad['ImagenesExtrasFilas'] ?? []; ?>
-                                <label class="form-label" for="editarImagenActividad">Imágenes actuales / nuevas imágenes (hasta 7 en total)</label>
+                                <label class="form-label" for="editarImagenActividad">Imágenes actuales / nuevas imágenes (hasta 5 en total)</label>
                                 <?php if ($imagenesActuales): ?>
                                 <div id="galeriaActualImagen" class="d-flex flex-wrap align-items-start gap-2 mb-2">
                                     <div class="text-center">
@@ -298,7 +298,7 @@ $mes = $fecha->format('d') . " de " . $meses[$fecha->format('n') - 1];
                                 </div>
                                 <?php endif; ?>
                                 <input type="file" class="form-control" id="editarImagenActividad" name="NuevaImagenActividad[]" multiple accept=".jpg,.jpeg,.png,image/jpeg,image/png" data-actividad-imagen="previewImagenEdicion" data-actividad-grupo="editarActividadParroquia" data-actividad-maximas="<?php echo max(0, ControladorActividad::MAXIMO_IMAGENES - count($imagenesActuales)); ?>" data-actividad-galeria="galeriaActualImagen">
-                                <div class="form-text">JPG/PNG, hasta 5 MB c/u. Las imágenes nuevas se agregan a la actividad.</div>
+                                <div class="form-text">JPG/PNG, hasta 2 MB c/u. Las imágenes nuevas se agregan a la actividad.</div>
                                 <?php if ($hayImagen): ?>
                                 <div class="form-check mt-2">
                                     <input class="form-check-input" type="checkbox" id="quitarImagenEdicion" name="QuitarImagen" value="1" data-quitar-actividad="editarImagenActividad">
@@ -310,14 +310,20 @@ $mes = $fecha->format('d') . " de " . $meses[$fecha->format('n') - 1];
                             <div class="col-sm-6">
                                 <label class="form-label" for="editarVideoActividad">Nuevo video (opcional)</label>
                                 <input type="file" class="form-control" id="editarVideoActividad" name="NuevaVideoActividad" accept=".mp4,.webm,video/mp4,video/webm" data-actividad-video="previewVideoEdicion" data-actividad-grupo="editarActividadParroquia">
-                                <div class="form-text">MP4/WebM, hasta 100 MB.</div>
-                                <?php if ($esVideoActividad): ?>
+                                <div class="form-text">MP4/WebM, hasta 10 MB (se comprime al adjuntarlo).</div>
+                                <?php if ($esVideoActividad || !empty($actividad['VideoUrl'])): ?>
                                 <div class="form-check mt-2">
                                     <input class="form-check-input" type="checkbox" id="quitarVideoEdicion" name="QuitarVideo" value="1" data-quitar-actividad="editarVideoActividad">
                                     <label class="form-check-label small" for="quitarVideoEdicion">Quitar el video actual</label>
                                 </div>
                                 <?php endif; ?>
                                 <video id="previewVideoEdicion" <?php if ($esVideoActividad): ?>src="../assets/images/events/<?php echo rawurlencode($archivoVideo); ?>"<?php endif; ?> class="w-100 rounded mt-3 actividad-video <?php echo $esVideoActividad ? '' : 'd-none'; ?>" controls playsinline preload="none" style="max-height:300px;"></video>
+                                <div class="mt-3">
+                                    <label class="form-label" for="editarVideoUrl">O pega un enlace de YouTube, TikTok o Facebook</label>
+                                    <input type="url" class="form-control" id="editarVideoUrl" name="VideoUrl" maxlength="255" placeholder="https://www.youtube.com/watch?v=..." value="<?php echo $valorEdicion('VideoUrl'); ?>">
+                                    <div class="form-text">Se reproduce dentro de la actividad. Si pegas un enlace, tiene prioridad sobre el archivo.</div>
+                                    <div id="previewVideoUrl" class="mt-2"></div>
+                                </div>
                             </div>
                             <div class="col-12 small">Conserve al menos una imagen o un video. Organiza: <strong>Parroquia</strong>.</div>
                             <div class="col-12 d-flex flex-wrap gap-2">
@@ -445,6 +451,77 @@ $mes = $fecha->format('d') . " de " . $meses[$fecha->format('n') - 1];
     <script src="../assets/js/functions.js"></script>
     <script src="../assets/js/tema.js"></script>
   <script src="../assets/js/actividad-multimedia.js?v=<?php echo filemtime(__DIR__ . '/../assets/js/actividad-multimedia.js'); ?>"></script>
+    <script src="../assets/js/actividad-compresion.js?v=<?php echo filemtime(__DIR__ . '/../assets/js/actividad-compresion.js'); ?>"></script>
+    <script>
+        // Vista previa del video por enlace: permite saber al instante si el
+        // video es público o si la plataforma lo tiene restringido.
+        (function () {
+            var campo = document.getElementById('editarVideoUrl');
+            var caja = document.getElementById('previewVideoUrl');
+            if (!campo || !caja) return;
+
+            function embed(url) {
+                var u;
+                try { u = new URL(url); } catch (e) { return null; }
+                var host = u.hostname.toLowerCase().replace(/^www\./, '');
+                var ruta = u.pathname || '';
+                var m;
+
+                if (['youtube.com', 'm.youtube.com', 'youtube-nocookie.com'].indexOf(host) >= 0) {
+                    var id = u.searchParams.get('v') || '';
+                    if (!id && (m = ruta.match(/^\/(?:shorts|embed|live|v)\/([A-Za-z0-9_-]{6,20})/))) id = m[1];
+                    return /^[A-Za-z0-9_-]{6,20}$/.test(id) ? 'https://www.youtube.com/embed/' + id : null;
+                }
+                if (host === 'youtu.be') {
+                    m = ruta.match(/^\/([A-Za-z0-9_-]{6,20})/);
+                    return m ? 'https://www.youtube.com/embed/' + m[1] : null;
+                }
+                if (host === 'tiktok.com' || host === 'm.tiktok.com') {
+                    m = ruta.match(/\/video\/(\d{6,25})/);
+                    return m ? 'https://www.tiktok.com/embed/v2/' + m[1] : null;
+                }
+                if (['facebook.com', 'm.facebook.com', 'web.facebook.com', 'fb.watch'].indexOf(host) >= 0) {
+                    return 'https://www.facebook.com/plugins/video.php?href=' + encodeURIComponent(url) + '&show_text=false';
+                }
+                return null;
+            }
+
+            function actualizar() {
+                var valor = campo.value.trim();
+                caja.replaceChildren();
+                if (!valor) return;
+
+                var src = embed(valor);
+                if (!src) {
+                    var error = document.createElement('div');
+                    error.className = 'form-text text-danger';
+                    error.textContent = 'Use un enlace de YouTube, TikTok o Facebook.';
+                    caja.appendChild(error);
+                    return;
+                }
+
+                var marco = document.createElement('iframe');
+                marco.src = src;
+                marco.className = 'w-100 rounded';
+                marco.style.cssText = 'height:340px;border:0;background:#101722;';
+                marco.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share');
+                marco.setAttribute('allowfullscreen', '');
+                marco.setAttribute('loading', 'lazy');
+                marco.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+                marco.title = 'Vista previa del video';
+                caja.appendChild(marco);
+
+                var nota = document.createElement('div');
+                nota.className = 'form-text';
+                nota.textContent = 'Si aparece un aviso de inicio de sesión, "contenido no disponible" o un cuadro vacío, el video está restringido y no se verá en la página.';
+                caja.appendChild(nota);
+            }
+
+            campo.addEventListener('input', actualizar);
+            campo.addEventListener('change', actualizar);
+            actualizar();
+        })();
+    </script>
 </body>
 
 </html>

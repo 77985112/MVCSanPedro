@@ -35,9 +35,40 @@
         });
     }
 
+    function interceptarLogin() {
+        var formulario = document.getElementById('login-form');
+        if (!formulario || !window.fetch || !window.FormData) return;
+
+        formulario.addEventListener('submit', function (evento) {
+            evento.preventDefault();
+
+            var boton = formulario.querySelector('button[type="submit"]');
+            if (boton) boton.disabled = true;
+
+            fetch(formulario.action, {
+                method: 'POST',
+                body: new FormData(formulario),
+                credentials: 'same-origin',
+                redirect: 'follow'
+            }).then(function (respuesta) {
+                // El controlador redirige al panel o al login con el error.
+                // El POST se hizo en segundo plano, así que no queda en el
+                // historial; la página de inicio sí queda y "atrás" funciona normal.
+                window.location.assign(respuesta.url);
+            }).catch(function () {
+                if (boton) boton.disabled = false;
+                formulario.submit();
+            });
+        });
+    }
+
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', iniciarAcceso);
+        document.addEventListener('DOMContentLoaded', function () {
+            iniciarAcceso();
+            interceptarLogin();
+        });
     } else {
         iniciarAcceso();
+        interceptarLogin();
     }
 }());

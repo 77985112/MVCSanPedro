@@ -11,7 +11,7 @@ $Catequista = $_SESSION['CiPersona'];
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($_POST) && empty($_FILES)
     && (int) ($_SERVER['CONTENT_LENGTH'] ?? 0) > 0) {
     http_response_code(413);
-    exit('El archivo supera el límite de carga. Use una imagen de hasta 5 MB o un video de hasta 100 MB.');
+    exit('El archivo supera el límite de carga. Use una imagen de hasta 2 MB o un video de hasta 10 MB.');
 }
 
 
@@ -104,11 +104,12 @@ function getActiveNotifications($conn)
             FROM notificaciones n 
             INNER JOIN catequista c ON n.CiNotificador = c.CiCat 
             INNER JOIN `persona` p ON c.CiCat = p.CiPersona 
-            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ?
+            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ? AND n.Sacramento = ?
             ORDER BY n.FechaNotFin ASC";
 
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("s", $currentDateTime);
+    $sacramentoActual = $_SESSION['CiPersona']['Sacramento'] ?? '';
+    $stmt->bind_param("ss", $currentDateTime, $sacramentoActual);
     $stmt->execute();
     $result = $stmt->get_result();
 
@@ -217,11 +218,6 @@ $activeNotifications = getActiveNotifications($conn);
                             <a class="dropdown-item" href="ReunionesCat.php"><i class="fa-fw bi bi-calendar2-check me-2"></i>Fecha de Reuniones</a>
                         </li>
                         <li>
-                            <a class="dropdown-item" href="Documentos.php">
-                                <i class="fa-fw bi bi-card-text me-2"></i>Documentación
-                            </a>
-                        </li>
-                        <li>
                             <a class="dropdown-item" href="Reglamento.php">
                                 <i class="fa-fw bi bi-list-check me-2"></i>Reglamento
                             </a>
@@ -302,17 +298,7 @@ $activeNotifications = getActiveNotifications($conn);
                             <a class="nav-link" href="VistaPersona.php"> <i class="<bi bi-person-vcard nav-icon"></i> <span class="nav-text">Persona </span></a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="Configuracion.php"> <i class="bi bi-gear-wide-connected nav-icon"></i> <span class="nav-text">Configuración </span></a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="VistaTodosCat.php"> <i class="bi bi-calendar-check nav-icon"></i> <span class="nav-text">Listado Catequistas</span></a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="VistaTodosCat.php"> <i class="bi bi-file-earmark-text nav-icon"></i> <span class="nav-text">Reporte </span></a>
-                        </li>
-                        <h6 class="nav-text badge bg-primary text-white mt-2 me-2 border border-white border-3 rounded"><i class="bi bi-caret-down-fill"></i>&nbsp;&nbsp; Publico</h6>
-                        <li class="nav-item">
-                            <a class="nav-link" href="VistaMensajeCoor.php"> <i class="bi bi-file-earmark-text nav-icon"></i> <span class="nav-text">Mensaje Público</span></a>
+                            <a class="nav-link" href="VistaTodosCat.php"> <i class="bi bi-calendar-check nav-icon"></i> <span class="nav-text">Reporte Activos Inactivos</span></a>
                         </li>
                     </ul>
                 </div>
@@ -418,7 +404,7 @@ $activeNotifications = getActiveNotifications($conn);
 
                                                 <div class="col-sm-6 col-lg-6 form-group">
                                                     <?php $imagenesActuales = ControladorActividad::imagenesActividad($actividad); $filasExtras = $actividad['ImagenesExtrasFilas'] ?? []; ?>
-                                                    <label class="form-label">Imágenes actuales / nuevas imágenes (hasta 7 en total)</label>
+                                                    <label class="form-label">Imágenes actuales / nuevas imágenes (hasta 5 en total)</label>
                                                     <?php if ($imagenesActuales): ?>
                                                     <div id="galeriaActualImagen" class="d-flex flex-wrap align-items-start gap-2 mb-2">
                                                         <div class="text-center">
@@ -457,9 +443,16 @@ $activeNotifications = getActiveNotifications($conn);
                                                 </div>
 
                                                 <div class="col-12">
-                                                    <div class="form-text">Sin seleccionar otro archivo, se conservan los actuales. Puede agregar hasta 7 imágenes en total (JPG/PNG, hasta 5 MB c/u); videos MP4/WebM hasta 100 MB.</div>
+                                                    <div class="form-text">Sin seleccionar otro archivo, se conservan los actuales. Puede agregar hasta 5 imágenes en total (JPG/PNG, hasta 2 MB c/u); videos MP4/WebM hasta 10 MB.</div>
                                                     <div id="previewImagen" class="d-flex flex-wrap gap-2 mt-3"></div>
                                                     <video id="previewVideo" <?php if ($esVideoActividad): ?>src="../assets/images/events/<?php echo rawurlencode($archivoVideo); ?>"<?php endif; ?> class="w-100 rounded mt-3 actividad-video <?php echo $esVideoActividad ? '' : 'd-none'; ?>" controls playsinline preload="none" style="max-height:300px;"></video>
+                                                </div>
+
+                                                <div class="col-12 form-group">
+                                                    <label class="form-label" for="editarVideoUrl">Enlace de video (YouTube, TikTok o Facebook)</label>
+                                                    <input type="url" class="form-control" id="editarVideoUrl" name="VideoUrl" maxlength="255" placeholder="https://www.youtube.com/watch?v=..." value="<?php echo htmlspecialchars($actividad['VideoUrl'] ?? '', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>">
+                                                    <div class="form-text">Opcional. También puede subir un video MP4/WebM.</div>
+                                                    <div id="previewVideoUrl" class="mt-2"></div>
                                                 </div>
 
                                                 <div class="col-sm-6 col-lg-4 form-group">
@@ -653,6 +646,7 @@ $activeNotifications = getActiveNotifications($conn);
 <script src="../assets/js/functions.js"></script>
 <script src="../assets/js/tema.js"></script>
   <script src="../assets/js/actividad-multimedia.js?v=<?php echo filemtime(__DIR__ . '/../assets/js/actividad-multimedia.js'); ?>"></script>
+    <script src="../assets/js/actividad-compresion.js?v=<?php echo filemtime(__DIR__ . '/../assets/js/actividad-compresion.js'); ?>"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         var abrir = document.querySelector('.sidebar-start-toggle-mobile');
@@ -668,6 +662,70 @@ $activeNotifications = getActiveNotifications($conn);
             });
         }
     });
+</script>
+<script>
+    // Vista previa del video por enlace de la actividad.
+    (function () {
+        var campo = document.getElementById('editarVideoUrl');
+        var caja = document.getElementById('previewVideoUrl');
+        if (!campo || !caja) return;
+
+        function embed(url) {
+            var u;
+            try { u = new URL(url); } catch (e) { return null; }
+            var host = u.hostname.toLowerCase().replace(/^www\./, '');
+            var ruta = u.pathname || '';
+            var m;
+
+            if (['youtube.com', 'm.youtube.com', 'youtube-nocookie.com'].indexOf(host) >= 0) {
+                var id = u.searchParams.get('v') || '';
+                if (!id && (m = ruta.match(/^\/(?:shorts|embed|live|v)\/([A-Za-z0-9_-]{6,20})/))) id = m[1];
+                return /^[A-Za-z0-9_-]{6,20}$/.test(id) ? 'https://www.youtube.com/embed/' + id : null;
+            }
+            if (host === 'youtu.be') {
+                m = ruta.match(/^\/([A-Za-z0-9_-]{6,20})/);
+                return m ? 'https://www.youtube.com/embed/' + m[1] : null;
+            }
+            if (host === 'tiktok.com' || host === 'm.tiktok.com') {
+                m = ruta.match(/\/video\/(\d{6,25})/);
+                return m ? 'https://www.tiktok.com/embed/v2/' + m[1] : null;
+            }
+            if (['facebook.com', 'm.facebook.com', 'web.facebook.com', 'fb.watch'].indexOf(host) >= 0) {
+                return 'https://www.facebook.com/plugins/video.php?href=' + encodeURIComponent(url) + '&show_text=false';
+            }
+            return null;
+        }
+
+        function actualizar() {
+            var valor = campo.value.trim();
+            caja.replaceChildren();
+            if (!valor) return;
+
+            var src = embed(valor);
+            if (!src) {
+                var error = document.createElement('div');
+                error.className = 'form-text text-danger';
+                error.textContent = 'Use un enlace de YouTube, TikTok o Facebook.';
+                caja.appendChild(error);
+                return;
+            }
+
+            var marco = document.createElement('iframe');
+            marco.src = src;
+            marco.className = 'w-100 rounded';
+            marco.style.cssText = 'height:340px;border:0;background:#101722;';
+            marco.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share');
+            marco.setAttribute('allowfullscreen', '');
+            marco.setAttribute('loading', 'lazy');
+            marco.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+            marco.title = 'Vista previa del video';
+            caja.appendChild(marco);
+        }
+
+        campo.addEventListener('input', actualizar);
+        campo.addEventListener('change', actualizar);
+        actualizar();
+    })();
 </script>
 </body>
 

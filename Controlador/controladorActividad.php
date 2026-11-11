@@ -6,7 +6,7 @@ class ControladorActividad
     public const LIMITE_DESCRIPCION = 5000;
     public const LIMITE_LUGAR = 255;
     /** Máximo de imágenes que puede tener una actividad (principal + adicionales). */
-    public const MAXIMO_IMAGENES = 7;
+    public const MAXIMO_IMAGENES = 5;
     /** Tipos de actividad gestionables en el sistema. */
     public const TIPOS_ACTIVIDAD = ['Parroquia', 'Confirmación', 'Primera Comunión'];
 
@@ -30,7 +30,11 @@ class ControladorActividad
         if (!in_array($data['TipoActividad'], self::TIPOS_ACTIVIDAD, true)) {
             throw new InvalidArgumentException("Elija el tipo de actividad según la pestaña del formulario (Parroquia, Primera Comunión o Confirmación).");
         }
-        list($data['ImagenActividad'], $data['ImagenesExtras'], $data['VideoActividad']) = $this->prepararArchivosActividad();
+        $data['VideoUrl'] = self::normalizarVideoUrl($data['VideoUrl'] ?? null);
+        list($data['ImagenActividad'], $data['ImagenesExtras'], $data['VideoActividad']) = $this->prepararArchivosActividad(false);
+        if ($data['ImagenActividad'] === 'Ninguno' && empty($data['VideoActividad']) && empty($data['VideoUrl'])) {
+            throw new InvalidArgumentException("Adjunte una imagen, un video o pegue un enlace válido de YouTube, TikTok o Facebook.");
+        }
         try {
             return $this->actividadModel->registrarActividad($data);
         } catch (Throwable $e) {
@@ -82,6 +86,78 @@ class ControladorActividad
     }
 
     /**
+     * URL para incrustar un video de YouTube, TikTok o Facebook.
+     * Devuelve null si el enlace no pertenece a esos proveedores.
+     */
+    public static function videoEmbedUrl($url)
+    {
+        $url = trim((string) $url);
+        if ($url === '') {
+            return null;
+        }
+
+        $partes = parse_url($url);
+        if (!$partes || empty($partes['host'])) {
+            return null;
+        }
+
+        $host = strtolower(preg_replace('/^www\./', '', $partes['host']));
+        $ruta = (string) ($partes['path'] ?? '');
+        $consulta = [];
+        if (!empty($partes['query'])) {
+            parse_str($partes['query'], $consulta);
+        }
+
+        // YouTube
+        if (in_array($host, ['youtube.com', 'm.youtube.com', 'youtube-nocookie.com'], true)) {
+            $id = isset($consulta['v']) && is_string($consulta['v']) ? $consulta['v'] : '';
+            if ($id === '' && preg_match('#^/(?:shorts|embed|live|v)/([A-Za-z0-9_-]{6,20})#', $ruta, $coincide)) {
+                $id = $coincide[1];
+            }
+            return preg_match('/^[A-Za-z0-9_-]{6,20}$/', $id) ? 'https://www.youtube.com/embed/' . $id : null;
+        }
+
+        if ($host === 'youtu.be') {
+            return preg_match('#^/([A-Za-z0-9_-]{6,20})#', $ruta, $coincide)
+                ? 'https://www.youtube.com/embed/' . $coincide[1] : null;
+        }
+
+        // TikTok
+        if (in_array($host, ['tiktok.com', 'm.tiktok.com'], true)) {
+            return preg_match('#/video/(\d{6,25})#', $ruta, $coincide)
+                ? 'https://www.tiktok.com/embed/v2/' . $coincide[1] : null;
+        }
+
+        // Facebook
+        if (in_array($host, ['facebook.com', 'm.facebook.com', 'web.facebook.com', 'fb.watch'], true)) {
+            return 'https://www.facebook.com/plugins/video.php?href=' . rawurlencode($url) . '&show_text=false';
+        }
+
+        return null;
+    }
+
+    /** Valida el enlace del formulario y devuelve la URL o null. */
+    private static function normalizarVideoUrl($url)
+    {
+        $url = trim((string) $url);
+        if ($url === '') {
+            return null;
+        }
+
+        $esquema = strtolower((string) parse_url($url, PHP_URL_SCHEME));
+        if (mb_strlen($url, 'UTF-8') > 255 || !filter_var($url, FILTER_VALIDATE_URL)
+            || !in_array($esquema, ['http', 'https'], true)) {
+            throw new InvalidArgumentException("El enlace del video no es válido.");
+        }
+
+        if (self::videoEmbedUrl($url) === null) {
+            throw new InvalidArgumentException("Use un enlace de YouTube, TikTok o Facebook.");
+        }
+
+        return $url;
+    }
+
+    /**
      * Archivos reales (imagen y video) de una actividad.
      * Devuelve [imagen|null, video|null]; 'Ninguno' o vacío se considera sin imagen.
      */
@@ -95,7 +171,7 @@ class ControladorActividad
     }
 
     /**
-     * Todas las imágenes de la actividad en orden: la principal y las adicionales (hasta 7).
+     * Todas las imágenes de la actividad en orden: la principal y las adicionales (hasta 5).
      */
     public static function imagenesActividad($actividad)
     {
@@ -150,7 +226,7 @@ class ControladorActividad
     }
 
     /**
-     * Guarda el archivo del campo indicado. $tipo: 'imagen' (JPG/PNG 5 MB) o 'video' (MP4/WebM 100 MB).
+     * Guarda el archivo del campo indicado. $tipo: 'imagen' (JPG/PNG 2 MB) o 'video' (MP4/WebM 10 MB).
      * Devuelve el nombre generado o null si no se adjuntó nada (solo cuando es opcional).
      */
     private function guardarArchivoActividad($campo, $tipo, $opcional = false)
@@ -164,7 +240,7 @@ class ControladorActividad
     }
 
     /**
-     * Valida un archivo individual (imagen JPG/PNG 5 MB o video MP4/WebM 100 MB) y lo guarda.
+     * Valida un archivo individual (imagen JPG/PNG 2 MB o video MP4/WebM 10 MB) y lo guarda.
      * Devuelve el nombre generado.
      */
     private function validarYGuardarArchivo($archivo, $tipo)
@@ -173,8 +249,8 @@ class ControladorActividad
         if (!is_array($archivo) || ($archivo['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK
             || !is_string($archivo['tmp_name'] ?? null) || !is_uploaded_file($archivo['tmp_name'])) {
             throw new InvalidArgumentException($esImagen
-                ? "Seleccione una imagen JPG/PNG (hasta 5 MB)."
-                : "Seleccione un video MP4/WebM (hasta 100 MB).");
+                ? "Seleccione una imagen JPG/PNG (hasta 2 MB)."
+                : "Seleccione un video MP4/WebM (hasta 10 MB).");
         }
         $extension = is_string($archivo['name'] ?? null)
             ? strtolower(pathinfo($archivo['name'], PATHINFO_EXTENSION)) : '';
@@ -186,12 +262,12 @@ class ControladorActividad
                 ? "La imagen debe estar en formato JPG o PNG."
                 : "El video debe estar en formato MP4 o WebM.");
         }
-        $limite = ($esImagen ? 5 : 100) * 1024 * 1024;
+        $limite = ($esImagen ? 2 : 10) * 1024 * 1024;
         $tamano = filesize($archivo['tmp_name']);
         if (!$tamano || $tamano > $limite) {
             throw new InvalidArgumentException($esImagen
-                ? "La imagen debe pesar como máximo 5 MB y no estar vacía."
-                : "El video debe pesar como máximo 100 MB y no estar vacío.");
+                ? "La imagen debe pesar como máximo 2 MB y no estar vacía."
+                : "El video debe pesar como máximo 10 MB y no estar vacío. Se comprime al adjuntarlo; si sigue superando el límite, usa un enlace de YouTube.");
         }
         $mime = (new finfo(FILEINFO_MIME_TYPE))->file($archivo['tmp_name']);
         if (!in_array($mime, $tipos[$extension], true)) {
@@ -220,11 +296,11 @@ class ControladorActividad
     }
 
     /**
-     * Guarda las imágenes (hasta 7; la primera es la principal) y el video adjuntos;
+     * Guarda las imágenes (hasta 5; la primera es la principal) y el video adjuntos;
      * al menos uno es obligatorio.
      * Devuelve [imagen principal ('Ninguno' si no hay), imágenes adicionales, video (null si no hay)].
      */
-    private function prepararArchivosActividad()
+    private function prepararArchivosActividad($requerirArchivo = true)
     {
         $imagenes = $this->guardarImagenesActividad(self::MAXIMO_IMAGENES);
         try {
@@ -233,8 +309,8 @@ class ControladorActividad
             $this->retirarArchivosNuevos($imagenes);
             throw $e;
         }
-        if (!$imagenes && $video === null) {
-            throw new InvalidArgumentException("Adjunte una imagen JPG/PNG (hasta 5 MB), un video MP4/WebM (hasta 100 MB) o ambos.");
+        if ($requerirArchivo && !$imagenes && $video === null) {
+            throw new InvalidArgumentException("Adjunte una imagen JPG/PNG (hasta 2 MB), un video MP4/WebM (hasta 10 MB) o ambos.");
         }
         $principal = $imagenes ? array_shift($imagenes) : 'Ninguno';
         return [$principal, $imagenes, $video];
@@ -355,7 +431,11 @@ class ControladorActividad
             throw new InvalidArgumentException("Indique una hora válida para la actividad.");
         }
 
-        list($data['ImagenActividad'], $data['ImagenesExtras'], $data['VideoActividad']) = $this->prepararArchivosActividad();
+        $data['VideoUrl'] = self::normalizarVideoUrl($data['VideoUrl'] ?? null);
+        list($data['ImagenActividad'], $data['ImagenesExtras'], $data['VideoActividad']) = $this->prepararArchivosActividad(false);
+        if ($data['ImagenActividad'] === 'Ninguno' && empty($data['VideoActividad']) && empty($data['VideoUrl'])) {
+            throw new InvalidArgumentException("Adjunte una imagen, un video o pegue un enlace válido de YouTube, TikTok o Facebook.");
+        }
         try {
             return $this->actividadModel->registrarActividadParroquia($data, (int) $usuario['CodPer']);
         } catch (Throwable $e) {
@@ -448,6 +528,11 @@ class ControladorActividad
         // (la actividad se mantiene Activa hasta que pase su fecha).
         $data['EstActividad'] = ($data['FechaActividad'] ?? '') < self::hoyActividad()
             ? 'Concluido' : 'Activo';
+        // Enlace de video: se valida y "Quitar video" también lo elimina.
+        $data['VideoUrl'] = self::normalizarVideoUrl($data['VideoUrl'] ?? null);
+        if (!empty($data['QuitarVideo'])) {
+            $data['VideoUrl'] = null;
+        }
         $quitarTodas = !empty($data['QuitarImagen']);
         $idsQuitar = array_map('intval', (array) ($data['QuitarImagenExtra'] ?? []));
         $conservadas = [];
@@ -469,13 +554,13 @@ class ControladorActividad
             // Añadir imágenes conserva la principal y el orden de las fotos anteriores.
             $finales = array_merge($conservadas, $nuevas);
             if (count($finales) > self::MAXIMO_IMAGENES) {
-                throw new InvalidArgumentException("Puede guardar hasta 7 imágenes por actividad.");
+                throw new InvalidArgumentException("Puede guardar hasta 5 imágenes por actividad.");
             }
             $data['ImagenActividad'] = $finales[0] ?? 'Ninguno';
             $data['ImagenesExtras'] = array_slice($finales, 1);
             $data['VideoActividad'] = $nuevoVideo
                 ?? (!empty($data['QuitarVideo']) ? null : ($actual['VideoActividad'] ?? null));
-            if (!$finales && empty($data['VideoActividad'])) {
+            if (!$finales && empty($data['VideoActividad']) && empty($data['VideoUrl'])) {
                 throw new InvalidArgumentException("Conserve o adjunte al menos una imagen o un video.");
             }
             $resultado = $this->actividadModel->actualizarActividadConImagenes($data, $actual, $codPerParroquia);

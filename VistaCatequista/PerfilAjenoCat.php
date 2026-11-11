@@ -30,6 +30,10 @@ require_once '../Conexion/Conexion.php';
 $conexion = new Conexion();
 $conn = $conexion->getConnection();
 
+require_once '../Modelo/modeloConfigCatequista.php';
+$privacidadModel = new Usuario($conn);
+$privacidadPerfil = $privacidadModel->obtenerPrivacidad($ciPersona);
+
 function getActiveNotifications($conn)
 {
     $currentDateTime = date('Y-m-d H:i:s');
@@ -38,11 +42,12 @@ function getActiveNotifications($conn)
             FROM notificaciones n 
             INNER JOIN catequista c ON n.CiNotificador = c.CiCat 
             INNER JOIN `persona` p ON c.CiCat = p.CiPersona 
-            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ?
+            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ? AND n.Sacramento = ?
             ORDER BY n.FechaNotFin ASC";
 
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("s", $currentDateTime);
+    $sacramentoActual = $_SESSION['CiPersona']['Sacramento'] ?? '';
+    $stmt->bind_param("ss", $currentDateTime, $sacramentoActual);
     $stmt->execute();
     $result = $stmt->get_result();
 
@@ -146,11 +151,6 @@ $activeNotifications = getActiveNotifications($conn);
                                 <a class="dropdown-item" href="ReunionesCat.php"><i class="fa-fw bi bi-calendar2-check me-2"></i>Fecha de Reuniones</a>
                             </li>
                             <li>
-                                <a class="dropdown-item" href="Documentos.php">
-                                    <i class="fa-fw bi bi-card-text me-2"></i>Documentación
-                                </a>
-                            </li>
-                            <li>
                                 <a class="dropdown-item" href="Reglamento.php">
                                     <i class="fa-fw bi bi-list-check me-2"></i>Reglamento
                                 </a>
@@ -243,11 +243,21 @@ $activeNotifications = getActiveNotifications($conn);
                                     ?>
                                     <li class="mb-2"> <i class="bi bi-calendar2-plus me-1"></i> Ingresó: <?php echo $fechaFormateada; ?></li>
 
-                                    <li class="mb-2"> <i class="bi bi-cake2-fill me-1"></i> Cumpleaños: <strong> <?php echo $fechaFormateadaNac; ?></strong></li>
+                                    <?php if ((int) ($privacidadPerfil['MostrarFechaNac'] ?? 1) === 1) : ?>
+                                        <li class="mb-2"> <i class="bi bi-cake2-fill me-1"></i> Cumpleaños: <strong> <?php echo $fechaFormateadaNac; ?></strong></li>
+                                    <?php endif; ?>
 
-                                    <li class="mb-2" <?php if ($catebus['EstadoCat'] == "Activo") : ?>style="color:limegreen;" <?php elseif ($catebus['EstadoCat'] == "Inactivo") : ?>style="color:Red;" <?php endif; ?>> <i class="bi bi-broadcast"></i> Estado: <strong> <?php echo $catebus['EstadoCat']; ?> </strong> </li>
+                                    <?php if ((int) ($privacidadPerfil['MostrarEstado'] ?? 1) === 1) : ?>
+                                        <li class="mb-2" <?php if ($catebus['EstadoCat'] == "Activo") : ?>style="color:limegreen;" <?php elseif ($catebus['EstadoCat'] == "Inactivo") : ?>style="color:Red;" <?php endif; ?>> <i class="bi bi-broadcast"></i> Estado: <strong> <?php echo $catebus['EstadoCat']; ?> </strong> </li>
+                                    <?php endif; ?>
 
-                                    <li> <i class="bi bi-telephone fa-fw pe-1"></i> Contacto: <strong> <?php echo $catebus['Contacto']; ?> </strong> </li>
+                                    <?php if ((int) ($privacidadPerfil['MostrarContacto'] ?? 1) === 1) : ?>
+                                        <li> <i class="bi bi-telephone fa-fw pe-1"></i> Contacto: <strong> <?php echo $catebus['Contacto']; ?> </strong> </li>
+                                    <?php endif; ?>
+
+                                    <?php if ((int) ($privacidadPerfil['MostrarDireccion'] ?? 1) === 1 && !empty($catebus['Direccion'])) : ?>
+                                        <li class="mt-2"> <i class="bi bi-geo-alt fa-fw pe-1"></i> Dirección: <strong> <?php echo htmlspecialchars($catebus['Direccion'], ENT_QUOTES, 'UTF-8'); ?> </strong> </li>
+                                    <?php endif; ?>
                                 </ul>
                             </div>
                             <a class="btn btn-success-soft btn-sm" href="PerfilCatequista.php">Volver a mi Perfil</a>

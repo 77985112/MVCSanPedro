@@ -20,7 +20,9 @@ class CatequistaModel
                 INNER JOIN `asignacion` asig ON c.CiCat = asig.CiCat
                 INNER JOIN `grupo` gr ON asig.IdGrupo = gr.IdGrupo
                 WHERE c.Sacramento = ?
-                ORDER BY asig.IdGrupo";
+                ORDER BY asig.IdGrupo,
+                         FIELD(asig.RolCat, 'Coordinador', 'Titular', 'Catequista'),
+                         p.Nombre, p.ApPaterno, p.ApMaterno";
 
         $stmt = $conn->prepare($sql);
         $stmt->bind_param('s', $sacramento);
@@ -55,6 +57,7 @@ class CatequistaModel
     public function ActualizarAsistencia($Gestion, $ciCat, $idGrupo, $detalleAsis, $fechaAsis)
     {
         $conn = $this->conexion->getConnection();
+        $detalleAsis = in_array($detalleAsis, ['Presente', 'Falta', 'Permiso'], true) ? $detalleAsis : 'Falta';
 
         $sqlUpdate = "UPDATE asistenciacat SET DetalleAsis = ? WHERE Gestion = ? AND CiCat = ? AND IdGrupo = ? AND FechaAsisCat = ?";
         $stmtUpdate = $conn->prepare($sqlUpdate);
@@ -65,11 +68,12 @@ class CatequistaModel
 
     public function registrarAsistencia($Gestion, $ciCat, $idGrupo, $detalleAsis, $fechaAsis) {
         $conn = $this->conexion->getConnection();
+        $detalleAsis = in_array($detalleAsis, ['Presente', 'Falta', 'Permiso'], true) ? $detalleAsis : 'Falta';
     
         // Verificar si el registro ya existe
         $sqlCheck = "SELECT COUNT(*) FROM asistenciacat WHERE Gestion = ? AND CiCat = ? AND IdGrupo = ? AND FechaAsisCat = ?";
         $stmtCheck = $conn->prepare($sqlCheck);
-        $stmtCheck->bind_param('sssi', $Gestion, $ciCat, $idGrupo, $fechaAsis);  // Cambia esto
+        $stmtCheck->bind_param('ssis', $Gestion, $ciCat, $idGrupo, $fechaAsis);
         $stmtCheck->execute();
         $stmtCheck->bind_result($count);
         $stmtCheck->fetch();
@@ -86,5 +90,20 @@ class CatequistaModel
             $stmtInsert->execute();
             $stmtInsert->close();
         }
+    }
+
+    public function eliminarAsistenciaPorFecha($sacramento, $fechaAsis) {
+        $conn = $this->conexion->getConnection();
+
+        $sql = "DELETE a FROM asistenciacat a
+                INNER JOIN catequista c ON c.CiCat = a.CiCat
+                WHERE c.Sacramento = ? AND a.FechaAsisCat = ?";
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param('ss', $sacramento, $fechaAsis);
+        $ok = $stmt->execute();
+        $afectados = $stmt->affected_rows;
+        $stmt->close();
+
+        return $ok ? $afectados : false;
     }
 }

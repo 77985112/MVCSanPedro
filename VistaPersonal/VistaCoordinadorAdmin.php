@@ -19,87 +19,133 @@ if ($usuario['DescripCar'] != 'Párroco') {
 
 $controller = new ControladorCoordinadorAdmin();
 $personaController = new ControladorPersona();
-$coordinadores = $controller->obtenerCoordinadores();
 $grupos = $controller->obtenerTodosLosGrupos();
 
 $mensaje = '';
 $mensaje1 = '';
-$personaEncontrada = null;
 
-$zonasSector = $controller->obtenerZonasSector();
-$sacramentosRegistrados = $controller->obtenerSacramentosSolicitados();
-$estadosCivilesRegistrados = $controller->obtenerEstadosCiviles();
-
-$filtrosBusqueda = [
-  'texto' => trim($_POST['buscarNombre'] ?? ''),
-  'sacramento' => $_POST['filtroSacramento'] ?? '',
-  'zona' => $_POST['filtroZona'] ?? '',
-  'estadoCivil' => $_POST['filtroEstado'] ?? '',
-];
-$mostrarResultados = $_SERVER['REQUEST_METHOD'] === 'POST'
-  && (isset($_POST['buscarPersona']) || isset($_POST['seleccionarPersona']));
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bloquearCoordinador'])) {
-  $ci = $_POST['ciBloquear'];
-  if ($controller->bloquearCoordinador($ci)) {
-    $mensaje = "Coordinador con CI {$ci} bloqueado correctamente.";
-  } else {
-    $mensaje1 = "Error al bloquear al coordinador.";
-  }
-  header("Location: VistaCoordinadorAdmin.php");
-  exit();
+// Gestión (año) seleccionada
+$anioActual = (int) date('Y');
+$gestionSeleccionada = (int) ($_POST['Gestion'] ?? $_GET['gestion'] ?? $anioActual);
+if ($gestionSeleccionada < $anioActual - 3 || $gestionSeleccionada > $anioActual + 3) {
+    $gestionSeleccionada = $anioActual;
 }
+$gestiones = range($anioActual - 1, $anioActual + 2);
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['activarCoordinador'])) {
-  $ci = $_POST['ciActivar'];
-  if ($controller->activarCoordinador($ci)) {
-    $mensaje = "Coordinador con CI {$ci} activado correctamente.";
-  } else {
-    $mensaje1 = "Error al activar al coordinador.";
-  }
-  header("Location: VistaCoordinadorAdmin.php");
-  exit();
-}
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['seleccionarPersona'])) {
-  $personaEncontrada = $controller->buscarPersona($_POST['ciSeleccionada']);
-}
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['registrarPersona'])) {
-  if ($personaController->crearPersona($_POST)) {
-    $ciRegistrado = $personaController->obtenerCiPersonaRegistrada();
-    $personaEncontrada = $controller->buscarPersona($ciRegistrado);
-    $mensaje = '<strong>Persona registrada con éxito.</strong> Identificador: ' . htmlspecialchars($ciRegistrado);
-  } else {
-    $mensaje1 = '<strong>Error:</strong> ' . htmlspecialchars($personaController->obtenerError() ?: 'No se pudo registrar la persona.');
-  }
-}
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['asignarCoordinador'])) {
-  $ci = $_POST['CiPersona'];
-  $sacramento = $_POST['Sacramento'];
-  $idGrupo = $_POST['IdGrupo'];
-  $usuarioCat = $_POST['UsuarioCat'];
-  $clave = $_POST['ClaveCat'];
-
-  $existente = $controller->verificarCoordinadorExistente($sacramento);
-  if ($existente) {
-    $mensaje1 = "<strong>Error:</strong> Ya existe un Coordinador para {$sacramento}.";
-  } else {
-    if ($controller->registrarCoordinador($ci, $sacramento, $idGrupo, $usuarioCat, $clave)) {
-      $persona = $controller->buscarPersona($ci);
-      $_SESSION['registroCatequista'] = [
-        'Nombre' => $persona['Nombre'] . ' ' . $persona['ApPaterno'],
-        'UsuarioCat' => $usuarioCat,
-        'ClaveCat' => $clave
-      ];
-      $mensaje = "<strong>Coordinador asignado con éxito.</strong> Nombre: {$persona['Nombre']} {$persona['ApPaterno']}, Usuario: {$usuarioCat}, Clave: {$clave}";
-      $personaEncontrada = null;
-      $coordinadores = $controller->obtenerCoordinadores();
-    } else {
-      $mensaje1 = "Error al asignar al coordinador.";
+// Buscador de personas para el formulario (AJAX)
+if (isset($_GET['buscarPersona'])) {
+    header('Content-Type: application/json; charset=utf-8');
+    $texto = trim((string) $_GET['buscarPersona']);
+    $lista = $texto === '' ? [] : $controller->buscarPersonasPorNombre($texto);
+    $salida = [];
+    foreach ($lista as $p) {
+        $salida[] = [
+            'ci' => $p['CiPersona'],
+            'nombre' => trim($p['Nombre'] . ' ' . $p['ApPaterno'] . ' ' . $p['ApMaterno']),
+            'doc' => trim((string) ($p['NumeroDocumento'] ?? '')),
+        ];
     }
-  }
+    echo json_encode(['ok' => true, 'personas' => $salida]);
+    exit;
 }
+
+// Registro de persona nueva (modal existente)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['registrarPersona'])) {
+    if ($personaController->crearPersona($_POST)) {
+        $ciRegistrado = $personaController->obtenerCiPersonaRegistrada();
+        $mensaje = '<strong>Persona registrada con éxito.</strong> Identificador: ' . htmlspecialchars($ciRegistrado);
+    } else {
+        $mensaje1 = '<strong>Error:</strong> ' . htmlspecialchars($personaController->obtenerError() ?: 'No se pudo registrar la persona.');
+    }
+}
+
+// Acciones del módulo
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion'])) {
+    $accion = (string) $_POST['accion'];
+
+    if ($accion === 'cambiar_estado') {
+        $ci = trim((string) ($_POST['ci'] ?? ''));
+        $nuevo = ($_POST['estado'] ?? '') === 'Activo' ? 'Activo' : 'Inactivo';
+        $ok = $nuevo === 'Activo' ? $controller->activarCoordinador($ci) : $controller->bloquearCoordinador($ci);
+        if ($ok) {
+            $mensaje = $nuevo === 'Activo' ? 'Coordinador activado.' : 'Coordinador inactivado.';
+        } else {
+            $mensaje1 = 'No se pudo cambiar el estado del coordinador.';
+        }
+    }
+
+    if ($accion === 'asignar_coordinador') {
+        $ci = trim((string) ($_POST['CiPersona'] ?? ''));
+        $sacramento = trim((string) ($_POST['Sacramento'] ?? ''));
+        $usuarioCat = trim((string) ($_POST['UsuarioCat'] ?? ''));
+        $clave = trim((string) ($_POST['ClaveCat'] ?? ''));
+
+        $errores = [];
+        if ($ci === '') {
+            $errores[] = 'Escribe el CI del nuevo coordinador.';
+        } elseif (!$controller->buscarPersona($ci)) {
+            $errores[] = 'La persona no está registrada. Regístrala primero en el módulo Persona.';
+        }
+        if (!in_array($sacramento, ['Primera Comunión', 'Confirmación'], true)) {
+            $errores[] = 'Selecciona el sacramento.';
+        }
+        if ($usuarioCat === '') {
+            $errores[] = 'Escribe el usuario de acceso.';
+        } elseif ($controller->verificarUsuarioDisponible($usuarioCat)) {
+            $errores[] = 'Ese usuario ya lo usa otro catequista.';
+        }
+        if (mb_strlen($clave) < 6) {
+            $errores[] = 'La contraseña debe tener al menos 6 caracteres.';
+        }
+
+        if ($errores) {
+            $mensaje1 = implode(' ', $errores);
+        } else {
+            $actual = $controller->verificarCoordinadorExistente($sacramento, '', $gestionSeleccionada);
+            $idGrupo = $actual ? (int) $actual['IdGrupo'] : 0;
+
+            // Si no hay coordinador previo, se usa el primer grupo de ese sacramento.
+            if ($idGrupo <= 0) {
+                foreach ($grupos as $g) {
+                    if (trim((string) $g['SacramentoGrupo']) === $sacramento) {
+                        $idGrupo = (int) $g['IdGrupo'];
+                        break;
+                    }
+                }
+            }
+
+            if ($idGrupo <= 0) {
+                $mensaje1 = 'No hay grupos registrados para ' . htmlspecialchars($sacramento) . '.';
+            } else {
+                if ($actual && $actual['CiCat'] === $ci) {
+                    // Misma persona: solo se actualizan sus credenciales.
+                    $ok = $controller->actualizarCargo($ci, $sacramento, $idGrupo, $usuarioCat, $clave);
+                    $mensaje = 'Se actualizaron los datos del coordinador.';
+                } else {
+                    if ($actual) {
+                        // Se cierra la gestión del anterior y se le quita el acceso.
+                        $controller->cerrarAsignacion($actual['CiCat'], $gestionSeleccionada);
+                        $controller->bloquearCoordinador($actual['CiCat']);
+                    }
+                    $ok = $controller->registrarCoordinador($ci, $sacramento, $idGrupo, $usuarioCat, $clave, $gestionSeleccionada);
+                    if ($ok) {
+                        $persona = $controller->buscarPersona($ci);
+                        $mensaje = 'Coordinador asignado: <strong>' . htmlspecialchars(trim($persona['Nombre'] . ' ' . $persona['ApPaterno'])) . '</strong> para ' . htmlspecialchars($sacramento) . ' · Gestión ' . $gestionSeleccionada . '.';
+                        if ($actual) {
+                            $mensaje .= ' El coordinador anterior finalizó su gestión y quedó inactivo.';
+                        }
+                    }
+                }
+
+                if (!$ok) {
+                    $mensaje1 = 'No se pudo asignar el coordinador.';
+                }
+            }
+        }
+    }
+}
+
+$coordinadores = $controller->obtenerCoordinadores($gestionSeleccionada);
 ?>
 
 <!DOCTYPE html>
@@ -240,372 +286,180 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['asignarCoordinador'])
             </div>
           <?php endif; ?>
 
-          <div class="card">
-            <div class="card-header d-sm-flex align-items-center text-center justify-content-sm-between border-0 pb-0">
-              <h1 class="h4 card-title">Designar Coordinadores</h1>
+                    <div class="card">
+            <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2 border-0 pb-0">
+              <div>
+                <h1 class="h4 card-title mb-1">Coordinadores</h1>
+                <p class="text-muted small mb-0">Asigna el coordinador de cada sacramento cuando termina su gestión.</p>
+              </div>
+              <form method="GET" class="d-flex align-items-center gap-2">
+                <label class="form-label mb-0 small text-muted" for="gestionSel">Gestión</label>
+                <select class="form-select form-select-sm" id="gestionSel" name="gestion" onchange="this.form.submit()" style="width:auto;">
+                  <?php foreach ($gestiones as $g): ?>
+                    <option value="<?php echo $g; ?>" <?php echo $g === $gestionSeleccionada ? 'selected' : ''; ?>><?php echo $g; ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </form>
             </div>
             <div class="card-body">
-              <p class="mb-3">Seleccione el Sacramento y asigne un Coordinador para cada uno.</p>
 
               <div class="row g-3 mb-4">
-                <div class="col-md-6">
-                  <div class="card border border-primary">
-                    <div class="card-body text-center">
-                      <h5 class="card-title text-primary">Confirmación</h5>
-                      <?php
-                      $coorConfirmacion = array_filter($coordinadores, function($c) { return $c['Sacramento'] == 'Confirmación'; });
-                      if (count($coorConfirmacion) > 0):
-                        $coor = array_values($coorConfirmacion)[0];
-                      ?>
-                        <p class="mb-1"><strong><?php echo $coor['Nombre'] . ' ' . $coor['ApPaterno']; ?></strong></p>
-                        <small class="text-muted">CI: <?php echo $coor['CiCat']; ?> | Grupo: <?php echo $coor['NombreGrupo']; ?></small>
-                      <?php else: ?>
-                        <p class="text-muted mb-2">Sin coordinador asignado</p>
-                      <?php endif; ?>
+                <?php
+                $resumenCoordinadores = [
+                  ['sacramento' => 'Confirmación', 'clase' => 'border-danger', 'texto' => 'text-danger', 'estilo' => ''],
+                  ['sacramento' => 'Primera Comunión', 'clase' => '', 'texto' => '', 'estilo' => 'style="border-color:#e0a800;"'],
+                ];
+                foreach ($resumenCoordinadores as $bloque):
+                  $activo = null;
+                  $cerrado = null;
+                  foreach ($coordinadores as $c) {
+                    if (trim((string) $c['Sacramento']) !== $bloque['sacramento']) { continue; }
+                    if ((int) $c['Vigente'] === 1) { $activo = $c; break; }
+                    if ($cerrado === null) { $cerrado = $c; }
+                  }
+                  $mostrar = $activo ?: $cerrado;
+                ?>
+                  <div class="col-md-6">
+                    <div class="card border <?php echo $bloque['clase']; ?>" <?php echo $bloque['estilo']; ?>>
+                      <div class="card-body text-center">
+                        <h5 class="card-title <?php echo $bloque['texto']; ?>" <?php echo $bloque['sacramento'] === 'Primera Comunión' ? 'style="color:#a67c00;"' : ''; ?>><?php echo $bloque['sacramento']; ?></h5>
+                        <?php if ($mostrar): ?>
+                          <p class="mb-1"><strong><?php echo htmlspecialchars($mostrar['Nombre'] . ' ' . $mostrar['ApPaterno']); ?></strong></p>
+                          <small class="text-muted">CI: <?php echo htmlspecialchars($mostrar['CiCat']); ?> | Grupo: <?php echo htmlspecialchars((string) $mostrar['NombreGrupo']); ?></small>
+                          <div class="mt-2">
+                            <?php if ((int) $mostrar['Vigente'] === 1): ?>
+                              <span class="badge bg-success">Vigente en <?php echo $gestionSeleccionada; ?></span>
+                            <?php else: ?>
+                              <span class="badge bg-secondary">Finalizó el <?php echo !empty($mostrar['FechaFinCat']) ? date('d/m/Y', strtotime($mostrar['FechaFinCat'])) : '-'; ?></span>
+                            <?php endif; ?>
+                          </div>
+                        <?php else: ?>
+                          <p class="text-muted mb-2">Sin coordinador asignado</p>
+                        <?php endif; ?>
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div class="col-md-6">
-                  <div class="card border border-success">
-                    <div class="card-body text-center">
-                      <h5 class="card-title text-success">Primera Comunión</h5>
-                      <?php
-                      $coorComunion = array_filter($coordinadores, function($c) { return $c['Sacramento'] == 'Primera Comunión'; });
-                      if (count($coorComunion) > 0):
-                        $coor = array_values($coorComunion)[0];
-                      ?>
-                        <p class="mb-1"><strong><?php echo $coor['Nombre'] . ' ' . $coor['ApPaterno']; ?></strong></p>
-                        <small class="text-muted">CI: <?php echo $coor['CiCat']; ?> | Grupo: <?php echo $coor['NombreGrupo']; ?></small>
-                      <?php else: ?>
-                        <p class="text-muted mb-2">Sin coordinador asignado</p>
-                      <?php endif; ?>
-                    </div>
-                  </div>
-                </div>
+                <?php endforeach; ?>
               </div>
 
               <hr>
 
-              <div class="d-flex justify-content-between align-items-center mb-3">
-                <h5 class="mb-0">Asignar Nuevo Coordinador</h5>
-                <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#registrarPersonaModal">
-                  <i class="bi bi-plus-circle"></i> Registrar Nuevo
-                </button>
-              </div>
-
+              <h6 class="mb-3"><i class="bi bi-person-plus me-1"></i>Asignar nuevo coordinador</h6>
               <form method="POST" class="row g-3">
-                <div class="col-md-8">
-                  <label class="form-label">Buscar por nombre o CI</label>
-                  <input type="text" class="form-control" name="buscarNombre" placeholder="Nombre, apellido o CI"
-                    value="<?php echo htmlspecialchars($filtrosBusqueda['texto']); ?>">
-                </div>
-                <div class="col-md-4 d-flex align-items-end">
-                  <button type="submit" name="buscarPersona" class="btn btn-primary w-100">Buscar</button>
-                </div>
-                <div class="col-md-4">
-                  <label class="form-label">Sacramento</label>
-                  <select class="form-select" name="filtroSacramento">
-                    <option value="">Todos</option>
-                    <?php foreach ($sacramentosRegistrados as $fila): ?>
-                      <option value="<?php echo htmlspecialchars($fila['SacramentoSolicita']); ?>"
-                        <?php echo $filtrosBusqueda['sacramento'] === $fila['SacramentoSolicita'] ? 'selected' : ''; ?>>
-                        <?php echo htmlspecialchars($fila['SacramentoSolicita']); ?>
-                      </option>
-                    <?php endforeach; ?>
+                <input type="hidden" name="accion" value="asignar_coordinador">
+                <input type="hidden" name="Gestion" value="<?php echo $gestionSeleccionada; ?>">
+                <div class="col-md-3">
+                  <label class="form-label" for="sacramentoCoor">Sacramento</label>
+                  <select class="form-select" id="sacramentoCoor" name="Sacramento" required>
+                    <option value="">Seleccionar…</option>
+                    <option value="Primera Comunión">Primera Comunión</option>
+                    <option value="Confirmación">Confirmación</option>
                   </select>
                 </div>
-                <div class="col-md-4">
-                  <label class="form-label">Zona / Sector</label>
-                  <select class="form-select" name="filtroZona">
-                    <option value="">Todas</option>
-                    <?php foreach ($zonasSector as $fila): ?>
-                      <option value="<?php echo htmlspecialchars($fila['ZonaSector']); ?>"
-                        <?php echo $filtrosBusqueda['zona'] === $fila['ZonaSector'] ? 'selected' : ''; ?>>
-                        <?php echo htmlspecialchars($fila['ZonaSector']); ?>
-                      </option>
-                    <?php endforeach; ?>
-                  </select>
+                <div class="col-md-3">
+                  <label class="form-label" for="buscarPersonaCoor">Buscar persona</label>
+                  <div class="position-relative">
+                    <input type="text" class="form-control" id="buscarPersonaCoor" placeholder="Nombre, apellido o carnet" autocomplete="off">
+                    <div id="resultadosPersona" class="list-group position-absolute w-100 shadow-sm" style="z-index:1050;max-height:240px;overflow:auto;display:none;background:#fff;border-radius:.5rem;"></div>
+                  </div>
+                  <div class="form-text" id="ayudaPersona">Escribe al menos 2 letras y elige de la lista.</div>
+                  <input type="hidden" name="CiPersona" id="ciPersonaCoor">
                 </div>
-                <div class="col-md-4">
-                  <label class="form-label">Estado civil</label>
-                  <select class="form-select" name="filtroEstado">
-                    <option value="">Todos</option>
-                    <?php foreach ($estadosCivilesRegistrados as $fila): ?>
-                      <option value="<?php echo htmlspecialchars($fila['Estado_per']); ?>"
-                        <?php echo $filtrosBusqueda['estadoCivil'] === $fila['Estado_per'] ? 'selected' : ''; ?>>
-                        <?php echo htmlspecialchars($fila['Estado_per']); ?>
-                      </option>
-                    <?php endforeach; ?>
-                  </select>
+                <div class="col-md-2">
+                  <label class="form-label" for="usuarioCoor">Usuario</label>
+                  <input type="text" class="form-control" id="usuarioCoor" name="UsuarioCat" maxlength="100" required>
+                </div>
+                <div class="col-md-2">
+                  <label class="form-label" for="claveCoor">Contraseña</label>
+                  <input type="text" class="form-control" id="claveCoor" name="ClaveCat" minlength="6" required>
+                </div>
+                <div class="col-md-2">
+                  <label class="form-label d-none d-md-block">&nbsp;</label>
+                  <button type="submit" class="btn btn-primary w-100">Asignar</button>
+                </div>
+                <div class="col-12">
+                  <div class="alert alert-warning py-2 mb-0 small">
+                    Al asignar, el coordinador activo de ese sacramento pasa automáticamente a <strong>Inactivo</strong>.
+                  </div>
                 </div>
               </form>
 
-              <?php if ($mostrarResultados): ?>
-                <?php
-                $personasEncontradas = $controller->buscarPersonasFiltradas(
-                  $filtrosBusqueda['texto'],
-                  $filtrosBusqueda['sacramento'],
-                  $filtrosBusqueda['zona'],
-                  $filtrosBusqueda['estadoCivil']
-                );
-                ?>
-                <?php if (count($personasEncontradas) > 0): ?>
-                  <div class="table-responsive mt-3">
-                    <table class="table table-hover table-sm">
-                      <thead class="table-light">
-                        <tr>
-                          <th>CI</th>
-                          <th>Nombre</th>
-                          <th>Apellido Paterno</th>
-                          <th>Apellido Materno</th>
-                          <th>Sacramento</th>
-                          <th>Zona / Sector</th>
-                          <th>Acción</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <?php foreach ($personasEncontradas as $p): ?>
-                          <tr>
-                            <td><?php echo htmlspecialchars($p['CiPersona']); ?></td>
-                            <td><?php echo htmlspecialchars($p['Nombre']); ?></td>
-                            <td><?php echo htmlspecialchars($p['ApPaterno']); ?></td>
-                            <td><?php echo htmlspecialchars($p['ApMaterno']); ?></td>
-                            <td>
-                              <?php if (!empty($p['SacramentoSolicita'])): ?>
-                                <span class="badge bg-primary"><?php echo htmlspecialchars($p['SacramentoSolicita']); ?></span>
-                              <?php else: ?>
-                                <span class="text-muted">—</span>
-                              <?php endif; ?>
-                            </td>
-                            <td>
-                              <?php if (!empty($p['ZonaSector'])): ?>
-                                <?php echo htmlspecialchars($p['ZonaSector']); ?>
-                              <?php else: ?>
-                                <span class="text-muted">—</span>
-                              <?php endif; ?>
-                            </td>
-                            <td class="text-nowrap">
-                              <form method="POST" style="display:inline;">
-                                <input type="hidden" name="ciSeleccionada" value="<?php echo htmlspecialchars($p['CiPersona']); ?>">
-                                <input type="hidden" name="buscarNombre" value="<?php echo htmlspecialchars($filtrosBusqueda['texto']); ?>">
-                                <input type="hidden" name="filtroSacramento" value="<?php echo htmlspecialchars($filtrosBusqueda['sacramento']); ?>">
-                                <input type="hidden" name="filtroZona" value="<?php echo htmlspecialchars($filtrosBusqueda['zona']); ?>">
-                                <input type="hidden" name="filtroEstado" value="<?php echo htmlspecialchars($filtrosBusqueda['estadoCivil']); ?>">
-                                <button type="submit" name="seleccionarPersona" class="btn btn-sm btn-outline-primary">Seleccionar</button>
-                              </form>
-                              <?php if (!empty($p['DocumentoBautizo'])): ?>
-                                <a class="btn btn-sm btn-outline-secondary" target="_blank" title="Ver certificado de bautizo"
-                                  href="../src/ver_documento_persona.php?archivo=<?php echo rawurlencode($p['DocumentoBautizo']); ?>">
-                                  <i class="bi bi-file-earmark-pdf"></i>
-                                </a>
-                              <?php endif; ?>
-                            </td>
-                          </tr>
-                        <?php endforeach; ?>
-                      </tbody>
-                    </table>
-                  </div>
-                <?php else: ?>
-                  <div class="alert alert-warning mt-3">
-                    No se encontraron personas con los filtros seleccionados.
-                  </div>
-                <?php endif; ?>
-              <?php endif; ?>
-
-              <?php if ($personaEncontrada): ?>
-                <form method="POST" class="mt-3">
-                  <div class="card border-success">
-                    <div class="card-body">
-                      <h6 class="card-title">Persona Seleccionada</h6>
-                      <div class="row g-2">
-                        <div class="col-md-3">
-                          <label class="form-label">CI</label>
-                          <input type="text" class="form-control" name="CiPersona" value="<?php echo htmlspecialchars($personaEncontrada['CiPersona']); ?>" readonly>
-                        </div>
-                        <div class="col-md-3">
-                          <label class="form-label">Nombre</label>
-                          <input type="text" class="form-control" value="<?php echo htmlspecialchars($personaEncontrada['Nombre']); ?>" readonly>
-                        </div>
-                        <div class="col-md-3">
-                          <label class="form-label">Apellido Paterno</label>
-                          <input type="text" class="form-control" value="<?php echo htmlspecialchars($personaEncontrada['ApPaterno']); ?>" readonly>
-                        </div>
-                        <div class="col-md-3">
-                          <label class="form-label">Apellido Materno</label>
-                          <input type="text" class="form-control" value="<?php echo htmlspecialchars($personaEncontrada['ApMaterno']); ?>" readonly>
-                        </div>
-                      </div>
-                      <div class="row g-2 mt-2">
-                        <div class="col-md-3">
-                          <label class="form-label">Sexo</label>
-                          <input type="text" class="form-control" value="<?php echo htmlspecialchars($personaEncontrada['Sexo']); ?>" readonly>
-                        </div>
-                        <div class="col-md-3">
-                          <label class="form-label">Fecha de Nacimiento</label>
-                          <input type="text" class="form-control" value="<?php echo htmlspecialchars($personaEncontrada['FechaNac']); ?>" readonly>
-                        </div>
-                        <div class="col-md-3">
-                          <label class="form-label">Estado Civil</label>
-                          <input type="text" class="form-control" value="<?php echo htmlspecialchars($personaEncontrada['Estado_per']); ?>" readonly>
-                        </div>
-                        <div class="col-md-3">
-                          <label class="form-label">Sacramento que solicita</label>
-                          <input type="text" class="form-control" value="<?php echo htmlspecialchars($personaEncontrada['SacramentoSolicita']); ?>" readonly>
-                        </div>
-                      </div>
-                      <div class="row g-2 mt-2">
-                        <div class="col-md-3">
-                          <label class="form-label">Zona / Sector</label>
-                          <input type="text" class="form-control" value="<?php echo htmlspecialchars($personaEncontrada['ZonaSector']); ?>" readonly>
-                        </div>
-                        <div class="col-md-4">
-                          <label class="form-label">Dirección</label>
-                          <input type="text" class="form-control" value="<?php echo htmlspecialchars($personaEncontrada['Direccion']); ?>" readonly>
-                        </div>
-                        <div class="col-md-2">
-                          <label class="form-label">Contacto</label>
-                          <input type="text" class="form-control" value="<?php echo htmlspecialchars($personaEncontrada['Contacto']); ?>" readonly>
-                        </div>
-                        <div class="col-md-3">
-                          <label class="form-label">Teléfono alternativo</label>
-                          <input type="text" class="form-control" value="<?php echo htmlspecialchars($personaEncontrada['TelefonoAlternativo']); ?>" readonly>
-                        </div>
-                      </div>
-                      <div class="row g-2 mt-2">
-                        <div class="col-md-4">
-                          <label class="form-label">Correo electrónico</label>
-                          <input type="text" class="form-control" value="<?php echo htmlspecialchars($personaEncontrada['Correo']); ?>" readonly>
-                        </div>
-                        <div class="col-md-4">
-                          <label class="form-label">Certificado de Bautizo</label>
-                          <div>
-                            <?php if (!empty($personaEncontrada['DocumentoBautizo'])): ?>
-                              <a class="btn btn-sm btn-outline-success" target="_blank"
-                                href="../src/ver_documento_persona.php?archivo=<?php echo rawurlencode($personaEncontrada['DocumentoBautizo']); ?>">
-                                <i class="bi bi-file-earmark-pdf"></i> Ver certificado
-                              </a>
-                            <?php else: ?>
-                              <span class="text-muted small">Sin certificado adjunto</span>
-                            <?php endif; ?>
-                          </div>
-                        </div>
-                      </div>
-                      <div class="row g-2 mt-2">
-                        <div class="col-12">
-                          <label class="form-label">Observaciones pastorales</label>
-                          <textarea class="form-control" rows="2" readonly><?php echo htmlspecialchars($personaEncontrada['Observaciones']); ?></textarea>
-                        </div>
-                      </div>
-                      <div class="row g-2 mt-2">
-                        <div class="col-md-4">
-                          <label class="form-label">Sacramento</label>
-                          <select class="form-select" name="Sacramento" required>
-                            <option value="">Seleccionar...</option>
-                            <?php
-                            $sacramentos = ['Confirmación', 'Primera Comunión'];
-                            foreach ($sacramentos as $sac):
-                              $yaTiene = array_filter($coordinadores, function($c) use ($sac) { return $c['Sacramento'] == $sac; });
-                            ?>
-                              <option value="<?php echo $sac; ?>" <?php echo count($yaTiene) > 0 ? 'disabled' : ''; ?>>
-                                <?php echo $sac . (count($yaTiene) > 0 ? ' (Ya tiene coordinador)' : ''); ?>
-                              </option>
-                            <?php endforeach; ?>
-                          </select>
-                        </div>
-                        <div class="col-md-4">
-                          <label class="form-label">Grupo</label>
-                          <select class="form-select" name="IdGrupo" required>
-                            <option value="">Seleccionar Sacramento primero...</option>
-                          </select>
-                        </div>
-                        <div class="col-md-4"></div>
-                        <div class="col-md-6 mt-2">
-                          <label class="form-label">Usuario de acceso</label>
-                          <input type="text" class="form-control" name="UsuarioCat" placeholder="Usuario para ingresar al sistema" required>
-                        </div>
-                        <div class="col-md-6 mt-2">
-                          <label class="form-label">Contraseña</label>
-                          <input type="text" class="form-control" name="ClaveCat" placeholder="Contraseña para ingresar al sistema" required>
-                        </div>
-                        <div class="col-md-4 d-flex align-items-end mt-2">
-                          <button type="submit" name="asignarCoordinador" class="btn btn-success w-100">Asignar Coordinador</button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </form>
-              <?php endif; ?>
-
               <hr>
 
-              <h5 class="mb-3">Coordinadores Actuales</h5>
-              <?php if (count($coordinadores) > 0): ?>
-                <div class="table-responsive">
-                  <table class="table table-hover">
-                    <thead>
+              <h6 class="mb-3">Coordinadores · Gestión <?php echo $gestionSeleccionada; ?></h6>
+              <div class="table-responsive">
+                <table class="table align-middle mb-0">
+                  <thead>
+                    <tr>
+                      <th>Nombre</th>
+                      <th>CI</th>
+                      <th>Sacramento</th>
+                      <th>Usuario</th>
+                      <th>Vigencia</th>
+                      <th>Acceso</th>
+                      <th class="text-end">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <?php if (!$coordinadores): ?>
+                      <tr><td colspan="7" class="text-center text-muted py-4">No hay coordinadores registrados en esta gestión.</td></tr>
+                    <?php endif; ?>
+                    <?php foreach ($coordinadores as $coor): ?>
+                      <?php
+                      $esConf = trim((string) $coor['Sacramento']) === 'Confirmación';
+                      $esPc = trim((string) $coor['Sacramento']) === 'Primera Comunión';
+                      $esActivo = trim((string) $coor['EstadoCat']) === 'Activo';
+                      ?>
                       <tr>
-                        <th>CI</th>
-                        <th>Nombre</th>
-                        <th>Sacramento</th>
-                        <th>Grupo</th>
-                        <th>Estado</th>
-                        <th>Credenciales</th>
-                        <th>Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <?php foreach ($coordinadores as $coor): ?>
-                        <tr>
-                          <td><?php echo $coor['CiCat']; ?></td>
-                          <td><?php echo $coor['Nombre'] . ' ' . $coor['ApPaterno'] . ' ' . $coor['ApMaterno']; ?></td>
-                          <td><span class="badge bg-primary"><?php echo $coor['Sacramento']; ?></span></td>
-                          <td><?php echo $coor['NombreGrupo']; ?></td>
-                          <td>
-                            <?php if ($coor['EstadoCat'] == 'Activo'): ?>
-                              <span class="badge bg-success">Activo</span>
-                            <?php else: ?>
-                              <span class="badge bg-danger">Inactivo</span>
-                            <?php endif; ?>
-                          </td>
-                          <td>
-                            <span class="credential-hidden" id="cred-<?php echo $coor['CiCat']; ?>">
-                              <span class="text-muted">••••••••</span>
-                            </span>
-                            <span class="credential-visible d-none" id="cred-show-<?php echo $coor['CiCat']; ?>">
-                              <small><strong>U:</strong> <?php echo $coor['UsuarioCat']; ?> <strong>Cl:</strong> <?php echo $coor['ClaveCat']; ?></small>
-                            </span>
-                            <button type="button" class="btn btn-sm btn-outline-secondary ms-1" onclick="toggleCred('<?php echo $coor['CiCat']; ?>')" title="Ver credenciales">
-                              <i class="bi bi-eye" id="eye-<?php echo $coor['CiCat']; ?>"></i>
+                        <td><strong><?php echo htmlspecialchars($coor['Nombre'] . ' ' . $coor['ApPaterno'] . ' ' . $coor['ApMaterno']); ?></strong></td>
+                        <td><?php echo htmlspecialchars($coor['CiCat']); ?></td>
+                        <td>
+                          <?php if ($esConf): ?>
+                            <span class="badge bg-danger">Confirmación</span>
+                          <?php elseif ($esPc): ?>
+                            <span class="badge" style="background:#e0a800;color:#3d2b00;">Primera Comunión</span>
+                          <?php else: ?>
+                            <span class="badge bg-primary"><?php echo htmlspecialchars($coor['Sacramento']); ?></span>
+                          <?php endif; ?>
+                        </td>
+                        <td><?php echo htmlspecialchars($coor['UsuarioCat']); ?></td>
+                        <td>
+                          <?php if ((int) $coor['Vigente'] === 1): ?>
+                            <span class="badge bg-success">Vigente</span>
+                          <?php else: ?>
+                            <span class="badge bg-secondary">Finalizó <?php echo !empty($coor['FechaFinCat']) ? date('d/m/Y', strtotime($coor['FechaFinCat'])) : ''; ?></span>
+                          <?php endif; ?>
+                        </td>
+                        <td>
+                          <span class="badge <?php echo $esActivo ? 'bg-success' : 'bg-danger'; ?>">
+                            <?php echo $esActivo ? 'Activo' : 'Inactivo'; ?>
+                          </span>
+                        </td>
+                        <td class="text-end">
+                          <button type="button" class="btn btn-sm btn-outline-secondary" onclick="verClave('<?php echo htmlspecialchars($coor['CiCat']); ?>')" title="Ver contraseña">
+                            <i class="bi bi-eye" id="ojo-<?php echo htmlspecialchars($coor['CiCat']); ?>"></i>
+                          </button>
+                          <span id="clave-<?php echo htmlspecialchars($coor['CiCat']); ?>" class="small text-muted d-none ms-1"><?php echo htmlspecialchars($coor['ClaveCat']); ?></span>
+
+                          <form method="POST" class="d-inline">
+                            <input type="hidden" name="accion" value="cambiar_estado">
+                            <input type="hidden" name="Gestion" value="<?php echo $gestionSeleccionada; ?>">
+                            <input type="hidden" name="ci" value="<?php echo htmlspecialchars($coor['CiCat']); ?>">
+                            <input type="hidden" name="estado" value="<?php echo $esActivo ? 'Inactivo' : 'Activo'; ?>">
+                            <button type="submit" class="btn btn-sm <?php echo $esActivo ? 'btn-outline-danger' : 'btn-outline-success'; ?>">
+                              <?php echo $esActivo ? 'Inactivar' : 'Activar'; ?>
                             </button>
-                          </td>
-                          <td>
-                            <?php if ($coor['EstadoCat'] == 'Activo'): ?>
-                              <form method="POST" class="d-inline">
-                                <input type="hidden" name="ciBloquear" value="<?php echo $coor['CiCat']; ?>">
-                                <button type="submit" name="bloquearCoordinador" class="btn btn-danger btn-sm" onclick="return confirm('¿Bloquear a este coordinador?')">
-                                  <i class="bi bi-lock-fill"></i>
-                                </button>
-                              </form>
-                            <?php else: ?>
-                              <form method="POST" class="d-inline">
-                                <input type="hidden" name="ciActivar" value="<?php echo $coor['CiCat']; ?>">
-                                <button type="submit" name="activarCoordinador" class="btn btn-success btn-sm" onclick="return confirm('¿Activar a este coordinador?')">
-                                  <i class="bi bi-unlock-fill"></i>
-                                </button>
-                              </form>
-                            <?php endif; ?>
-                          </td>
-                        </tr>
-                      <?php endforeach; ?>
-                    </tbody>
-                  </table>
-                </div>
-              <?php else: ?>
-                <p class="text-muted">No hay coordinadores asignados actualmente.</p>
-              <?php endif; ?>
+                          </form>
+                        </td>
+                      </tr>
+                    <?php endforeach; ?>
+                  </tbody>
+                </table>
+              </div>
 
             </div>
           </div>
+
         </div>
       </div>
     </div>
@@ -628,43 +482,72 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['asignarCoordinador'])
   <script src="../assets/js/functions.js"></script>
   <script src="../assets/js/tema.js"></script>
   <script>
-    const gruposPriCom = [
-      <?php
-      for ($i = 2; $i <= 19; $i++) {
-        echo "{id: {$i}, nombre: 'Grupo " . str_pad($i - 2, 2, '0', STR_PAD_LEFT) . "'},";
-      }
-      ?>
-    ];
-    const gruposConfirm = [
-      <?php
-      for ($i = 23; $i <= 40; $i++) {
-        echo "{id: {$i}, nombre: 'Grupo " . str_pad($i - 23, 2, '0', STR_PAD_LEFT) . "'},";
-      }
-      ?>
-    ];
+    // Buscador de personas: nombre, apellido o carnet
+    const buscadorPersona = document.getElementById('buscarPersonaCoor');
+    const resultadosPersona = document.getElementById('resultadosPersona');
+    const ayudaPersona = document.getElementById('ayudaPersona');
+    const ciPersonaCoor = document.getElementById('ciPersonaCoor');
+    let temporizadorBusqueda;
 
-    const selectSacramento = document.querySelector('select[name="Sacramento"]');
-    const selectGrupo = document.querySelector('select[name="IdGrupo"]');
+    function pintarPersonas(lista) {
+      resultadosPersona.innerHTML = '';
+      if (!lista.length) {
+        resultadosPersona.style.display = 'none';
+        ayudaPersona.className = 'form-text text-danger';
+        ayudaPersona.textContent = 'No se encontraron personas con ese dato.';
+        return;
+      }
+      lista.forEach(p => {
+        const boton = document.createElement('button');
+        boton.type = 'button';
+        boton.className = 'list-group-item list-group-item-action py-2';
+        boton.innerHTML = '<strong>' + p.nombre + '</strong><br><small class="text-muted">CI: ' + p.ci + (p.doc ? ' · Doc: ' + p.doc : '') + '</small>';
+        boton.addEventListener('click', function () {
+          ciPersonaCoor.value = p.ci;
+          buscadorPersona.value = p.nombre;
+          ayudaPersona.className = 'form-text text-success';
+          ayudaPersona.textContent = 'Seleccionado: ' + p.nombre + ' (CI ' + p.ci + ')';
+          resultadosPersona.style.display = 'none';
+        });
+        resultadosPersona.appendChild(boton);
+      });
+      resultadosPersona.style.display = 'block';
+    }
 
-    function cargarGrupos(lista) {
-      selectGrupo.innerHTML = '<option value="">Seleccionar...</option>';
-      lista.forEach(g => {
-        const opt = document.createElement('option');
-        opt.value = g.id;
-        opt.textContent = g.nombre;
-        selectGrupo.appendChild(opt);
+    if (buscadorPersona) {
+      buscadorPersona.addEventListener('input', function () {
+        const texto = this.value.trim();
+        ciPersonaCoor.value = '';
+        ayudaPersona.className = 'form-text';
+        ayudaPersona.textContent = 'Escribe al menos 2 letras y elige de la lista.';
+        clearTimeout(temporizadorBusqueda);
+        if (texto.length < 2) {
+          resultadosPersona.style.display = 'none';
+          return;
+        }
+        temporizadorBusqueda = setTimeout(function () {
+          fetch('VistaCoordinadorAdmin.php?buscarPersona=' + encodeURIComponent(texto), { credentials: 'same-origin' })
+            .then(r => r.json())
+            .then(d => pintarPersonas(d.personas || []))
+            .catch(() => {});
+        }, 250);
+      });
+
+      document.addEventListener('click', function (evento) {
+        if (evento.target !== buscadorPersona && !resultadosPersona.contains(evento.target)) {
+          resultadosPersona.style.display = 'none';
+        }
       });
     }
 
-    selectSacramento.addEventListener('change', function() {
-      if (this.value === 'Primera Comunión') {
-        cargarGrupos(gruposPriCom);
-      } else if (this.value === 'Confirmación') {
-        cargarGrupos(gruposConfirm);
-      } else {
-        selectGrupo.innerHTML = '<option value="">Seleccionar...</option>';
-      }
-    });
+    function verClave(ci) {
+      const span = document.getElementById('clave-' + ci);
+      const ojo = document.getElementById('ojo-' + ci);
+      if (!span) return;
+      const oculto = span.classList.toggle('d-none');
+      if (ojo) ojo.className = oculto ? 'bi bi-eye' : 'bi bi-eye-slash';
+    }
+
 
     function toggleCred(ci) {
       const hidden = document.getElementById('cred-' + ci);

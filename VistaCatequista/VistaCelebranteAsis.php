@@ -8,6 +8,7 @@ if (!isset($_SESSION['CiPersona'])) {
 	exit();
 }
 $Catequista = $_SESSION['CiPersona'];
+$fechaConsulta = $_POST['fecha'] ?? $_GET['fecha'] ?? '';
 
 $conexion = new Conexion();
 $db = $conexion->getConnection();
@@ -26,6 +27,22 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 $idGrupo = $Catequista['IdGrupo'];
 $celebrantes = $controlador->obtenerCelebrantes($idGrupo);
 
+$claveOrdenNombre = function ($texto) {
+	$texto = strtr((string) $texto, [
+		'Á' => 'A', 'À' => 'A', 'Ä' => 'A', 'Â' => 'A', 'á' => 'a', 'à' => 'a', 'ä' => 'a', 'â' => 'a',
+		'É' => 'E', 'È' => 'E', 'Ë' => 'E', 'Ê' => 'E', 'é' => 'e', 'è' => 'e', 'ë' => 'e', 'ê' => 'e',
+		'Í' => 'I', 'Ì' => 'I', 'Ï' => 'I', 'Î' => 'I', 'í' => 'i', 'ì' => 'i', 'ï' => 'i', 'î' => 'i',
+		'Ó' => 'O', 'Ò' => 'O', 'Ö' => 'O', 'Ô' => 'O', 'ó' => 'o', 'ò' => 'o', 'ö' => 'o', 'ô' => 'o',
+		'Ú' => 'U', 'Ù' => 'U', 'Ü' => 'U', 'Û' => 'U', 'ú' => 'u', 'ù' => 'u', 'ü' => 'u', 'û' => 'u',
+		'Ñ' => 'N', 'ñ' => 'n', 'Ç' => 'C', 'ç' => 'c'
+	]);
+	return strtolower($texto);
+};
+$ordenarPorNombre = function ($a, $b) use ($claveOrdenNombre) {
+	return strcmp($claveOrdenNombre($a['NombreCompleto'] ?? ''), $claveOrdenNombre($b['NombreCompleto'] ?? ''));
+};
+usort($celebrantes, $ordenarPorNombre);
+
 setlocale(LC_TIME, 'es_ES.UTF-8');
 
 $sql_celebrantes = "
@@ -41,6 +58,9 @@ $celebrantesAll = [];
 while ($row = $result_celebrantes->fetch_assoc()) {
 	$celebrantesAll[$row['CiPersona']] = $row['NombreCompleto'];
 }
+uasort($celebrantesAll, function ($a, $b) use ($claveOrdenNombre) {
+	return strcmp($claveOrdenNombre($a), $claveOrdenNombre($b));
+});
 
 $sql_fechas = "
     SELECT DISTINCT a.FechaAsisConf
@@ -68,7 +88,13 @@ foreach ($celebrantesAll as $ci => $nombre) {
 
 		if ($result_asistencia->num_rows > 0) {
 			$tipoAsis = $result_asistencia->fetch_assoc()['TipoAsis'];
-			$asistenciasAll[$ci][$fecha] = ($tipoAsis === 'Presente') ? 'P' : 'F';
+			if ($tipoAsis === 'Presente') {
+				$asistenciasAll[$ci][$fecha] = 'P';
+			} elseif ($tipoAsis === 'Licencia') {
+				$asistenciasAll[$ci][$fecha] = 'L';
+			} else {
+				$asistenciasAll[$ci][$fecha] = 'F';
+			}
 		} else {
 			$asistenciasAll[$ci][$fecha] = 'F';
 		}
@@ -91,11 +117,12 @@ function getActiveNotifications($conn)
             FROM notificaciones n 
             INNER JOIN catequista c ON n.CiNotificador = c.CiCat 
             INNER JOIN `persona` p ON c.CiCat = p.CiPersona 
-            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ?
+            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ? AND n.Sacramento = ?
             ORDER BY n.FechaNotFin ASC";
 
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("s", $currentDateTime);
+    $sacramentoActual = $_SESSION['CiPersona']['Sacramento'] ?? '';
+    $stmt->bind_param("ss", $currentDateTime, $sacramentoActual);
     $stmt->execute();
     $result = $stmt->get_result();
 
@@ -169,6 +196,11 @@ $activeNotifications = getActiveNotifications($conn);
 
 		.absent {
 			color: black;
+			font-weight: bold;
+		}
+
+		.license {
+			color: #0d6efd;
 			font-weight: bold;
 		}
 	</style>
@@ -246,11 +278,6 @@ $activeNotifications = getActiveNotifications($conn);
 							</li>
 							<li>
 								<a class="dropdown-item" href="ReunionesCat.php"><i class="fa-fw bi bi-calendar2-check me-2"></i>Fecha de Reuniones</a>
-							</li>
-							<li>
-								<a class="dropdown-item" href="Documentos.php">
-									<i class="fa-fw bi bi-card-text me-2"></i>Documentación
-								</a>
 							</li>
 							<li>
 								<a class="dropdown-item" href="Reglamento.php">
@@ -410,7 +437,7 @@ $activeNotifications = getActiveNotifications($conn);
 											<form method="POST" class="row align-items-end g-4">
 												<div class="col-sm-6 col-lg-6">
 													<label for="fecha" class="form-label">Fecha Actual:</label>
-													<input type="date" name="fecha" id="fecha" class="form-control">
+													<input type="date" name="fecha" id="fecha" class="form-control" value="<?php echo htmlspecialchars($fechaConsulta !== '' ? $fechaConsulta : date('Y-m-d')); ?>">
 												</div>
 												<div class="col-sm-6 col-lg-6">
 													<button type="submit" class="btn btn-primary-soft w-100" data-bs-toggle="tooltip" data-bs-placement="top" title="Buscar"><i class="bi bi-search"></i></button>
@@ -418,10 +445,10 @@ $activeNotifications = getActiveNotifications($conn);
 											</form>
 											<br>
 											<?php if (!empty($fechas)) {?>
-											<form action="asistencia_pdf.php" method="post">
+											<form action="asistencia_pdf.php" method="post" target="_blank">
 												<input type="hidden" value="<?php echo $idGrupo; ?>" name="idGrupo">
 												<input type="hidden" value="<?php echo $Catequista['NombreGrupo'];; ?>" name="NombreGr">
-												<button type="submit" class="btn btn-primary-soft w-100" target="_blank">
+												<button type="submit" class="btn btn-primary-soft w-100">
 													<i class="bi bi-file-earmark-spreadsheet"></i> Generar PDF de las Asistencias
 												</button>
 											</form>
@@ -432,9 +459,10 @@ $activeNotifications = getActiveNotifications($conn);
 							</div>
 
 							<div class="p-3">
-								<?php if (isset($_POST['fecha'])): ?>
-									<?php $asistencias = $controlador->obtenerAsistenciaPorFecha($_POST['fecha']); ?>
-									<?php if (empty($asistencias)):  $FechaReg = $_POST['fecha'];?>
+								<?php if ($fechaConsulta !== ''): ?>
+									<?php $asistencias = $controlador->obtenerAsistenciaPorFecha($fechaConsulta); ?>
+									<?php usort($asistencias, $ordenarPorNombre); ?>
+									<?php if (empty($asistencias)):  $FechaReg = $fechaConsulta;?>
 										<h2>Registrar Asistencia</h2>
 										<form method="post">
 											<table class="table">
@@ -454,7 +482,18 @@ $activeNotifications = getActiveNotifications($conn);
 															<td><?= $celebrante['DescripItem'] ?></td>
 
 															<td>
-																<input type="checkbox" name="TipoAsis[<?= $celebrante['IdInscripcion'] ?>]" value="Presente" onchange="this.previousElementSibling.value = this.checked ? 'Presente' : 'Falta';"> Presente
+																<label class="me-2">
+																	<input type="radio" name="TipoAsis[<?= $celebrante['IdInscripcion'] ?>]" value="Presente">
+																	Presente
+																</label>
+																<label class="me-2">
+																	<input type="radio" name="TipoAsis[<?= $celebrante['IdInscripcion'] ?>]" value="Falta">
+																	Falta
+																</label>
+																<label class="me-2">
+																	<input type="radio" name="TipoAsis[<?= $celebrante['IdInscripcion'] ?>]" value="Licencia">
+																	Licencia
+																</label>
 																<input type="hidden" name="IdInscripcion[]" value="<?= $celebrante['IdInscripcion'] ?>">
 															</td>
 														</tr>
@@ -495,14 +534,25 @@ $activeNotifications = getActiveNotifications($conn);
 															<td><?= $asistencia['NombreCompleto'] ?></td>
 															<td><?= $asistencia['DescripItem'] ?></td>
 															<td>
-																<input type="hidden" name="TipoAsis[<?= $asistencia['CodAsis'] ?>]" value="Falta">
-																<input type="checkbox" name="TipoAsis[<?= $asistencia['CodAsis'] ?>]" value="Presente" <?= strpos($asistencia['TipoAsis'], 'Presente') !== false ? 'checked' : '' ?> onchange="this.previousElementSibling.value = this.checked ? 'Presente' : 'Falta';"> Presente
+																<label class="me-2">
+																	<input type="radio" name="TipoAsis[<?= $asistencia['CodAsis'] ?>]" value="Presente" <?= $asistencia['TipoAsis'] === 'Presente' ? 'checked' : '' ?>>
+																	Presente
+																</label>
+																<label class="me-2">
+																	<input type="radio" name="TipoAsis[<?= $asistencia['CodAsis'] ?>]" value="Falta" <?= $asistencia['TipoAsis'] === 'Falta' ? 'checked' : '' ?>>
+																	Falta
+																</label>
+																<label class="me-2">
+																	<input type="radio" name="TipoAsis[<?= $asistencia['CodAsis'] ?>]" value="Licencia" <?= $asistencia['TipoAsis'] === 'Licencia' ? 'checked' : '' ?>>
+																	Licencia
+																</label>
 																<input type="hidden" name="CodAsis[]" value="<?= $asistencia['CodAsis'] ?>">
 															</td>
 														</tr>
 													<?php endforeach; ?>
 												</tbody>
 											</table>
+											<input type="hidden" name="FechaReg" value="<?= htmlspecialchars($fechaConsulta) ?>">
 											<button type="submit" name="modificar" class="btn btn-primary-soft w-100">Modificar Asistencias</button>
 										</form>
 									<?php endif; ?>
@@ -537,6 +587,8 @@ $activeNotifications = getActiveNotifications($conn);
 											$tipoAsis = $asistenciasAll[$ci][$fecha];
 											if ($tipoAsis === 'P') {
 												echo "<td class='present'></td>";
+											} elseif ($tipoAsis === 'L') {
+												echo "<td class='license'>L</td>";
 											} else {
 												echo "<td class='absent'>$tipoAsis</td>";
 											}
@@ -557,6 +609,7 @@ $activeNotifications = getActiveNotifications($conn);
 	<script>
 		function setCurrentDate() {
 			var fechaInput = document.getElementById('fecha');
+			if (!fechaInput || fechaInput.value) return;
 
 			var today = new Date();
 			var year = today.getFullYear();

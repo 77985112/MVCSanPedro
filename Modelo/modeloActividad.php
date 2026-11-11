@@ -129,6 +129,7 @@ class Actividad
             }
             $this->liberarResultadosPendientes();
             $idActividad = $this->ultimoIdInsertado();
+            $this->guardarVideoUrl($idActividad, $data['VideoUrl'] ?? null);
             $this->insertarImagenesExtras($idActividad, $data['ImagenesExtras'] ?? []);
             $this->conn->commit();
             return $idActividad;
@@ -138,8 +139,22 @@ class Actividad
         }
     }
 
-    /** id de la última fila insertada en esta conexión (también tras un procedimiento). */
-    private function ultimoIdInsertado()
+    /** Guarda el enlace del video; el procedimiento de alta no lo recibe. */
+    private function guardarVideoUrl($idActividad, $videoUrl)
+    {
+        if ($videoUrl === null || $videoUrl === '') {
+            return;
+        }
+        $stmt = $this->conn->prepare("UPDATE actividades SET VideoUrl = ? WHERE idActividad = ?");
+        $stmt->bind_param("si", $videoUrl, $idActividad);
+        try {
+            $stmt->execute();
+        } finally {
+            $stmt->close();
+        }
+    }
+
+    /** id de la última fila insertada en esta conexión (también tras un procedimiento). */    private function ultimoIdInsertado()
     {
         $resultado = $this->conn->query("SELECT LAST_INSERT_ID() AS id");
         $fila = $resultado ? $resultado->fetch_assoc() : null;
@@ -285,7 +300,7 @@ class Actividad
     public function puedeEliminarActividadParroquia($idActividad, $codPer)
     {
         $stmt = $this->conn->prepare("SELECT idActividad FROM actividades
-            WHERE idActividad = ? AND TipoActividad = 'Parroquia'
+            WHERE idActividad = ?
               AND EstActividad <> 'Eliminado'
               AND (CodPer = ? OR EXISTS (
                   SELECT 1 FROM `personal` p INNER JOIN `cargo` c ON c.CodCar = p.CodCar
@@ -302,16 +317,16 @@ class Actividad
     {
         // La categoría y el autor no se toman de los campos del formulario.
         $stmt = $this->conn->prepare("INSERT INTO actividades
-            (TituloActividad, FechaActividad, DetalleActividad, ImagenActividad, VideoActividad,
+            (TituloActividad, FechaActividad, DetalleActividad, ImagenActividad, VideoActividad, VideoUrl,
              LugarAct, HoraAct, CiCat, CodPer, TipoActividad)
-            SELECT ?, ?, ?, ?, ?, ?, ?, NULL, p.CodPer, 'Parroquia'
+            SELECT ?, ?, ?, ?, ?, ?, ?, ?, NULL, p.CodPer, 'Parroquia'
             FROM `personal` p
             LEFT JOIN permiso_acceso pa ON pa.CodPer = p.CodPer
             WHERE p.CodPer = ? AND p.Estado = 'Activo'
               AND (pa.CodPer IS NULL OR pa.Inicio = 1)");
-        $stmt->bind_param("sssssssi", $data['TituloActividad'], $data['FechaActividad'],
+        $stmt->bind_param("ssssssssi", $data['TituloActividad'], $data['FechaActividad'],
             $data['DetalleActividad'], $data['ImagenActividad'], $data['VideoActividad'],
-            $data['LugarAct'], $data['HoraAct'], $codPer);
+            $data['VideoUrl'], $data['LugarAct'], $data['HoraAct'], $codPer);
         $this->conn->begin_transaction();
         try {
             try {
@@ -403,11 +418,11 @@ class Actividad
                 WHERE p.CodPer = ? AND p.Estado = 'Activo' AND c.DescripCar = 'Párroco'
             ))";
         $stmt = $this->conn->prepare("UPDATE actividades SET TituloActividad = ?, FechaActividad = ?,
-            DetalleActividad = ?, ImagenActividad = ?, VideoActividad = ?, LugarAct = ?, HoraAct = ?
+            DetalleActividad = ?, ImagenActividad = ?, VideoActividad = ?, VideoUrl = ?, LugarAct = ?, HoraAct = ?
             WHERE " . $condicion);
-        $stmt->bind_param("sssssssiii", $data['TituloActividad'], $data['FechaActividad'],
+        $stmt->bind_param("ssssssssiii", $data['TituloActividad'], $data['FechaActividad'],
             $data['DetalleActividad'], $data['ImagenActividad'], $data['VideoActividad'],
-            $data['LugarAct'], $data['HoraAct'], $data['idActividad'], $codPer, $codPer);
+            $data['VideoUrl'], $data['LugarAct'], $data['HoraAct'], $data['idActividad'], $codPer, $codPer);
         try {
             $stmt->execute();
             $modificada = $stmt->affected_rows > 0;
@@ -435,11 +450,11 @@ class Actividad
     {
         // Conserva el autor original, sea catequista o párroco.
         $stmt = $this->conn->prepare("UPDATE actividades SET TituloActividad = ?, FechaActividad = ?,
-            DetalleActividad = ?, ImagenActividad = ?, VideoActividad = ?, LugarAct = ?, HoraAct = ?,
+            DetalleActividad = ?, ImagenActividad = ?, VideoActividad = ?, VideoUrl = ?, LugarAct = ?, HoraAct = ?,
             TipoActividad = ?, EstActividad = ? WHERE idActividad = ? AND EstActividad <> 'Eliminado'");
-        $stmt->bind_param("sssssssssi", $data['TituloActividad'], $data['FechaActividad'],
+        $stmt->bind_param("ssssssssssi", $data['TituloActividad'], $data['FechaActividad'],
             $data['DetalleActividad'], $data['ImagenActividad'], $data['VideoActividad'],
-            $data['LugarAct'], $data['HoraAct'], $data['TipoActividad'], $data['EstActividad'],
+            $data['VideoUrl'], $data['LugarAct'], $data['HoraAct'], $data['TipoActividad'], $data['EstActividad'],
             $data['idActividad']);
         try {
             return $stmt->execute();

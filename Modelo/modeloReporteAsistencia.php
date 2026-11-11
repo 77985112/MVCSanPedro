@@ -18,7 +18,9 @@ class ReporteAsistenciaModelo {
                 INNER JOIN `asignacion` a ON c.CiCat = a.CiCat
                 INNER JOIN `grupo` g ON a.IdGrupo = g.IdGrupo
                 WHERE c.Sacramento = ? AND c.EstadoCat = 'Activo'
-                ORDER BY p.ApPaterno, p.ApMaterno, p.Nombre";
+                ORDER BY g.IdGrupo,
+                         FIELD(a.RolCat, 'Coordinador', 'Titular', 'Catequista'),
+                         p.Nombre, p.ApPaterno, p.ApMaterno";
         
         $stmt = $conn->prepare($sql);
         $stmt->bind_param("s", $sacramento);

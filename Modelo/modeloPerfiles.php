@@ -10,7 +10,7 @@ class modeloSacramentoPer {
     }
 
     public function buscarPerfilCatequista($ciCat) {
-        $sql = "SELECT catequista.*, asig.*, gr.*, persona.Contacto, persona.FechaNac, CONCAT(persona.Nombre, ' ', persona.ApPaterno, ' ', persona.ApMaterno) AS NombreCompleto 
+        $sql = "SELECT catequista.*, asig.*, gr.*, persona.Contacto, persona.FechaNac, persona.Direccion, CONCAT(persona.Nombre, ' ', persona.ApPaterno, ' ', persona.ApMaterno) AS NombreCompleto 
         FROM catequista 
         INNER JOIN `persona` ON catequista.CiCat = persona.CiPersona
         INNER JOIN `asignacion` asig ON asig.CiCat = catequista.CiCat

@@ -12,7 +12,7 @@ class Mensaje {
     }
 
     public function insertarMensaje($nombre, $numCorr, $concepto, $detalle) {
-        $sql = "INSERT INTO mensajepublico (NombreMensaje, NumCorrMensaje, ConceptoMensaje, DetalleMensaje, FechaMensaje, EstadoMensaje) 
+        $sql = "INSERT INTO guardarconsulta (NombreMensaje, NumCorrMensaje, ConceptoMensaje, DetalleMensaje, FechaMensaje, EstadoMensaje) 
                 VALUES (?, ?, ?, ?, NOW(), 'Pendiente')";
 
         $stmt = $this->conn->prepare($sql);
@@ -23,14 +23,52 @@ class Mensaje {
         return false;
     }
 
-    public function obtenerMensajes() {
-        $sql = "SELECT * FROM mensajepublico";
-        $result = $this->conn->query($sql);
-        return $result;
+    public function obtenerMensajes($estado = null) {
+        if ($estado === 'Pendiente' || $estado === 'Leído') {
+            $sql = "SELECT * FROM guardarconsulta WHERE EstadoMensaje = ? ORDER BY FechaMensaje DESC, idMensaje DESC";
+            $stmt = $this->conn->prepare($sql);
+            if ($stmt) {
+                $stmt->bind_param("s", $estado);
+                $stmt->execute();
+                return $stmt->get_result();
+            }
+            return null;
+        }
+
+        $sql = "SELECT * FROM guardarconsulta ORDER BY FechaMensaje DESC, idMensaje DESC";
+        return $this->conn->query($sql);
+    }
+
+    public function contarMensajes($estado = null) {
+        if ($estado === 'Pendiente' || $estado === 'Leído') {
+            $sql = "SELECT COUNT(*) AS total FROM guardarconsulta WHERE EstadoMensaje = ?";
+            $stmt = $this->conn->prepare($sql);
+            if (!$stmt) {
+                return 0;
+            }
+            $stmt->bind_param("s", $estado);
+            $stmt->execute();
+            $total = (int) $stmt->get_result()->fetch_assoc()['total'];
+            $stmt->close();
+            return $total;
+        }
+
+        $result = $this->conn->query("SELECT COUNT(*) AS total FROM guardarconsulta");
+        return $result ? (int) $result->fetch_assoc()['total'] : 0;
+    }
+
+    public function eliminarMensaje($id) {
+        $sql = "DELETE FROM guardarconsulta WHERE idMensaje = ?";
+        $stmt = $this->conn->prepare($sql);
+        if ($stmt) {
+            $stmt->bind_param("i", $id);
+            return $stmt->execute();
+        }
+        return false;
     }
 
     public function obtenerMensajePorId($id) {
-        $sql = "SELECT * FROM mensajepublico WHERE idMensaje = ?";
+        $sql = "SELECT * FROM guardarconsulta WHERE idMensaje = ?";
         $stmt = $this->conn->prepare($sql);
         if ($stmt) {
             $stmt->bind_param("i", $id);
@@ -42,7 +80,7 @@ class Mensaje {
     }
 
     public function marcarComoLeido($id) {
-        $sql = "UPDATE mensajepublico SET EstadoMensaje = 'Leído', FechaLeido = NOW() WHERE idMensaje = ?";
+        $sql = "UPDATE guardarconsulta SET EstadoMensaje = 'Leído', FechaLeido = NOW() WHERE idMensaje = ?";
         $stmt = $this->conn->prepare($sql);
         if ($stmt) {
             $stmt->bind_param("i", $id);

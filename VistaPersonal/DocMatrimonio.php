@@ -219,14 +219,5 @@ try {
     error_log('No se pudo guardar el respaldo local de Matrimonio: ' . $e->getMessage());
 }
 
-try {
-    require_once __DIR__ . '/../Controlador/controladorGoogleDrive.php';
-    $drive = new ControladorGoogleDrive();
-    if ($drive->estaConectado()) {
-        $drive->respaldarPDF($pdfContent, 'Matrimonio', $pareja);
-    }
-} catch (Throwable $e) {
-    error_log('No se pudo guardar el respaldo de Matrimonio en Drive: ' . $e->getMessage());
-}
 @unlink($tmpFile);
 $pdf->Output('I', 'Certificado-Matrimonio.pdf');

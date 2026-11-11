@@ -265,15 +265,6 @@ if (isset($_GET['CodIns'])) {
             error_log('No se pudo guardar el respaldo local de Bautizo: ' . $e->getMessage());
         }
 
-        try {
-            require_once __DIR__ . '/../Controlador/controladorGoogleDrive.php';
-            $drive = new ControladorGoogleDrive();
-            if ($drive->estaConectado()) {
-                $drive->respaldarPDF($pdfContent, 'Bautizo', $certificadoData['NombreBautizado']);
-            }
-        } catch (Throwable $e) {
-            error_log('No se pudo guardar el respaldo de Bautizo en Drive: ' . $e->getMessage());
-        }
     }
 
     @unlink($tmpFile);

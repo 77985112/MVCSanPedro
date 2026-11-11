@@ -1278,6 +1278,40 @@ class ModeloInsSacramento
             }
         }
         $stmt->close();
+
+        // Si el certificado no tiene padrinos propios, usar los registrados
+        // manualmente en la ficha de catequesis del confirmante.
+        $stmtPadrinos = $this->conn->prepare(
+            "SELECT pmd.RolFam, pmd.Nombre, pmd.Apellido
+             FROM padrinocel pmd
+             INNER JOIN inscripcion i ON i.IdInscripcion = pmd.IdInscripcion
+             WHERE i.CiCel = ?
+             ORDER BY pmd.IdPadrino"
+        );
+        $stmtPadrinos->bind_param("s", $certificado['CiPersona']);
+        $stmtPadrinos->execute();
+        $padrinosManuales = $stmtPadrinos->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmtPadrinos->close();
+
+        if (!empty($padrinosManuales)) {
+            $porRol = ['Padrino' => [], 'Madrina' => []];
+            foreach ($padrinosManuales as $padrinoManual) {
+                $rolPadrino = $padrinoManual['RolFam'] ?? '';
+                if (isset($porRol[$rolPadrino])) {
+                    $nombreCompletoPadrino = trim(($padrinoManual['Nombre'] ?? '') . ' ' . ($padrinoManual['Apellido'] ?? ''));
+                    if ($nombreCompletoPadrino !== '') {
+                        $porRol[$rolPadrino][] = $nombreCompletoPadrino;
+                    }
+                }
+            }
+            if (trim((string) ($certificado['NombrePadrino'] ?? '')) === '' && !empty($porRol['Padrino'])) {
+                $certificado['NombrePadrino'] = implode(' y ', $porRol['Padrino']);
+            }
+            if (trim((string) ($certificado['NombreMadrina'] ?? '')) === '' && !empty($porRol['Madrina'])) {
+                $certificado['NombreMadrina'] = implode(' y ', $porRol['Madrina']);
+            }
+        }
+
         return $certificado;
     }
 

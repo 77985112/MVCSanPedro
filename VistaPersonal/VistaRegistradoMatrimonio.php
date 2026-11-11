@@ -12,9 +12,9 @@ require_once __DIR__ . '/../Controlador/controladorAcceso.php';
 ControladorAcceso::exigir('certificado');
 $controller = new ControladorInsSacramento();
 $certificadoData = [];
+$codIns = (int) ($_GET['CodIns'] ?? 0);
 
-if (isset($_GET['CodIns'])) {
-  $codIns = $_GET['CodIns'];
+if ($codIns > 0) {
   $certificadoData = $controller->VerCertificadoMatrimonio($codIns);
 }
 $partidaGuardada = $certificadoData

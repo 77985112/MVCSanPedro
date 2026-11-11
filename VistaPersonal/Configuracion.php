@@ -9,6 +9,7 @@ if (!isset($_SESSION['usuario'])) {
 
 $usuarioController = new UsuarioController();
 $usuario = $_SESSION['usuario'];
+$cambioObligatorio = !empty($usuario['DebeCambiarClave']);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['cambiarPerfil'])) {
@@ -33,7 +34,17 @@ if (isset($_POST['cambiarContacto'])) {
 }
 
 if (isset($_POST['cambiarContracat'])) {
-    $usuarioController->cambiarContrasena($usuario['CiPersonal'], $_POST['ActualC'], $_POST['NuevoC1'], $_POST['NuevoC2'], $usuario['ClavePer']);
+    // Con una clave de un solo uso (primer ingreso) no se pide la clave actual.
+    if ($usuarioController->cambiarContrasena(
+        $usuario['CiPersonal'],
+        $_POST['ActualC'] ?? '',
+        $_POST['NuevoC1'],
+        $_POST['NuevoC2'],
+        empty($usuario['DebeCambiarClave'])
+    )) {
+        header("Location: VistaDashboard.php");
+        exit();
+    }
 }
 
 if (isset($_POST['EliminarCount'])) {
@@ -140,6 +151,13 @@ if (isset($_POST['EliminarCount'])) {
 
 
     <main>
+        <?php if ($cambioObligatorio): ?>
+            <div class="container mt-4">
+                <div class="alert alert-warning border-0 shadow-sm" role="alert">
+                    <strong>Contraseña de un solo uso:</strong> ya la usaste para ingresar. Crea ahora tu contraseña definitiva; la clave del ticket dejará de funcionar.
+                </div>
+            </div>
+        <?php endif; ?>
         <div class="container personal-dashboard-container">
             <div class="row">
                 <div class="col-lg-3">
@@ -283,22 +301,26 @@ if (isset($_POST['EliminarCount'])) {
                                 </div>
                             </div>
 
-                            <div class="card mb-4">
+                            <div class="card mb-4" id="cardContrasena">
                                 <div class="card-header border-0 pb-0">
-                                    <h5 class="card-title">Cambia tu contraseña</h5>
-                                    <p class="mb-0">Al cambiar tu contraseña tines mas segura tu cuenta.</p>
+                                    <h5 class="card-title"><?php echo $cambioObligatorio ? 'Crea tu contraseña definitiva' : 'Cambia tu contraseña'; ?></h5>
+                                    <p class="mb-0"><?php echo $cambioObligatorio
+                                        ? 'La clave del ticket es de un solo uso. Define tu contraseña personal para continuar.'
+                                        : 'Al cambiar tu contraseña tienes más segura tu cuenta.'; ?></p>
                                 </div>
                                 <div class="card-body">
                                     <form method="post">
                                         <div class="row g-3">
+                                            <?php if (!$cambioObligatorio): ?>
                                             <div class="col-4">
                                                 <label class="form-label">Contraseña actual</label>
-                                                <input type="text" class="form-control" name="ActualC" id="ActualC" placeholder="Contraseña Actual">
+                                                <input type="password" class="form-control" name="ActualC" id="ActualC" placeholder="Contraseña Actual">
                                             </div>
+                                            <?php endif; ?>
                                             <div class="col-4">
                                                 <label class="form-label">Nueva contraseña</label>
                                                 <div class="input-group">
-                                                    <input class="form-control fakepassword" type="password" name="NuevoC1" id="NuevoC1" placeholder="Nueva Contraseña">
+                                                    <input class="form-control fakepassword" type="password" name="NuevoC1" id="NuevoC1" placeholder="Nueva Contraseña"<?php echo $cambioObligatorio ? ' autofocus' : ''; ?>>
                                                     <span class="input-group-text p-0">
                                                         <i class="fakepasswordicon fa-solid fa-eye-slash cursor-pointer p-2 w-40px" onclick="myFunction()"></i>
                                                     </span>
@@ -320,7 +342,7 @@ if (isset($_POST['EliminarCount'])) {
                                             </div>
                                             <div class="col-12 text-end">
 
-                                                <button type="submit" name="cambiarContracat" class="btn btn-primary mb-0">Guardar Contraseña</button>
+                                                <button type="submit" name="cambiarContracat" class="btn btn-primary mb-0"><?php echo $cambioObligatorio ? 'Guardar contraseña definitiva' : 'Guardar Contraseña'; ?></button>
                                             </div>
                                         </div>
                                     </form>

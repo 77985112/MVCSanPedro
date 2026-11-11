@@ -11,6 +11,7 @@ if (!isset($_SESSION['CiPersona'])) {
 $Catequista = $_SESSION['CiPersona'];
 $sacramento = $Catequista['Sacramento'];
 $idGrupo = $Catequista['IdGrupo'];
+$cantidadNotas = (stripos((string) $sacramento, 'Confirmación') !== false) ? 3 : 2;
 
 $contNota = new ContCelebranteExamen();
 $celebrantes = $contNota->verCelebrantes($sacramento, $idGrupo);
@@ -19,7 +20,11 @@ $pdf = new FPDF();
 $pdf->AddPage();
 
 $pdf->SetFont('Arial', 'B', 16);
-$pdf->Cell(0, 10, 'Reporte de Notas de Catequisandos G# '.$Catequista['NombreGrupo'], 0, 1, 'C');
+$titulo = 'Reporte de Notas de Catequizandos G# ' . $Catequista['NombreGrupo'];
+if (trim((string) $sacramento) !== '') {
+    $titulo .= ' - ' . $sacramento;
+}
+$pdf->Cell(0, 10, iconv('UTF-8', 'Windows-1252//TRANSLIT', $titulo), 0, 1, 'C');
 $pdf->Ln(0);
 
 $pdf->SetFont('Arial', '', 12);
@@ -45,21 +50,27 @@ $pdf->Cell(10, 10, '#', 1, 0, 'C');
 $pdf->Cell(60, 10, 'Nombre Completo', 1, 0, 'C');
 $pdf->Cell(20, 10, 'Bim. 1', 1, 0, 'C');
 $pdf->Cell(20, 10, 'Bim. 2', 1, 0, 'C');
-$pdf->Cell(20, 10, 'Bim. 3', 1, 0, 'C');
-$pdf->Cell(20, 10, 'Bim. 4', 1, 0, 'C');
+if ($cantidadNotas >= 3) {
+    $pdf->Cell(20, 10, 'Bim. 3', 1, 0, 'C');
+}
 $pdf->Cell(20, 10, 'Promedio', 1, 1, 'C');
 
 $pdf->SetFont('Arial', '', 10);
 $Num=0;
 foreach ($celebrantes as $celebrante) {
     $Num++;
-    $nombreCompleto = $celebrante['Nombre'] . ' ' . $celebrante['ApPaterno'] . ' ' . $celebrante['ApMaterno'];
+    $nombreCompleto = iconv(
+        'UTF-8',
+        'Windows-1252//TRANSLIT',
+        $celebrante['Nombre'] . ' ' . $celebrante['ApPaterno'] . ' ' . $celebrante['ApMaterno']
+    );
     $pdf->Cell(10, 10, $Num, 1, 0, 'C');
     $pdf->Cell(60, 10, $nombreCompleto, 1, 0, 'C');
     $pdf->Cell(20, 10, $celebrante['NotaExamen1'], 1, 0, 'C');
     $pdf->Cell(20, 10, $celebrante['NotaExamen2'], 1, 0, 'C');
-    $pdf->Cell(20, 10, $celebrante['NotaExamen3'], 1, 0, 'C');
-    $pdf->Cell(20, 10, $celebrante['NotaExamen4'], 1, 0, 'C');
+    if ($cantidadNotas >= 3) {
+        $pdf->Cell(20, 10, $celebrante['NotaExamen3'], 1, 0, 'C');
+    }
     $pdf->Cell(20, 10, round($celebrante['Promedio']), 1, 1, 'C');
 }
 

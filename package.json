@@ -1,7 +1,7 @@
 {
   "name": "mvcsanpedro",
   "version": "1.0.0",
-  "description": "Sistema de gestión de la Parroquia San Pedro de Sacaba, desarrollado en PHP con\r MySQLi y MariaDB. Incluye personas, catequesis, reservas, certificados, avisos\r por correo con Brevo y una integración de Google Drive para respaldar PDF.",
+  "description": "Sistema de gestión de la Parroquia San Pedro de Sacaba, desarrollado en PHP con\r MySQLi y MariaDB. Incluye personas, catequesis, reservas, certificados y avisos\r por correo con Brevo.",
   "main": "index.js",
   "directories": {
     "doc": "docs"

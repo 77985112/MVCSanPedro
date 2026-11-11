@@ -5,10 +5,32 @@ if (!isset($_SESSION['CiPersona']) || ($_SESSION['CiPersona']['RolCat'] ?? '') !
     exit();
 }
 $Catequista = $_SESSION['CiPersona'];
+require_once __DIR__ . '/../Controlador/controladorAccesoCatequista.php';
+ControladorAccesoCatequista::exigirCambioClave();
 require_once '../Controlador/controladorGrupos.php';
 
 $controller = new GrupoController();
 $Sacramento = $Catequista['Sacramento'];
+
+// Aviso de la ultima accion (se muestra una sola vez).
+$avisoGrupo = $_SESSION['flash_grupo'] ?? null;
+unset($_SESSION['flash_grupo']);
+
+// Agregar o quitar grupos del propio sacramento.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion_grupo'])) {
+    if ($_POST['accion_grupo'] === 'crear_grupo') {
+        $resultadoGrupo = $controller->crearGrupo($Sacramento);
+    } elseif ($_POST['accion_grupo'] === 'eliminar_grupo') {
+        $resultadoGrupo = $controller->eliminarGrupo((int) ($_POST['IdGrupo'] ?? 0), $Sacramento);
+    } else {
+        $resultadoGrupo = ['ok' => false, 'mensaje' => 'Acción no válida.'];
+    }
+
+    $_SESSION['flash_grupo'] = $resultadoGrupo;
+    header('Location: VistaCoordinador.php');
+    exit;
+}
+
 $celebrantes = $controller->mostrarDatosPorSacramento($Sacramento);
 
 
@@ -31,11 +53,12 @@ function getActiveNotifications($conn)
             FROM notificaciones n 
             INNER JOIN catequista c ON n.CiNotificador = c.CiCat 
             INNER JOIN `persona` p ON c.CiCat = p.CiPersona 
-            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ?
+            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ? AND n.Sacramento = ?
             ORDER BY n.FechaNotFin ASC";
 
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("s", $currentDateTime);
+    $sacramentoActual = $_SESSION['CiPersona']['Sacramento'] ?? '';
+    $stmt->bind_param("ss", $currentDateTime, $sacramentoActual);
     $stmt->execute();
     $result = $stmt->get_result();
 
@@ -168,11 +191,6 @@ $activeNotifications = getActiveNotifications($conn);
                                 <a class="dropdown-item" href="ReunionesCat.php"><i class="fa-fw bi bi-calendar2-check me-2"></i>Fecha de Reuniones</a>
                             </li>
                             <li>
-                                <a class="dropdown-item" href="Documentos.php">
-                                    <i class="fa-fw bi bi-card-text me-2"></i>Documentación
-                                </a>
-                            </li>
-                            <li>
                                 <a class="dropdown-item" href="Reglamento.php">
                                     <i class="fa-fw bi bi-list-check me-2"></i>Reglamento
                                 </a>
@@ -219,7 +237,7 @@ $activeNotifications = getActiveNotifications($conn);
             </div>
             <div class="row justify-content-between g-0">
 
-                <div class="col-md-2 col-lg-3 col-xxl-4 mt-n4">
+                <div class="col-md-2 col-lg-2 col-xxl-2 mt-n4">
                     <div class="nav-sidenav p-4 bg-mode h-100 custom-scrollbar">
                         <div class="d-flex justify-content-end d-lg-none mb-2">
                             <button class="btn btn-light btn-sm sidebar-start-close" type="button" aria-label="Cerrar menú"><i class="bi bi-x-lg"></i></button>
@@ -253,38 +271,55 @@ $activeNotifications = getActiveNotifications($conn);
                                 <a class="nav-link" href="VistaPersona.php"> <i class="bi bi-person-vcard nav-icon"></i> <span class="nav-text">Persona </span></a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link" href="Configuracion.php"> <i class="bi bi-gear-wide-connected nav-icon"></i> <span class="nav-text">Configuración </span></a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link" href="VistaTodosCat.php"> <i class="bi bi-calendar-check nav-icon"></i> <span class="nav-text">Listado Catequistas</span></a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link" href="VistaTodosCat.php"> <i class="bi bi-file-earmark-text nav-icon"></i> <span class="nav-text">Reporte </span></a>
-                            </li>
-                            <h6 class="nav-text badge bg-primary text-white mt-2 me-2 border border-white border-3 rounded"><i class="bi bi-caret-down-fill"></i>&nbsp;&nbsp; Publico</h6>
-                            <li class="nav-item">
-                                <a class="nav-link" href="VistaMensajeCoor.php"> <i class="bi bi-file-earmark-text nav-icon"></i> <span class="nav-text">Mensaje Público</span></a>
+                                <a class="nav-link" href="VistaTodosCat.php"> <i class="bi bi-calendar-check nav-icon"></i> <span class="nav-text">Reporte Activos Inactivos</span></a>
                             </li>
                         </ul>
                     </div>
                 </div>
 
 
-                <section class="pt-0 ">
-                    <div class="container">
+                <section class="pt-0 col-md-10 col-lg-10 col-xxl-10 pe-lg-5">
+                    <div class="container-fluid px-3">
                         <div class="card">
+                            <?php if ($avisoGrupo): ?>
+                                <div class="alert alert-<?php echo $avisoGrupo['ok'] ? 'success' : 'danger'; ?> alert-dismissible fade show mx-4 mt-4 mb-0" role="alert">
+                                    <?php echo htmlspecialchars($avisoGrupo['mensaje']); ?>
+                                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+                                </div>
+                            <?php endif; ?>
+
                             <h2 class="align-items-center text-center" style="margin-top: 5%;">Estado Actual de <?php echo $Sacramento; ?></h2>
 
-                            <div class="row" style="margin-left: 5%; margin-right: 5%; margin-top: 5%;">
+                            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2" style="margin-left: 5%; margin-right: 5%; margin-top: 1.5rem;">
+                                <small class="text-muted">Los grupos 01 a 17 son fijos. Solo se pueden quitar los grupos nuevos (18 en adelante).</small>
+                                <form method="POST" class="m-0">
+                                    <input type="hidden" name="accion_grupo" value="crear_grupo">
+                                    <button type="submit" class="btn btn-primary btn-sm">
+                                        <i class="bi bi-plus-lg me-1"></i>Añadir grupo
+                                    </button>
+                                </form>
+                            </div>
 
-                                <?php $numGrupo = 0; foreach ($celebrantes as $grupo): ?>
+                            <div class="row" style="margin-left: 5%; margin-right: 5%; margin-top: 1.5rem;">
+
+                                <?php foreach ($celebrantes as $grupo): ?>
                                     <div class="col-12 col-md-3">
-                                        <div class="card mb-3">
+                                        <div class="card mb-3 position-relative">
+                                            <?php if ((int) $grupo['NombreGrupo'] > 17 && (int) $grupo['totalInscripciones'] === 0 && (int) $grupo['totalAsignaciones'] === 0): ?>
+                                                <form method="POST" class="position-absolute top-0 end-0 m-2">
+                                                    <input type="hidden" name="accion_grupo" value="eliminar_grupo">
+                                                    <input type="hidden" name="IdGrupo" value="<?php echo $grupo['IdGrupo']; ?>">
+                                                    <button type="submit" class="btn btn-sm btn-link text-danger p-0" title="Quitar grupo"
+                                                            onclick="return confirm('¿Quitar este grupo vacío?')">
+                                                        <i class="bi bi-trash"></i>
+                                                    </button>
+                                                </form>
+                                            <?php endif; ?>
                                             <div class="card-body pt-0 border border-white border-3 rounded text-center">
                                                 <input type="hidden" value="<?php echo $grupo['IdGrupo']; ?>">
                                                 <h5 class="mb-0">
                                                     <a href="GrupoEsp.php?id=<?php echo $grupo['IdGrupo']; ?>">
-                                                        Grupo: <?php echo str_pad($numGrupo, 2, '0', STR_PAD_LEFT); ?>
+                                                        Grupo: <?php echo htmlspecialchars($grupo['NombreGrupo']); ?>
                                                     </a>
                                                 </h5>
                                                 <div class="hstack gap-2 gap-xl-3 justify-content-center">
@@ -302,7 +337,7 @@ $activeNotifications = getActiveNotifications($conn);
                                             </div>
                                         </div>
                                     </div>
-                                <?php $numGrupo++; endforeach; ?>
+                                <?php endforeach; ?>
 
                             </div>
                         </div>

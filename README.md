@@ -1,8 +1,8 @@
 # MVCSanPedro
 
 Sistema de gestión de la Parroquia San Pedro de Sacaba, desarrollado en PHP con
-MySQLi y MariaDB. Incluye personas, catequesis, reservas, certificados, avisos
-por correo con Brevo y una integración de Google Drive para respaldar PDF.
+MySQLi y MariaDB. Incluye personas, catequesis, reservas, certificados y avisos
+por correo con Brevo.
 
 ## Instalación local
 
@@ -15,10 +15,8 @@ Entorno utilizado: XAMPP en Windows, PHP 8.2 y MariaDB 10.4.
    [esquema de la versión inicial](https://github.com/77985112/MVCSanPedro/blob/a8228bb62227e4d3c67081eee8b8dddcc08eb0eb/docs/bdsanpedro_estructura.sql).
    Preparar los catálogos y las cuentas de acceso: el esquema no contiene
    usuarios, contraseñas ni registros personales.
-4. Desde la carpeta del proyecto, ejecutar `composer install --no-dev`.
-   Se utilizan las versiones de `composer.lock`; `vendor/` no se publica en Git.
-5. Configurar las credenciales privadas de las APIs como se indica abajo.
-6. Iniciar Apache y MySQL y abrir `http://localhost/MVCSanPedro/`.
+4. Configurar las credenciales privadas de correo como se indica abajo.
+5. Iniciar Apache y MySQL y abrir `http://localhost/MVCSanPedro/`.
 
 Para una instalación existente, conservar su base de datos y su configuración
 privada. El esquema inicial sirve para una base vacía; no reemplaza una migración
@@ -44,43 +42,11 @@ la entrega en la bandeja del destinatario. La
 [documentación previa del módulo](https://github.com/77985112/MVCSanPedro/blob/a8228bb62227e4d3c67081eee8b8dddcc08eb0eb/docs/correo_brevo.md)
 permanece disponible en el historial.
 
-## Google Drive: certificados
-
-Proyecto de Google Cloud: **SanPedroRespaldoCertificados**.
-Se utiliza Google Drive API, OAuth 2.0 y el permiso
-`https://www.googleapis.com/auth/drive.file`.
-
-En cada instalación se necesitan los archivos privados:
-- `Config/credentials.json`: credenciales del cliente OAuth de aplicación web.
-- `Config/google_token.json`: token creado al autorizar la cuenta desde el sistema.
-
-Ambos están excluidos de Git. `Config/.htaccess` bloquea el acceso HTTP a JSON
-cuando Apache permite estas reglas. En otros servidores debe configurarse la
-protección equivalente o mover los secretos fuera de la carpeta pública y
-actualizar sus rutas.
-
-URI de redireccionamiento configurada en PHP:
-`http://localhost/MVCSanPedro/Controlador/googleDriveCallback.php`.
-Debe coincidir con la del cliente OAuth. Cambiar ambas al usar otro dominio o puerto.
-
-El panel incluye un enlace a `VistaPersonal/VistaGoogleDrive.php`. Los archivos
-`DocBautizo.php`, `DocConfirmacion.php` y `DocMatrimonio.php` incorporan la
-llamada de respaldo antes de mostrar el PDF.
-
-### Estado de esta versión
-
-Esta publicación guarda la implementación actual. La revisión del código detectó
-pendientes: asignar la carpeta al PDF al subirlo, guardar el ID y estado del respaldo
-en la base de datos, evitar duplicados y completar los controles OAuth/CSRF y el
-manejo de errores. La existencia del código o del token no demuestra que una
-subida real haya terminado correctamente.
-
 ## Organización
 
 - `Controlador/`: coordinación de los módulos.
 - `Modelo/`: acceso a datos y operaciones con las APIs.
 - `Conexion/`: configuración de base de datos y correo.
-- `Config/`: configuración del cliente de Google.
 - `VistaPersonal/`, `VistaCatequista/`, `VistaCelebrante/`,
   `VistaCoordinador/`: pantallas por rol. El nombre interno VistaCelebrante se
   conserva; el rol se muestra como Catequisando.
@@ -113,5 +79,4 @@ C:\xampp\php\php.exe -l VistaPersonal/DocBautizo.php
 
 Las pruebas anteriores pueden consultarse en el historial. Si se recuperan para
 ejecutarlas desde otra ubicación, revisar primero sus rutas y sus efectos sobre
-la base de datos. Esta publicación no constituye una prueba real de correo ni
-de subida a Google Drive.
+la base de datos. Esta publicación no constituye una prueba real de correo.

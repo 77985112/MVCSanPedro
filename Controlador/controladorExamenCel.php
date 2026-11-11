@@ -13,9 +13,5 @@ class ContCelebranteExamen {
     public function asignarNota($idCelEx, $numNota, $nota) {
         return $this->model->actualizarNota($idCelEx, $numNota, $nota);
     }
-
-    public function listarExamenes() {
-        return $this->model->getExamenes();
-    }
 }
 ?>

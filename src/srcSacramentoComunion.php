@@ -256,6 +256,24 @@ $sacramentos = $controller->Comunion();
                                         </div>
                                     </article>
                                 </div>
+
+                                <div class="sacramento-redes">
+                                    <p class="sacramento-redes-titulo">Síguenos en nuestras redes</p>
+                                    <div class="sacramento-redes-iconos">
+                                        <a class="sacramento-red sacramento-red--facebook"
+                                            href="https://www.facebook.com/PriComSacaba?locale=es_LA"
+                                            target="_blank" rel="noopener noreferrer"
+                                            aria-label="Facebook de Primera Comunión">
+                                            <i class="fa-brands fa-facebook-f" aria-hidden="true"></i>
+                                        </a>
+                                        <a class="sacramento-red sacramento-red--tiktok"
+                                            href="https://www.tiktok.com/@pricom.sacaba?is_from_webapp=1&amp;sender_device=pc"
+                                            target="_blank" rel="noopener noreferrer"
+                                            aria-label="TikTok de Primera Comunión">
+                                            <i class="fa-brands fa-tiktok" aria-hidden="true"></i>
+                                        </a>
+                                    </div>
+                                </div>
                             </section>
 
                         </div>

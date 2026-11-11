@@ -5,7 +5,45 @@ if (!isset($_SESSION['CiPersona'])) {
     exit();
 }
 $Catequista = $_SESSION['CiPersona'];
+$cambioObligatorio = !empty($Catequista['DebeCambiarClave']);
 include_once '../Controlador/controladorConfigCatequista.php';
+
+require_once '../Controlador/controladorPermisosCatequista.php';
+$permisosController = new ControladorPermisosCatequista();
+$mensajePoderes = $_SESSION['mensajePoderes'] ?? '';
+$errorPoderes = $_SESSION['errorPoderes'] ?? '';
+unset($_SESSION['mensajePoderes'], $_SESSION['errorPoderes']);
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['guardar_poderes'])) {
+    if (($Catequista['RolCat'] ?? '') !== 'Titular') {
+        $_SESSION['errorPoderes'] = 'Solo el titular del grupo puede asignar poderes.';
+    } else {
+        $ok = $permisosController->guardar(
+            trim((string) ($_POST['CiCatPermiso'] ?? '')),
+            isset($_POST['asistencia_apoderados']) ? 1 : 0,
+            isset($_POST['puntaje_examenes']) ? 1 : 0,
+            isset($_POST['registrar_catequizandos']) ? 1 : 0,
+            (int) ($Catequista['IdGrupo'] ?? 0),
+            (string) ($Catequista['Gestion'] ?? ''),
+            (string) ($Catequista['CiCat'] ?? '')
+        );
+        if ($ok) {
+            $_SESSION['mensajePoderes'] = 'Poderes actualizados correctamente.';
+        } else {
+            $_SESSION['errorPoderes'] = 'No se pudieron actualizar los poderes.';
+        }
+    }
+    header('Location: Configuracion.php#nav-setting-tab-3');
+    exit;
+}
+
+$companerosPoderes = (($Catequista['RolCat'] ?? '') === 'Titular')
+    ? $permisosController->obtenerCompaneros(
+        (int) ($Catequista['IdGrupo'] ?? 0),
+        (string) ($Catequista['Gestion'] ?? ''),
+        (string) ($Catequista['CiCat'] ?? '')
+    )
+    : [];
 
 require_once '../Conexion/Conexion.php';
 
@@ -20,11 +58,12 @@ function getActiveNotifications($conn)
             FROM notificaciones n 
             INNER JOIN catequista c ON n.CiNotificador = c.CiCat 
             INNER JOIN `persona` p ON c.CiCat = p.CiPersona 
-            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ?
+            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ? AND n.Sacramento = ?
             ORDER BY n.FechaNotFin ASC";
 
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("s", $currentDateTime);
+    $sacramentoActual = $_SESSION['CiPersona']['Sacramento'] ?? '';
+    $stmt->bind_param("ss", $currentDateTime, $sacramentoActual);
     $stmt->execute();
     $result = $stmt->get_result();
 
@@ -135,11 +174,6 @@ $activeNotifications = getActiveNotifications($conn);
                                 <a class="dropdown-item" href="ReunionesCat.php"><i class="fa-fw bi bi-calendar2-check me-2"></i>Fecha de Reuniones</a>
                             </li>
                             <li>
-                                <a class="dropdown-item" href="Documentos.php">
-                                    <i class="fa-fw bi bi-card-text me-2"></i>Documentación
-                                </a>
-                            </li>
-                            <li>
                                 <a class="dropdown-item" href="Reglamento.php">
                                     <i class="fa-fw bi bi-list-check me-2"></i>Reglamento
                                 </a>
@@ -179,6 +213,25 @@ $activeNotifications = getActiveNotifications($conn);
 
     <main>
         <div class="container">
+            <?php if (!empty($_SESSION['mensajeClave'])): ?>
+                <div class="alert alert-success alert-dismissible fade show mt-3" role="alert">
+                    <i class="bi bi-check-circle me-1"></i><?php echo htmlspecialchars($_SESSION['mensajeClave']); ?>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+                </div>
+                <?php unset($_SESSION['mensajeClave']); ?>
+            <?php endif; ?>
+            <?php if (!empty($_SESSION['errorClave'])): ?>
+                <div class="alert alert-danger alert-dismissible fade show mt-3" role="alert">
+                    <i class="bi bi-exclamation-triangle me-1"></i><?php echo htmlspecialchars($_SESSION['errorClave']); ?>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+                </div>
+                <?php unset($_SESSION['errorClave']); ?>
+            <?php endif; ?>
+            <?php if ($cambioObligatorio): ?>
+                <div class="alert alert-warning border-0 shadow-sm mt-3" role="alert">
+                    <strong>Contraseña de un solo uso:</strong> ya la usaste para ingresar. Crea ahora tu contraseña definitiva; la clave del ticket dejará de funcionar.
+                </div>
+            <?php endif; ?>
             <div class="row">
                 <div class="col-lg-3">
                     <div class="d-flex align-items-center mb-4 d-lg-none">
@@ -373,20 +426,24 @@ $activeNotifications = getActiveNotifications($conn);
 
                             <div class="card mb-4">
                                 <div class="card-header border-0 pb-0">
-                                    <h5 class="card-title">Cambia tu contraseña</h5>
-                                    <p class="mb-0">Al cambiar tu contraseña tines mas segura tu cuenta.</p>
+                                    <h5 class="card-title"><?php echo $cambioObligatorio ? 'Crea tu contraseña definitiva' : 'Cambia tu contraseña'; ?></h5>
+                                    <p class="mb-0"><?php echo $cambioObligatorio
+                                        ? 'La clave del ticket es de un solo uso. Define tu contraseña personal para continuar.'
+                                        : 'Al cambiar tu contraseña tienes más segura tu cuenta.'; ?></p>
                                 </div>
                                 <div class="card-body">
                                     <form method="post">
                                         <div class="row g-3">
+                                            <?php if (!$cambioObligatorio): ?>
                                             <div class="col-4">
                                                 <label class="form-label">Contraseña actual</label>
-                                                <input type="text" class="form-control" name="ActualC" id="ActualC" placeholder="Contraseña Actual">
+                                                <input type="password" class="form-control" name="ActualC" id="ActualC" placeholder="Contraseña Actual">
                                             </div>
+                                            <?php endif; ?>
                                             <div class="col-4">
                                                 <label class="form-label">Nueva contraseña</label>
                                                 <div class="input-group">
-                                                    <input class="form-control fakepassword" type="password" name="NuevoC1" id="NuevoC1" placeholder="Nueva Contraseña">
+                                                    <input class="form-control fakepassword" type="password" name="NuevoC1" id="NuevoC1" placeholder="Nueva Contraseña"<?php echo $cambioObligatorio ? ' autofocus' : ''; ?>>
                                                     <span class="input-group-text p-0">
                                                         <i class="fakepasswordicon fa-solid fa-eye-slash cursor-pointer p-2 w-40px" onclick="myFunction()"></i>
                                                     </span>
@@ -408,7 +465,7 @@ $activeNotifications = getActiveNotifications($conn);
                                             </div>
                                             <div class="col-12 text-end">
 
-                                                <button type="submit" name="cambiarContracat" class="btn btn-primary mb-0">Guardar Contraseña</button>
+                                                <button type="submit" name="cambiarContracat" class="btn btn-primary mb-0"><?php echo $cambioObligatorio ? 'Guardar contraseña definitiva' : 'Guardar Contraseña'; ?></button>
                                             </div>
                                         </div>
                                     </form>
@@ -422,43 +479,54 @@ $activeNotifications = getActiveNotifications($conn);
                             <div class="card">
                                 <div class="card-header border-0 pb-0">
                                     <h5 class="card-title">Mi seguridad</h5>
-                                    <p class="mb-0">Puedes modificar la visualización de tus datos personales a Catequistas y Confirmantes que visitan tu perfil.</p>
+                                    <p class="mb-0">Puedes modificar la visualización de tus datos personales a Catequistas y Catequisandos que visitan tu perfil.</p>
                                 </div>
-                                <div class="card-body">
-                                    <ul class="list-group">
-                                        <li class="list-group-item d-md-flex justify-content-between align-items-start">
-                                            <div class="me-md-3">
-                                                <h6 class="mb-0">Contacto</h6>
-                                                <p class="small mb-0">Los demás podrían requerir tu número de contacto para informarte o realizarte alguna consulta.</p>
-                                            </div>
-                                            <button class="visibility-toggle btn btn-success-soft btn-sm mt-1 mt-md-0" data-visible="true"> <i class="bi bi-eye"></i> Visible</button>
-                                        </li>
-                                        <li class="list-group-item d-md-flex justify-content-between align-items-start">
-                                            <div class="me-md-3">
-                                                <h6 class="mb-0"> Fecha de nacimiento</h6>
-                                                <p class="small mb-0">El día de tu nacimiento insentiva a festejar tu cumpleaño con los amigos.</p>
-                                            </div>
-                                            <button class="visibility-toggle btn btn-success-soft btn-sm mt-1 mt-md-0" data-visible="true"> <i class="bi bi-eye"></i> Visible</button>
-                                        </li>
-                                        <li class="list-group-item d-md-flex justify-content-between align-items-start">
-                                            <div class="me-md-3">
-                                                <h6 class="mb-0"> Estado</h6>
-                                                <p class="small mb-0">Tu situacion emocional es el motivo de alegrias y tristezas.</p>
-                                            </div>
-                                            <button class="visibility-toggle btn btn-success-soft btn-sm mt-1 mt-md-0" data-visible="true"> <i class="bi bi-eye"></i> Visible</button>
-                                        </li>
-                                        <li class="list-group-item d-md-flex justify-content-between align-items-start">
-                                            <div class="me-md-3">
-                                                <h6 class="mb-0"> Dirección</h6>
-                                                <p class="small mb-0">Tu dirección nos ayuda a ver tus dificultades y facilidades en participar de la Confirmación.</p>
-                                            </div>
-                                            <button class="visibility-toggle btn btn-success-soft btn-sm mt-1 mt-md-0" data-visible="true"> <i class="bi bi-eye"></i> Visible</button>
-                                        </li>
-                                    </ul>
-                                </div>
-                                <div class="card-footer pt-0 text-end border-0">
-                                    <button type="submit" class="btn btn-sm btn-primary mb-0">Guardar Cambios</button>
-                                </div>
+                                <form method="post" action="">
+                                    <input type="hidden" name="guardarPrivacidad" value="1">
+                                    <div class="card-body">
+                                        <?php if (!empty($_SESSION['mensajePrivacidad'])): ?>
+                                            <div class="alert alert-success" role="alert"><?php echo htmlspecialchars($_SESSION['mensajePrivacidad'], ENT_QUOTES, 'UTF-8'); ?></div>
+                                            <?php unset($_SESSION['mensajePrivacidad']); ?>
+                                        <?php endif; ?>
+                                        <ul class="list-group">
+                                            <li class="list-group-item d-md-flex justify-content-between align-items-start">
+                                                <div class="me-md-3">
+                                                    <h6 class="mb-0">Contacto</h6>
+                                                    <p class="small mb-0">Los demás podrían requerir tu número de contacto para informarte o realizarte alguna consulta.</p>
+                                                </div>
+                                                <input type="hidden" name="MostrarContacto" id="MostrarContacto" value="<?php echo (int) ($Privacidad['MostrarContacto'] ?? 1); ?>">
+                                                <button type="button" class="visibility-toggle btn btn-success-soft btn-sm mt-1 mt-md-0" data-target="MostrarContacto" data-visible="<?php echo (int) ($Privacidad['MostrarContacto'] ?? 1); ?>"> <i class="bi bi-eye"></i> Visible</button>
+                                            </li>
+                                            <li class="list-group-item d-md-flex justify-content-between align-items-start">
+                                                <div class="me-md-3">
+                                                    <h6 class="mb-0"> Fecha de nacimiento</h6>
+                                                    <p class="small mb-0">El día de tu nacimiento insentiva a festejar tu cumpleaño con los amigos.</p>
+                                                </div>
+                                                <input type="hidden" name="MostrarFechaNac" id="MostrarFechaNac" value="<?php echo (int) ($Privacidad['MostrarFechaNac'] ?? 1); ?>">
+                                                <button type="button" class="visibility-toggle btn btn-success-soft btn-sm mt-1 mt-md-0" data-target="MostrarFechaNac" data-visible="<?php echo (int) ($Privacidad['MostrarFechaNac'] ?? 1); ?>"> <i class="bi bi-eye"></i> Visible</button>
+                                            </li>
+                                            <li class="list-group-item d-md-flex justify-content-between align-items-start">
+                                                <div class="me-md-3">
+                                                    <h6 class="mb-0"> Estado</h6>
+                                                    <p class="small mb-0">Tu situacion emocional es el motivo de alegrias y tristezas.</p>
+                                                </div>
+                                                <input type="hidden" name="MostrarEstado" id="MostrarEstado" value="<?php echo (int) ($Privacidad['MostrarEstado'] ?? 1); ?>">
+                                                <button type="button" class="visibility-toggle btn btn-success-soft btn-sm mt-1 mt-md-0" data-target="MostrarEstado" data-visible="<?php echo (int) ($Privacidad['MostrarEstado'] ?? 1); ?>"> <i class="bi bi-eye"></i> Visible</button>
+                                            </li>
+                                            <li class="list-group-item d-md-flex justify-content-between align-items-start">
+                                                <div class="me-md-3">
+                                                    <h6 class="mb-0"> Dirección</h6>
+                                                    <p class="small mb-0">Tu dirección nos ayuda a ver tus dificultades y facilidades en participar de la Confirmación.</p>
+                                                </div>
+                                                <input type="hidden" name="MostrarDireccion" id="MostrarDireccion" value="<?php echo (int) ($Privacidad['MostrarDireccion'] ?? 1); ?>">
+                                                <button type="button" class="visibility-toggle btn btn-success-soft btn-sm mt-1 mt-md-0" data-target="MostrarDireccion" data-visible="<?php echo (int) ($Privacidad['MostrarDireccion'] ?? 1); ?>"> <i class="bi bi-eye"></i> Visible</button>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                    <div class="card-footer pt-0 text-end border-0">
+                                        <button type="submit" class="btn btn-sm btn-primary mb-0">Guardar Cambios</button>
+                                    </div>
+                                </form>
                             </div>
                         </div>
                         <!-- seguridad fin -->
@@ -472,68 +540,62 @@ $activeNotifications = getActiveNotifications($conn);
                                     <br>
                                 </div>
                             </div>
-                            <div class="card mb-4">
-                                <div class="card-header border-0 pb-0">
-                                    <div class="hstack gap-2 mb-3">
-                                        <div class="avatar">
-                                            <img class="avatar-img rounded-circle" src="" alt="">
-                                        </div>
-                                        <div class="overflow-hidden">
-                                            <h4 class="card-title">hola</h4>
-                                            <apan class="mb-0" class="mb-0 small" style="color: red;">nada</apan>
-                                        </div>
-                                        <a class="btn btn-danger-soft rounded-circle icon-md ms-auto" href="#"><i class="fa-solid fa-eye"> </i></a>
+                            <?php if ($mensajePoderes): ?>
+                                <div class="alert alert-success" role="alert"><?php echo htmlspecialchars($mensajePoderes); ?></div>
+                            <?php endif; ?>
+                            <?php if ($errorPoderes): ?>
+                                <div class="alert alert-danger" role="alert"><?php echo htmlspecialchars($errorPoderes); ?></div>
+                            <?php endif; ?>
+
+                            <?php if (empty($companerosPoderes)): ?>
+                                <div class="card mb-4">
+                                    <div class="card-body">
+                                        <p class="mb-0">No hay otros catequistas activos en tu grupo.</p>
                                     </div>
                                 </div>
-                                <div class="card-body">
-                                    <ul class="list-group list-group-flush">
-                                        <li class="list-group-item d-flex justify-content-between align-items-center px-0">
-                                            <div class="me-2">
-                                                <h6 class="mb-0"><i class="bi bi-person-lines-fill"> </i> Poder registrar asistencia en aula y actividades a Confirmantes</h6>
-                                            </div>
-                                            <div class="form-check form-switch">
-                                                <input class="form-check-input" type="checkbox" role="switch" id="msgSwitchCheckChecked">
-                                            </div>
-                                        </li>
-                                        <li class="list-group-item d-flex justify-content-between align-items-center px-0">
-                                            <div class="me-2">
-                                                <h6 class="mb-0"><i class="bi bi-card-checklist"> </i> Poder registrar asistencia a apoderados en reuniones</h6>
-                                            </div>
-                                            <div class="form-check form-switch">
-                                                <input class="form-check-input" type="checkbox" role="switch" id="msgSwitchCheckChecked2">
-                                            </div>
-                                        </li>
-                                        <li class="list-group-item d-flex justify-content-between align-items-center px-0">
-                                            <div class="me-2">
-                                                <h6 class="mb-0"><i class="bi bi-vector-pen"> </i> Poder registrar puntaje en examenes de confirmantes</h6>
-                                            </div>
-                                            <div class="form-check form-switch">
-                                                <input class="form-check-input" type="checkbox" role="switch" id="msgSwitchCheckChecked3">
-                                            </div>
-                                        </li>
-                                        <li class="list-group-item d-flex justify-content-between align-items-center px-0">
-                                            <div class="me-2">
-                                                <h6 class="mb-0"><i class="bi bi-filetype-doc"> </i> Poder registrar  de confirmantes</h6>
-                                            </div>
-                                            <div class="form-check form-switch">
-                                                <input class="form-check-input" type="checkbox" role="switch" id="msgSwitchCheckChecked4">
-                                            </div>
-                                        </li>
-                                        <li class="list-group-item d-flex justify-content-between align-items-center px-0">
-                                            <div class="me-2">
-                                                <h6 class="mb-0"><i class="bi bi-file-text"> </i> Poder preparar e instruir a confirmantes con material educativo</h6>
-                                            </div>
-                                            <div class="form-check form-switch">
-                                                <input class="form-check-input" type="checkbox" role="switch" id="msgSwitchCheckChecked4">
-                                            </div>
-                                        </li>
-                                    </ul>
-                                    <hr>
-                                </div>
-                                <div class="card-footer pt-0 text-end border-0">
-                                    <button type="submit" class="btn btn-sm btn-success mb-0">Asignar Poderes</button>
-                                </div>
-                            </div>
+                            <?php else: ?>
+                                <?php foreach ($companerosPoderes as $companero): ?>
+                                    <form method="post" class="card mb-4">
+                                        <input type="hidden" name="CiCatPermiso" value="<?php echo htmlspecialchars($companero['CiCat']); ?>">
+                                        <div class="card-header border-0 pb-0">
+                                            <h5 class="card-title mb-0"><?php echo htmlspecialchars($companero['NombreCompleto']); ?></h5>
+                                            <small class="text-muted"><?php echo htmlspecialchars($companero['RolCat']); ?></small>
+                                        </div>
+                                        <div class="card-body">
+                                            <ul class="list-group list-group-flush">
+                                                <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                                                    <div class="me-2">
+                                                        <h6 class="mb-0"><i class="bi bi-card-checklist"> </i> Poder registrar asistencia a apoderados en reuniones</h6>
+                                                    </div>
+                                                    <div class="form-check form-switch">
+                                                        <input class="form-check-input" type="checkbox" role="switch" name="asistencia_apoderados" value="1" <?php echo !empty($companero['PuedeAsistenciaApoderados']) ? 'checked' : ''; ?>>
+                                                    </div>
+                                                </li>
+                                                <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                                                    <div class="me-2">
+                                                        <h6 class="mb-0"><i class="bi bi-vector-pen"> </i> Poder registrar puntaje en examenes de catequisandos</h6>
+                                                    </div>
+                                                    <div class="form-check form-switch">
+                                                        <input class="form-check-input" type="checkbox" role="switch" name="puntaje_examenes" value="1" <?php echo !empty($companero['PuedePuntajeExamenes']) ? 'checked' : ''; ?>>
+                                                    </div>
+                                                </li>
+                                                <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                                                    <div class="me-2">
+                                                        <h6 class="mb-0"><i class="bi bi-filetype-doc"> </i> Registrar catequizandos</h6>
+                                                    </div>
+                                                    <div class="form-check form-switch">
+                                                        <input class="form-check-input" type="checkbox" role="switch" name="registrar_catequizandos" value="1" <?php echo !empty($companero['PuedeRegistrarCatequizandos']) ? 'checked' : ''; ?>>
+                                                    </div>
+                                                </li>
+                                            </ul>
+                                            <hr>
+                                        </div>
+                                        <div class="card-footer pt-0 text-end border-0">
+                                            <button type="submit" name="guardar_poderes" class="btn btn-sm btn-success mb-0">Asignar Poderes</button>
+                                        </div>
+                                    </form>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
                         </div>
 
                         <div class="tab-pane fade" id="nav-setting-tab-4">
@@ -748,6 +810,40 @@ $activeNotifications = getActiveNotifications($conn);
     <script src="../assets/vendor/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="../assets/js/functions.js"></script>
     <script src="../assets/js/tema.js"></script>
+    <script>
+        // Alterna Visible / No visible y activa la pestaña de Seguridad al guardar.
+        document.addEventListener('DOMContentLoaded', function() {
+            function pintarBoton(boton) {
+                var visible = boton.getAttribute('data-visible') === '1';
+                boton.classList.toggle('btn-success-soft', visible);
+                boton.classList.toggle('btn-danger-soft', !visible);
+                boton.innerHTML = visible
+                    ? '<i class="bi bi-eye"></i> Visible'
+                    : '<i class="bi bi-eye-slash"></i> No visible';
+            }
+
+            document.querySelectorAll('.visibility-toggle').forEach(function(boton) {
+                pintarBoton(boton);
+                boton.addEventListener('click', function() {
+                    var destino = document.getElementById(this.getAttribute('data-target'));
+                    var visible = this.getAttribute('data-visible') === '1';
+                    visible = !visible;
+                    this.setAttribute('data-visible', visible ? '1' : '0');
+                    if (destino) {
+                        destino.value = visible ? '1' : '0';
+                    }
+                    pintarBoton(this);
+                });
+            });
+
+            if (window.location.hash && window.bootstrap) {
+                var pestana = document.querySelector('.nav-link[data-bs-toggle="tab"][href="' + window.location.hash + '"]');
+                if (pestana) {
+                    new bootstrap.Tab(pestana).show();
+                }
+            }
+        });
+    </script>
 </body>
 
 </html>

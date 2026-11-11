@@ -5,6 +5,8 @@ if (!isset($_SESSION['CiPersona'])) {
     exit();
 }
 $Celebrante = $_SESSION['CiPersona'];
+require_once __DIR__ . '/../Controlador/controladorAccesoCelebrante.php';
+ControladorAccesoCelebrante::exigirCambioClave();
 
 require_once('../fpdf/fpdf.php');
 require_once('../FPDI-master/src/autoload.php');
@@ -22,8 +24,9 @@ $celebrantes = $controller->obtenerNotas($ins);
 $catequistas = $controller->obtenerCatApp($Sac, $gr);
 
 class CertificadoPDF extends FPDF {
-    public function generarPDF($celebrantes, $catequistas) {
+    public function generarPDF($celebrantes, $catequistas, $sacramento = '') {
         $this->AddPage('L', 'Letter');
+        $cantidadNotas = (stripos((string) $sacramento, 'Confirmación') !== false) ? 3 : 2;
 
         $this->SetFont('Arial', 'B', 14);
         $this->Cell(0, 10, "Mi estado en Notas " . date('Y'), 0, 1, 'C');
@@ -65,21 +68,25 @@ class CertificadoPDF extends FPDF {
             $this->Cell(25, 10, 'GR', 1, 0, 'C');
             $this->Cell(35, 10, 'EXAMEN 1', 1, 0, 'C');
             $this->Cell(35, 10, 'EXAMEN 2', 1, 0, 'C');
-            $this->Cell(35, 10, 'EXAMEN 3', 1, 0, 'C');
-            $this->Cell(35, 10, 'EXAMEN 4', 1, 0, 'C');
+            if ($cantidadNotas >= 3) {
+                $this->Cell(35, 10, 'EXAMEN 3', 1, 0, 'C');
+            }
             $this->Cell(30, 10, 'PROMEDIO', 1, 0, 'C');
             $this->Cell(45, 10, 'ESTADO', 1, 0, 'C');
             $this->Ln();
         
             $this->SetFont('Arial', '', 14);
             foreach ($celebrantes as $celebrante) {
-                $total = ($celebrante['NotaExamen1'] + $celebrante['NotaExamen2'] + $celebrante['NotaExamen3'] + $celebrante['NotaExamen4']) / 4;
+                $total = $cantidadNotas === 3
+                    ? ($celebrante['NotaExamen1'] + $celebrante['NotaExamen2'] + $celebrante['NotaExamen3']) / 3
+                    : ($celebrante['NotaExamen1'] + $celebrante['NotaExamen2']) / 2;
         
                 $this->Cell(25, 10, $celebrante['NombreGrupo'], 1, 0, 'C');
                 $this->Cell(35, 10, $celebrante['NotaExamen1'], 1, 0, 'C');
                 $this->Cell(35, 10, $celebrante['NotaExamen2'], 1, 0, 'C');
-                $this->Cell(35, 10, $celebrante['NotaExamen3'], 1, 0, 'C');
-                $this->Cell(35, 10, $celebrante['NotaExamen4'], 1, 0, 'C');
+                if ($cantidadNotas >= 3) {
+                    $this->Cell(35, 10, $celebrante['NotaExamen3'], 1, 0, 'C');
+                }
                 $this->Cell(30, 10, round($total, 2), 1, 0, 'C');
                 $this->Cell(45, 10, $celebrante['EstadoExamen'], 1, 0, 'C');
                 
@@ -97,6 +104,6 @@ class CertificadoPDF extends FPDF {
 }
 
 $pdf = new CertificadoPDF();
-$pdf->generarPDF($celebrantes, $catequistas);
+$pdf->generarPDF($celebrantes, $catequistas, $Sac);
 
 ?>

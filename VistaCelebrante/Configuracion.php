@@ -6,6 +6,7 @@ if (!isset($_SESSION['CiPersona'])) {
     exit();
 }
 $Celebrante = $_SESSION['CiPersona'];
+$cambioObligatorio = !empty($Celebrante['DebeCambiarClave']);
 require_once '../Controlador/controladorConfigCelebrante.php';
 
 require_once '../Conexion/Conexion.php';
@@ -21,11 +22,12 @@ function getActiveNotifications($conn)
             FROM notificaciones n 
             INNER JOIN catequista c ON n.CiNotificador = c.CiCat 
             INNER JOIN `persona` p ON c.CiCat = p.CiPersona 
-            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ?
+            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ? AND n.Sacramento = ?
             ORDER BY n.FechaNotFin ASC";
 
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("s", $currentDateTime);
+    $sacramentoActual = $_SESSION['CiPersona']['Sacramento'] ?? '';
+    $stmt->bind_param("ss", $currentDateTime, $sacramentoActual);
     $stmt->execute();
     $result = $stmt->get_result();
 
@@ -170,6 +172,25 @@ $activeNotifications = getActiveNotifications($conn);
 
     <main>
         <div class="container">
+            <?php if (!empty($_SESSION['mensajeClave'])): ?>
+                <div class="alert alert-success alert-dismissible fade show mt-3" role="alert">
+                    <i class="bi bi-check-circle me-1"></i><?php echo htmlspecialchars($_SESSION['mensajeClave']); ?>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+                </div>
+                <?php unset($_SESSION['mensajeClave']); ?>
+            <?php endif; ?>
+            <?php if (!empty($_SESSION['errorClave'])): ?>
+                <div class="alert alert-danger alert-dismissible fade show mt-3" role="alert">
+                    <i class="bi bi-exclamation-triangle me-1"></i><?php echo htmlspecialchars($_SESSION['errorClave']); ?>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+                </div>
+                <?php unset($_SESSION['errorClave']); ?>
+            <?php endif; ?>
+            <?php if ($cambioObligatorio): ?>
+                <div class="alert alert-warning border-0 shadow-sm mt-3" role="alert">
+                    <strong>Contraseña de un solo uso:</strong> ya la usaste para ingresar. Crea ahora tu contraseña definitiva; la clave del ticket dejará de funcionar.
+                </div>
+            <?php endif; ?>
             <div class="row  pt-3">
                 <div class="col-lg-3">
                     <div class="d-flex align-items-center mb-4 d-lg-none">
@@ -317,20 +338,24 @@ $activeNotifications = getActiveNotifications($conn);
 
                             <div class="card mb-4">
                                 <div class="card-header border-0 pb-0">
-                                    <h5 class="card-title">Cambia tu contraseña</h5>
-                                    <p class="mb-0">Al cambiar tu contraseña tines mas segura tu cuenta.</p>
+                                    <h5 class="card-title"><?php echo $cambioObligatorio ? 'Crea tu contraseña definitiva' : 'Cambia tu contraseña'; ?></h5>
+                                    <p class="mb-0"><?php echo $cambioObligatorio
+                                        ? 'La clave del ticket es de un solo uso. Define tu contraseña personal para continuar.'
+                                        : 'Al cambiar tu contraseña tienes más segura tu cuenta.'; ?></p>
                                 </div>
                                 <div class="card-body">
                                     <form method="post">
                                         <div class="row g-3">
+                                            <?php if (!$cambioObligatorio): ?>
                                             <div class="col-4">
                                                 <label class="form-label">Contraseña actual</label>
-                                                <input type="text" class="form-control" name="ActualC" id="ActualC" placeholder="Contraseña Actual">
+                                                <input type="password" class="form-control" name="ActualC" id="ActualC" placeholder="Contraseña Actual">
                                             </div>
+                                            <?php endif; ?>
                                             <div class="col-4">
                                                 <label class="form-label">Nueva contraseña</label>
                                                 <div class="input-group">
-                                                    <input class="form-control fakepassword" type="password" name="NuevoC1" id="NuevoC1" placeholder="Nueva Contraseña">
+                                                    <input class="form-control fakepassword" type="password" name="NuevoC1" id="NuevoC1" placeholder="Nueva Contraseña"<?php echo $cambioObligatorio ? ' autofocus' : ''; ?>>
                                                     <span class="input-group-text p-0">
                                                         <i class="fakepasswordicon fa-solid fa-eye-slash cursor-pointer p-2 w-40px" onclick="myFunction()"></i>
                                                     </span>
@@ -352,7 +377,7 @@ $activeNotifications = getActiveNotifications($conn);
                                             </div>
                                             <div class="col-12 text-end">
 
-                                                <button type="submit" name="cambiarContracat" class="btn btn-primary mb-0">Guardar Contraseña</button>
+                                                <button type="submit" name="cambiarContracat" class="btn btn-primary mb-0"><?php echo $cambioObligatorio ? 'Guardar contraseña definitiva' : 'Guardar Contraseña'; ?></button>
                                             </div>
                                         </div>
                                     </form>

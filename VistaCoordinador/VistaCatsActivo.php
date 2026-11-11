@@ -16,7 +16,18 @@ $controller = new controladorReporteGeneral($conexion);
 $catequistas = $controller->obtenerCatesActivos($codIns);
 
 class CertificadoPDF extends FPDF {
-    public function generarPDF($catequistas) {
+    private function encabezadoTabla() {
+        $this->SetFont('Arial', 'B', 10);
+        $this->Cell(8, 5, '#', 1);
+        $this->Cell(30, 5, 'Cargo', 1);
+        $this->Cell(80, 5, 'Nombre Completo', 1);
+        $this->Cell(30, 5, 'Contacto', 1);
+        $this->Cell(25, 5, 'Grupo', 1);
+        $this->Ln();
+        $this->SetFont('Arial', '', 10);
+    }
+
+    public function generarPDF($catequistas, $sacramento = '') {
         if (!empty($catequistas)) {
             $meses = [
                 1 => 'Enero',
@@ -34,8 +45,11 @@ class CertificadoPDF extends FPDF {
             ];
 
             $this->AddPage('P','Letter');
+            $this->SetAutoPageBreak(true, 15);
             $this->SetFont('Arial', 'B', 12);
-            $this->Cell(0, 10, 'Reporte de Catequistas "Activos" de la '. iconv('UTF-8', 'Windows-1252//IGNORE', 'gestión ') . date('Y'), 0, 1, 'C');
+            $this->Cell(0, 10, 'Reporte de Catequistas "Activos" - ' . iconv('UTF-8', 'Windows-1252//IGNORE', $sacramento), 0, 1, 'C');
+            $this->SetFont('Arial', '', 9);
+            $this->Cell(0, 6, iconv('UTF-8', 'Windows-1252//IGNORE', 'Gestión ') . date('Y'), 0, 1, 'C');
             $this->Ln(2);
 
             $dia = date('d');
@@ -47,17 +61,18 @@ class CertificadoPDF extends FPDF {
             $this->Cell(0, 10, $fechaActual, 0, 1, 'R');
             $this->Ln(5);
 
-            $this->SetFont('Arial', 'B', 10);
-            $this->Cell(8, 5, '#', 1);
-            $this->Cell(30, 5, 'Cargo', 1);
-            $this->Cell(80, 5, 'Nombre Completo', 1);
-            $this->Cell(30, 5, 'Contacto', 1);
-            $this->Cell(25, 5, 'Grupo', 1);
-            $this->Ln();
+            $this->encabezadoTabla();
 
-            $this->SetFont('Arial', '', 10);
             $cont=0;
             foreach ($catequistas as $fila) {
+                if ($this->GetY() > 250) {
+                    $this->AddPage('P','Letter');
+                    $this->SetFont('Arial', 'B', 12);
+                    $this->Cell(0, 10, 'Reporte de Catequistas "Activos" - ' . iconv('UTF-8', 'Windows-1252//IGNORE', $sacramento), 0, 1, 'C');
+                    $this->SetFont('Arial', '', 10);
+                    $this->encabezadoTabla();
+                }
+
                 $cont++;
                 $this->Cell(8, 5, $cont, 1);
                 $this->Cell(30, 5, iconv('UTF-8', 'Windows-1252//IGNORE', $fila['RolCat']), 1);
@@ -73,7 +88,7 @@ class CertificadoPDF extends FPDF {
         {
             $this->AddPage();
             $this->SetFont('Arial', 'B', 12);
-            $this->Cell(0, 10, 'Reporte de Catequistas "Activos" de la '.iconv('UTF-8', 'Windows-1252//IGNORE', 'gestión ') . date('Y'), 0, 1, 'C');
+            $this->Cell(0, 10, 'Reporte de Catequistas "Activos" - ' . iconv('UTF-8', 'Windows-1252//IGNORE', $sacramento), 0, 1, 'C');
             $this->Ln(5);
             $this->SetFont('Arial', 'B', 10);
             $this->Cell(50, 10, 'No hay Catequistas Activos...', 0);
@@ -84,5 +99,5 @@ class CertificadoPDF extends FPDF {
 }
 
 $pdf = new CertificadoPDF();
-$pdf->generarPDF($catequistas);
+$pdf->generarPDF($catequistas, $codIns);
 ?>

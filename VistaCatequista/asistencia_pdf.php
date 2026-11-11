@@ -3,11 +3,18 @@ require('../fpdf/fpdf.php');
 require_once '../Conexion/Conexion.php';
 
 
-$idGrupo = $_POST['idGrupo'];
-$NombreGr = $_POST['NombreGr'];
+$idGrupo = (int) ($_POST['idGrupo'] ?? 0);
+$NombreGr = trim((string) ($_POST['NombreGr'] ?? ''));
 
 $conexion = new Conexion();
 $db = $conexion->getConnection();
+
+$sql_grupo = "SELECT SacramentoGrupo FROM grupo WHERE IdGrupo = $idGrupo LIMIT 1";
+$result_grupo = $db->query($sql_grupo);
+$sacramento = '';
+if ($result_grupo && $result_grupo->num_rows > 0) {
+    $sacramento = trim((string) $result_grupo->fetch_assoc()['SacramentoGrupo']);
+}
 
 $sql_celebrantes = "
         SELECT p.CiPersona, CONCAT(p.Nombre, ' ', p.ApPaterno, ' ', p.ApMaterno) AS NombreCompleto
@@ -22,6 +29,19 @@ $celebrantesAll = [];
 while ($row = $result_celebrantes->fetch_assoc()) {
     $celebrantesAll[$row['CiPersona']] = $row['NombreCompleto'];
 }
+uasort($celebrantesAll, function ($a, $b) {
+    $mapa = [
+        'Á' => 'A', 'À' => 'A', 'Ä' => 'A', 'Â' => 'A', 'á' => 'a', 'à' => 'a', 'ä' => 'a', 'â' => 'a',
+        'É' => 'E', 'È' => 'E', 'Ë' => 'E', 'Ê' => 'E', 'é' => 'e', 'è' => 'e', 'ë' => 'e', 'ê' => 'e',
+        'Í' => 'I', 'Ì' => 'I', 'Ï' => 'I', 'Î' => 'I', 'í' => 'i', 'ì' => 'i', 'ï' => 'i', 'î' => 'i',
+        'Ó' => 'O', 'Ò' => 'O', 'Ö' => 'O', 'Ô' => 'O', 'ó' => 'o', 'ò' => 'o', 'ö' => 'o', 'ô' => 'o',
+        'Ú' => 'U', 'Ù' => 'U', 'Ü' => 'U', 'Û' => 'U', 'ú' => 'u', 'ù' => 'u', 'ü' => 'u', 'û' => 'u',
+        'Ñ' => 'N', 'ñ' => 'n', 'Ç' => 'C', 'ç' => 'c'
+    ];
+    $na = strtolower(strtr((string) $a, $mapa));
+    $nb = strtolower(strtr((string) $b, $mapa));
+    return strcmp($na, $nb);
+});
 
 $sql_fechas = "
         SELECT DISTINCT a.FechaAsisConf
@@ -49,7 +69,13 @@ foreach ($celebrantesAll as $ci => $nombre) {
 
         if ($result_asistencia->num_rows > 0) {
             $tipoAsis = $result_asistencia->fetch_assoc()['TipoAsis'];
-            $asistenciasAll[$ci][$fecha] = ($tipoAsis === 'Presente') ? 'P' : 'F';
+            if ($tipoAsis === 'Presente') {
+                $asistenciasAll[$ci][$fecha] = 'P';
+            } elseif ($tipoAsis === 'Licencia') {
+                $asistenciasAll[$ci][$fecha] = 'L';
+            } else {
+                $asistenciasAll[$ci][$fecha] = 'F';
+            }
         } else {
             $asistenciasAll[$ci][$fecha] = 'F';
         }
@@ -95,9 +121,16 @@ $meses_es = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct
     $pdf = new PDF('L', 'mm', 'Letter');
     $pdf->AddPage();
     $pdf->SetFont('Arial', 'B', 17);
-    $pdf->Cell(0, 10, utf8_decode('Asistencia del Grupo ' . $NombreGr . ' en Catequisis'), 0, 1, 'C');
+    $titulo = 'Asistencia del Grupo ' . $NombreGr . ' en Catequesis';
+    if ($sacramento !== '') {
+        $titulo .= ' de ' . $sacramento;
+    }
+    $pdf->Cell(0, 10, utf8_decode($titulo), 0, 1, 'C');
 
     $pdf->Ln(5);
+    $pdf->SetFont('Arial', '', 9);
+    $pdf->Cell(0, 5, utf8_decode('P = Presente   F = Falta   L = Licencia'), 0, 1, 'C');
+    $pdf->Ln(2);
     $pdf->SetFont('Arial', 'B', 10);
 
     $pdf->Cell(70, 35, utf8_decode('Nº / Nombres'), 1, 0, 'C');

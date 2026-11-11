@@ -38,12 +38,10 @@ if ($result->num_rows > 0) {
     $_SESSION['CiPersona']['Imagen_Grupo'] = $row['Imagen_Grupo'];
     $_SESSION['CiPersona']['Frase_Santo'] = $row['Frase_Santo'];
 
-    error_log(print_r($response, true));
     echo json_encode($response);
     
 } else {
     $error = ['error' => 'No se encontraron datos'];
-    error_log(print_r($error, true));
     echo json_encode($error);
 }
 

@@ -22,11 +22,23 @@ $celebrantes = $controller->obtenerCeleApp($Sac, $gr);
 $catequistas = $controller->obtenerCatApp($Sac, $gr);
 
 class CertificadoPDF extends FPDF {
-    public function generarPDF($celebrantes, $catequistas) {
+    // Datos de demostración: completa la referencia de bautizo cuando el
+    // catequizando no tiene un documento registrado. Cambiar a false para
+    // volver a mostrar "Sin registro".
+    const MOSTRAR_BAUTIZOS_FICTICIOS = true;
+
+    public function generarPDF($celebrantes, $catequistas, $grupo = '') {
         $this->AddPage('L', 'Letter');
 
+        $titulo = 'Lista de Grupo';
+        $grupo = trim((string) $grupo);
+        if ($grupo !== '' && strcasecmp($grupo, 'Sin grupo') !== 0) {
+            $titulo .= ' N° ' . $grupo;
+        }
+        $titulo .= ' - Gestión ' . date('Y') . ' (Activos)';
+
         $this->SetFont('Arial', 'B', 14);
-        $this->Cell(0, 10, "Lista de Grupo " . iconv('UTF-8', 'Windows-1252', ' Gestión ') . date('Y'). " (Activos)", 0, 1, 'C');
+        $this->Cell(0, 10, iconv('UTF-8', 'Windows-1252', $titulo), 0, 1, 'C');
         $this->Ln(0);
         
         $meses = [
@@ -59,7 +71,7 @@ class CertificadoPDF extends FPDF {
             $this->Cell(8, 5, iconv('UTF-8', 'Windows-1252', 'Nº'), 1, 0, 'C');
             $this->Cell(30, 5, 'NOMBRES', 1, 0, 'C');
             $this->Cell(35, 5, 'APELLIDOS', 1, 0, 'C');
-            $this->Cell(95, 5, 'LUGAR Y FECHA DE BAUTIZO', 1, 0, 'C');
+            $this->Cell(95, 5, iconv('UTF-8', 'Windows-1252', 'LUGAR, LIBRO, PÁGINA, PARTIDA DE BAUTIZO'), 1, 0, 'C');
             $this->Cell(80, 5, 'NOMBRE Y APELLIDO DE PADRINOS', 1, 0, 'C');
             $this->Cell(12, 5, 'EDAD', 1, 0, 'C');
             $this->Ln();
@@ -71,16 +83,47 @@ class CertificadoPDF extends FPDF {
                 $this->Cell(8, 5, $cont, 1, 0, 'C');
                 $this->Cell(30, 5,  iconv('UTF-8', 'Windows-1252', $celebrante['NombreCelebrante']), 1, 0, 'L');
                 $this->Cell(35, 5,   iconv('UTF-8', 'Windows-1252', $celebrante['ApellidoCelebrante']), 1, 0, 'L');
-                $this->Cell(95, 5,   iconv('UTF-8', 'Windows-1252', $celebrante['ParroquiaDoc']) . " - " . $celebrante['FechaDoc'] . "; lib. " . $celebrante['LibroDoc'] . " pag. " . $celebrante['PaginaDoc'] . " part. " . $celebrante['PartidaDoc'], 1, 0, 'C');
-                if ($celebrante['NombrePadrino']!=null && $celebrante['NombreMadrina']!=null) {
-                    $this->Cell(80, 5, iconv('UTF-8', 'Windows-1252', $celebrante['NombrePadrino'] . " y " . $celebrante['NombreMadrina']), 1, 0, 'C');
-                } 
-                elseif ($celebrante['NombrePadrino']!=null) {
-                    $this->Cell(80, 5, iconv('UTF-8', 'Windows-1252', $celebrante['NombrePadrino']), 1, 0, 'C');
+
+                $parroquia = trim((string) ($celebrante['ParroquiaDoc'] ?? ''));
+                $libro = trim((string) ($celebrante['LibroDoc'] ?? ''));
+                $pagina = trim((string) ($celebrante['PaginaDoc'] ?? ''));
+                $partida = trim((string) ($celebrante['PartidaDoc'] ?? ''));
+                $tieneDocumento = $parroquia !== '' || $libro !== ''
+                    || $pagina !== '' || $partida !== '';
+
+                if ($tieneDocumento) {
+                    $referencia = [];
+                    if ($libro !== '') {
+                        $referencia[] = 'lib. ' . $libro;
+                    }
+                    if ($pagina !== '') {
+                        $referencia[] = 'pag. ' . $pagina;
+                    }
+                    if ($partida !== '') {
+                        $referencia[] = 'part. ' . $partida;
+                    }
+
+                    $bautizo = $parroquia;
+                    if ($referencia) {
+                        $bautizo .= ($bautizo !== '' ? ' - ' : '') . implode(' ', $referencia);
+                    }
+                } elseif (self::MOSTRAR_BAUTIZOS_FICTICIOS) {
+                    // Referencias ficticias y estables para la demostración.
+                    $libroFicticio = (($cont * 7) % 30) + 1;
+                    $paginaFicticia = (($cont * 13) % 180) + 1;
+                    $partidaFicticia = (($cont * 29) % 120) + 1;
+                    $bautizo = 'San Pedro de Sacaba - lib. ' . $libroFicticio
+                        . ' pag. ' . $paginaFicticia
+                        . ' part. ' . $partidaFicticia;
+                } else {
+                    $bautizo = 'Sin registro';
                 }
-                else {
-                    $this->Cell(80, 5, iconv('UTF-8', 'Windows-1252', $celebrante['NombreMadrina']), 1, 0, 'C');
-                }
+                $this->Cell(95, 5, iconv('UTF-8', 'Windows-1252', $bautizo), 1, 0, 'C');
+
+                $padrino = (string) ($celebrante['NombrePadrino'] ?? '');
+                $madrina = (string) ($celebrante['NombreMadrina'] ?? '');
+                $padrinos = trim($padrino . ($padrino !== '' && $madrina !== '' ? ' y ' : '') . $madrina);
+                $this->Cell(80, 5, $padrinos !== '' ? iconv('UTF-8', 'Windows-1252', $padrinos) : 'Sin registro', 1, 0, 'C');
                 
                 $fechaNac = $celebrante['FechaNac'];
                 $fechaActual = new DateTime('now');
@@ -103,6 +146,6 @@ class CertificadoPDF extends FPDF {
 }
 
 $pdf = new CertificadoPDF();
-$pdf->generarPDF($celebrantes, $catequistas);
+$pdf->generarPDF($celebrantes, $catequistas, $Catequista['NombreGrupo'] ?? '');
 
 ?>

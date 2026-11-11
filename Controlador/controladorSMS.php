@@ -18,9 +18,19 @@ class ControladorMensaje {
         return null;
     }
 
-    public function listarMensajes() {
+    public function listarMensajes($estado = null) {
         $mensaje = new Mensaje();
-        return $mensaje->obtenerMensajes();
+        return $mensaje->obtenerMensajes($estado);
+    }
+
+    public function contarMensajes($estado = null) {
+        $mensaje = new Mensaje();
+        return $mensaje->contarMensajes($estado);
+    }
+
+    public function eliminarMensaje($id) {
+        $mensaje = new Mensaje();
+        return $mensaje->eliminarMensaje($id);
     }
 
     public function leerMensaje($id) {

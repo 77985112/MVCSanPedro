@@ -15052,6 +15052,10 @@ textarea.form-control-lg {
     visibility: visible;
     padding-left: 10px;
   }
+  /* Permite que los nombres largos bajen de línea y no salgan del menú */
+  .sidebar-start-enabled .nav-sidenav .nav-link {
+    white-space: normal;
+  }
 }
 @media (max-width: 991.98px) {
   .nav-sidenav {

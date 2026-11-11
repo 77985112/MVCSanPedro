@@ -11,7 +11,7 @@ const CUENTAS = process.env.PW_CUENTAS_FILE || path.join(
 );
 const usuarios = existsSync(CUENTAS) ? JSON.parse(readFileSync(CUENTAS, 'utf8').replace(/^\uFEFF/, '')) : {};
 const paneles = {
-  personal: 'VistaPersonal/VistaPersonal.php',
+  personal: 'VistaPersonal/VistaDashboard.php',
   coordinador: 'VistaCoordinador/VistaCoordinador.php',
   catequista: 'VistaCatequista/VistaCatequista.php',
   catequisando: 'VistaCelebrante/VistaCelebrante.php',

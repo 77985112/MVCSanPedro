@@ -4,6 +4,13 @@ if (!isset($_SESSION['CiPersona'])) {
     header("Location: ../logout.php");
     exit();
 }
+
+// Solo el coordinador puede crear y administrar notificaciones.
+if (($_SESSION['CiPersona']['RolCat'] ?? '') !== 'Coordinador') {
+    header("Location: ../logout.php");
+    exit();
+}
+
 $Catequista = $_SESSION['CiPersona'];
 
 
@@ -25,11 +32,12 @@ function getActiveNotifications($conn)
             FROM notificaciones n 
             INNER JOIN catequista c ON n.CiNotificador = c.CiCat 
             INNER JOIN `persona` p ON c.CiCat = p.CiPersona 
-            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ?
+            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ? AND n.Sacramento = ?
             ORDER BY n.FechaNotFin ASC";
 
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("s", $currentDateTime);
+    $sacramentoActual = $_SESSION['CiPersona']['Sacramento'] ?? '';
+    $stmt->bind_param("ss", $currentDateTime, $sacramentoActual);
     $stmt->execute();
     $result = $stmt->get_result();
 
@@ -52,29 +60,52 @@ $activeNotifications = getActiveNotifications($conn);
 $catNotis = getCatequistas($conn);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $action = $_POST['action'];
+    $action = $_POST['action'] ?? '';
     $response = ['success' => false, 'message' => ''];
 
     if ($action === 'create' || $action === 'update') {
-        $ciNotificador = $_POST['ciNotificador'];
-        $tituloNot = $_POST['tituloNot'];
-        $detalleNot = $_POST['detalleNot'];
-        $fechaNotifi = $_POST['fechaNotifi'];
+        $ciNotificador = $Catequista['CiCat'];
+        $sacramentoNot = $Catequista['Sacramento'];
+        $tituloNot = $_POST['tituloNot'] ?? '';
+        $detalleNot = $_POST['detalleNot'] ?? '';
+        $fechaNotifi = $_POST['fechaNotifi'] ?? '';
         $estadoNot = 'Activo';
+
+        $timestampNotifi = strtotime((string) $fechaNotifi);
+        $horaNotifi = $timestampNotifi !== false ? (int) date('H', $timestampNotifi) : -1;
+        if ($timestampNotifi === false || $horaNotifi < 5 || $horaNotifi > 22) {
+            $response['message'] = 'La hora debe estar entre 05:00 y 22:00.';
+            echo json_encode($response);
+            exit;
+        }
 
         if ($action === 'create') {
             $fechaNot = date('Y-m-d H:i:s');
-            $sql = "INSERT INTO notificaciones (CiNotificador, TituloNot, DetalleNot, FechaNot, FechaNotFin, EstadoNot) 
-                    VALUES (?, ?, ?, ?, ?, ?)";
+            $sql = "INSERT INTO notificaciones (CiNotificador, Sacramento, TituloNot, DetalleNot, FechaNot, FechaNotFin, EstadoNot) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?)";
             $stmt = $conn->prepare($sql);
-            $stmt->bind_param("ssssss", $ciNotificador, $tituloNot, $detalleNot, $fechaNot, $fechaNotifi, $estadoNot);
+            $stmt->bind_param("sssssss", $ciNotificador, $sacramentoNot, $tituloNot, $detalleNot, $fechaNot, $fechaNotifi, $estadoNot);
         } else {
-            $idNotificacion = $_POST['idNotificacion'];
+            $idNotificacion = (int) ($_POST['idNotificacion'] ?? 0);
+
+            // Solo se puede editar una notificación del mismo sacramento.
+            $stmtCheck = $conn->prepare("SELECT Sacramento FROM notificaciones WHERE idNotificacion = ? LIMIT 1");
+            $stmtCheck->bind_param("i", $idNotificacion);
+            $stmtCheck->execute();
+            $noti = $stmtCheck->get_result()->fetch_assoc();
+            $stmtCheck->close();
+
+            if (!$noti || $noti['Sacramento'] !== $sacramentoNot) {
+                $response['message'] = 'No puedes editar una notificación de otro sacramento.';
+                echo json_encode($response);
+                exit;
+            }
+
             $sql = "UPDATE notificaciones 
                     SET TituloNot = ?, DetalleNot = ?, FechaNotFin = ?, EstadoNot = ? 
-                    WHERE idNotificacion = ?";
+                    WHERE idNotificacion = ? AND Sacramento = ?";
             $stmt = $conn->prepare($sql);
-            $stmt->bind_param("ssssi", $tituloNot, $detalleNot, $fechaNotifi, $estadoNot, $idNotificacion);
+            $stmt->bind_param("ssssis", $tituloNot, $detalleNot, $fechaNotifi, $estadoNot, $idNotificacion, $sacramentoNot);
         }
 
         if ($stmt->execute()) {
@@ -186,11 +217,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 <a class="dropdown-item" href="ReunionesCat.php"><i class="fa-fw bi bi-calendar2-check me-2"></i>Fecha de Reuniones</a>
                             </li>
                             <li>
-                                <a class="dropdown-item" href="Documentos.php">
-                                    <i class="fa-fw bi bi-card-text me-2"></i>Documentación
-                                </a>
-                            </li>
-                            <li>
                                 <a class="dropdown-item" href="Reglamento.php">
                                     <i class="fa-fw bi bi-list-check me-2"></i>Reglamento
                                 </a>
@@ -271,17 +297,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 <a class="nav-link" href="VistaPersona.php"> <i class="<bi bi-person-vcard nav-icon"></i> <span class="nav-text">Persona </span></a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link" href="Configuracion.php"> <i class="bi bi-gear-wide-connected nav-icon"></i> <span class="nav-text">Configuración </span></a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link" href="VistaTodosCat.php"> <i class="bi bi-calendar-check nav-icon"></i> <span class="nav-text">Listado Catequistas</span></a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link" href="VistaTodosCat.php"> <i class="bi bi-file-earmark-text nav-icon"></i> <span class="nav-text">Reporte </span></a>
-                            </li>
-                            <h6 class="nav-text badge bg-primary text-white mt-2 me-2 border border-white border-3 rounded"><i class="bi bi-caret-down-fill"></i>&nbsp;&nbsp; Publico</h6>
-                            <li class="nav-item">
-                                <a class="nav-link" href="VistaMensajeCoor.php"> <i class="bi bi-file-earmark-text nav-icon"></i> <span class="nav-text">Mensaje Público</span></a>
+                                <a class="nav-link" href="VistaTodosCat.php"> <i class="bi bi-calendar-check nav-icon"></i> <span class="nav-text">Reporte Activos Inactivos</span></a>
                             </li>
                         </ul>
                     </div>
@@ -329,8 +345,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                                             <input type="text" class="form-control" id="tituloNot" name="tituloNot" required>
                                                         </div>
                                                         <div class="col-sm-6 col-lg-6 form-group">
-                                                            <label for="fechaNotifi" class="form-label">Fecha de Notificación</label>
-                                                            <input type="datetime-local" class="form-control" name="fechaNotifi" id="fechaNotifi" required>
+                                                            <label class="form-label">Fecha de Notificación</label>
+                                                            <div class="row g-2">
+                                                                <div class="col-12">
+                                                                    <input type="date" class="form-control" id="fechaNotifiFecha" required>
+                                                                </div>
+                                                                <div class="col-6">
+                                                                    <select class="form-select" id="fechaNotifiHora" required>
+                                                                        <?php for ($h = 0; $h <= 23; $h++): $hh = str_pad((string) $h, 2, '0', STR_PAD_LEFT); ?>
+                                                                            <option value="<?php echo $hh; ?>" <?php echo $hh === '05' ? 'selected' : ''; ?> <?php echo ($h < 5 || $h > 22) ? 'disabled class="text-muted"' : ''; ?>><?php echo $hh; ?></option>
+                                                                        <?php endfor; ?>
+                                                                    </select>
+                                                                </div>
+                                                                <div class="col-6">
+                                                                    <select class="form-select" id="fechaNotifiMinuto" required>
+                                                                        <?php for ($m = 0; $m <= 59; $m++): $mm = str_pad((string) $m, 2, '0', STR_PAD_LEFT); ?>
+                                                                            <option value="<?php echo $mm; ?>"><?php echo $mm; ?></option>
+                                                                        <?php endfor; ?>
+                                                                    </select>
+                                                                </div>
+                                                            </div>
+                                                            <div class="form-text">Horario permitido: 05:00 a 22:00.</div>
+                                                            <input type="hidden" name="fechaNotifi" id="fechaNotifi">
                                                         </div>
                                                         <div class="col-sm-6 col-lg-12 form-group">
                                                             <label for="detalleNot" class="form-label">Detalle de la Notificación</label>
@@ -376,8 +412,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                                             <textarea class="form-control" id="editDetalleNot" name="detalleNot" required></textarea>
                                                         </div>
                                                         <div class="col-sm-6 col-lg-12 form-group">
-                                                            <label for="editFechaNotifi" class="form-label">Fecha de Notificación</label>
-                                                            <input type="datetime-local" class="form-control" id="editFechaNotifi" name="fechaNotifi" required>
+                                                            <label class="form-label">Fecha de Notificación</label>
+                                                            <div class="row g-2">
+                                                                <div class="col-12">
+                                                                    <input type="date" class="form-control" id="editFechaNotifiFecha" required>
+                                                                </div>
+                                                                <div class="col-6">
+                                                                    <select class="form-select" id="editFechaNotifiHora" required>
+                                                                        <?php for ($h = 0; $h <= 23; $h++): $hh = str_pad((string) $h, 2, '0', STR_PAD_LEFT); ?>
+                                                                            <option value="<?php echo $hh; ?>" <?php echo $hh === '05' ? 'selected' : ''; ?> <?php echo ($h < 5 || $h > 22) ? 'disabled class="text-muted"' : ''; ?>><?php echo $hh; ?></option>
+                                                                        <?php endfor; ?>
+                                                                    </select>
+                                                                </div>
+                                                                <div class="col-6">
+                                                                    <select class="form-select" id="editFechaNotifiMinuto" required>
+                                                                        <?php for ($m = 0; $m <= 59; $m++): $mm = str_pad((string) $m, 2, '0', STR_PAD_LEFT); ?>
+                                                                            <option value="<?php echo $mm; ?>"><?php echo $mm; ?></option>
+                                                                        <?php endfor; ?>
+                                                                    </select>
+                                                                </div>
+                                                            </div>
+                                                            <div class="form-text">Horario permitido: 05:00 a 22:00.</div>
+                                                            <input type="hidden" name="fechaNotifi" id="editFechaNotifi">
                                                         </div>
                                                     </form>
                                                 </div>
@@ -474,6 +530,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
         </div>
     </main>
+    <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1090;">
+        <div id="avisoNotificacion" class="toast align-items-center text-bg-danger border-0" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body" id="avisoNotificacionTexto"></div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Cerrar"></button>
+            </div>
+        </div>
+    </div>
     <script>
         $(document).ready(function() {
             function obtenerEstado() {
@@ -511,21 +575,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <script src="../assets/js/tema.js"></script>
 
     <script>
+        function componerFechaNotifi(prefijo) {
+            var fecha = document.getElementById(prefijo + 'Fecha');
+            var hora = document.getElementById(prefijo + 'Hora');
+            var minuto = document.getElementById(prefijo + 'Minuto');
+            var oculto = document.getElementById(prefijo);
+
+            if (!fecha || !hora || !minuto || !oculto || !fecha.value || !hora.value || !minuto.value) {
+                if (oculto) oculto.value = '';
+                return false;
+            }
+
+            oculto.value = fecha.value + 'T' + hora.value + ':' + minuto.value;
+            return true;
+        }
+
+        function mostrarAvisoNotificacion(mensaje) {
+            var toastEl = document.getElementById('avisoNotificacion');
+            var texto = document.getElementById('avisoNotificacionTexto');
+            if (!toastEl || !texto) return;
+
+            texto.textContent = mensaje;
+            if (window.bootstrap && bootstrap.Toast) {
+                bootstrap.Toast.getOrCreateInstance(toastEl, { delay: 4000 }).show();
+            }
+        }
+
         $(document).ready(function() {
             $('#submitCreateNotification').click(function() {
+                if (!componerFechaNotifi('fechaNotifi')) {
+                    mostrarAvisoNotificacion('Selecciona la fecha de la notificación.');
+                    return;
+                }
                 $.ajax({
                     url: '',
                     method: 'POST',
                     data: $('#createNotificationForm').serialize(),
                     dataType: 'json',
                     success: function(response) {
-                        alert(response.message);
                         if (response.success) {
                             location.reload();
+                        } else {
+                            mostrarAvisoNotificacion(response.message);
                         }
                     },
                     error: function() {
-                        alert('Error al procesar la solicitud.');
+                        mostrarAvisoNotificacion('Error al procesar la solicitud.');
                     }
                 });
             });
@@ -536,24 +631,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $('#editCiNotificador').val(notification.CiNotificador);
                 $('#editTituloNot').val(notification.TituloNot);
                 $('#editDetalleNot').val(notification.DetalleNot);
-                $('#editFechaNotifi').val(notification.FechaNotFin.replace(' ', 'T'));
+                var partesFechaNot = (notification.FechaNotFin || '').split(' ');
+                var fechaNot = partesFechaNot[0] || '';
+                var horaNot = (partesFechaNot[1] || '05:00').split(':');
+                var horaNum = parseInt(horaNot[0], 10);
+                if (isNaN(horaNum) || horaNum < 5) horaNum = 5;
+                if (horaNum > 22) horaNum = 22;
+                $('#editFechaNotifiFecha').val(fechaNot);
+                $('#editFechaNotifiHora').val(String(horaNum).padStart(2, '0'));
+                $('#editFechaNotifiMinuto').val(horaNot[1] || '00');
                 $('#editNotificationModal').modal('show');
             });
 
             $('#submitEditNotification').click(function() {
+                if (!componerFechaNotifi('editFechaNotifi')) {
+                    mostrarAvisoNotificacion('Selecciona la fecha de la notificación.');
+                    return;
+                }
                 $.ajax({
                     url: '',
                     method: 'POST',
                     data: $('#editNotificationForm').serialize(),
                     dataType: 'json',
                     success: function(response) {
-                        alert(response.message);
                         if (response.success) {
                             location.reload();
+                        } else {
+                            mostrarAvisoNotificacion(response.message);
                         }
                     },
                     error: function() {
-                        alert('Error al procesar la solicitud.');
+                        mostrarAvisoNotificacion('Error al procesar la solicitud.');
                     }
                 });
             });
@@ -561,26 +669,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            const today = new Date();
-            const yyyy = today.getFullYear();
-            const mm = String(today.getMonth() + 1).padStart(2, '0');
-            const dd = String(today.getDate()).padStart(2, '0');
+            const hoy = new Date();
+            const yyyy = hoy.getFullYear();
+            const mm = String(hoy.getMonth() + 1).padStart(2, '0');
+            const dd = String(hoy.getDate()).padStart(2, '0');
+            const minFecha = `${yyyy}-${mm}-${dd}`;
 
-            const minDateTime = `${yyyy}-${mm}-${dd}T00:00`;
-            document.getElementById('fechaNotifi').setAttribute('min', minDateTime);
-            document.getElementById('editFechaNotifi').setAttribute('min', minDateTime);
+            const fechaCrear = document.getElementById('fechaNotifiFecha');
+            const fechaEditar = document.getElementById('editFechaNotifiFecha');
 
-            function adjustTime(input) {
-                input.addEventListener('change', function() {
-                    const value = new Date(input.value);
-                    if (!isNaN(value)) {
-                        value.setMinutes(value.getMinutes() < 30 ? 0 : 30);
-                        input.value = value.toISOString().slice(0, 16);
-                    }
-                });
-            }
-            adjustTime(document.getElementById('fechaNotifi'));
-            adjustTime(document.getElementById('editFechaNotifi'));
+            if (fechaCrear) fechaCrear.setAttribute('min', minFecha);
+            if (fechaEditar) fechaEditar.setAttribute('min', minFecha);
         });
     </script>
 <script>

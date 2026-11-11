@@ -1,6 +1,5 @@
 <?php
 require('../fpdf/fpdf.php');
-require_once '../Controlador/controladorPersonal.php';
 session_start();
 
 // Solo el Párroco puede generar tickets de acceso.
@@ -9,25 +8,10 @@ if (!isset($_SESSION['usuario']) || $_SESSION['usuario']['DescripCar'] != 'Párr
     exit();
 }
 
-// 1) Ticket de un personal buscado (?ci=...); 2) el del último registrado (sesión).
-$personal = null;
-if (isset($_GET['ci']) && trim($_GET['ci']) !== '') {
-    $controller = new ControladorPersonal();
-    $registro = $controller->buscarPersonalPorCi(trim($_GET['ci']));
-    if ($registro) {
-        $personal = [
-            'Nombre' => trim($registro['Nombre'] . ' ' . $registro['Paterno'] . ' ' . $registro['Materno']),
-            'UsuarioPer' => $registro['UsuarioPer'],
-            'ClavePer' => $registro['ClavePer'],
-            'DescripCar' => $registro['DescripCar'] ?? '',
-        ];
-    }
-}
-if (!$personal && isset($_SESSION['registroPersonal'])) {
-    $personal = $_SESSION['registroPersonal'];
-}
-if (!$personal) {
-    header("Location: ../logout.php");
+// El ticket se genera al crear un personal nuevo, con su contraseña de un solo uso.
+$personal = $_SESSION['registroPersonal'] ?? null;
+if (!$personal || empty($personal['ClavePer'])) {
+    header("Location: vistaGesPersonal.php");
     exit();
 }
 
@@ -79,7 +63,7 @@ $pdf->SetLineWidth(0.2);
 $filas = [
     'Nombre' => $personal['Nombre'],
     'Usuario' => $personal['UsuarioPer'],
-    'Clave' => $personal['ClavePer'],
+    'Contraseña' => $personal['ClavePer'],
 ];
 $y = 31;
 foreach ($filas as $etiqueta => $valor) {
@@ -97,6 +81,12 @@ foreach ($filas as $etiqueta => $valor) {
 // Imagen de San Pedro, más abajo.
 $pdf->Image('../assets/images/Santo/SanPedro.png', 37, 56, 26, 26);
 
+// Nota de contraseña de un solo uso.
+$pdf->SetXY(8, 82.5);
+$pdf->SetTextColor(120, 120, 120);
+$pdf->SetFont('Arial', 'I', 5.5);
+$pdf->Cell(84, 3, $txt('Contraseña de un solo uso. Crea tu contraseña al ingresar.'), 0, 0, 'C');
+
 // Pie del ticket.
 $pdf->SetDrawColor(189, 145, 50);
 $pdf->Line(12, 86, 88, 86);
@@ -105,5 +95,15 @@ $pdf->SetFont('Arial', '', 6);
 $pdf->SetXY(0, 88);
 $pdf->Cell(100, 4, $txt('Documento de uso interno · Parroquia San Pedro de Sacaba'), 0, 0, 'C');
 
-$pdf->Output();
+// Se genera el PDF y se envían cabeceras propias para que el navegador no
+// reutilice un ticket anterior desde la caché.
+$documento = $pdf->Output('S');
+
+header('Content-Type: application/pdf');
+header('Content-Disposition: inline; filename="ticket.pdf"');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
+
+echo $documento;
 ?>

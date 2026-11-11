@@ -19,8 +19,8 @@ $grupo = null;
 $catGrupo = [];
 $celGrupo = [];
 
-if (isset($_GET['id'])) {
-    $idGrupo = $_GET['id'];
+if (isset($_GET['id']) && filter_var($_GET['id'], FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]])) {
+    $idGrupo = (int) $_GET['id'];
     $datosGrupo = $contG->mostrarGrupoCoor($idGrupo);
 
     if ($datosGrupo) {
@@ -30,7 +30,12 @@ if (isset($_GET['id'])) {
     }
 }
 
-if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+if (!$grupo) {
+    header('Location: VistaCoordinador.php');
+    exit();
+}
+
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['actualizar_grupo'])) {
     $idGrupo = $_POST['IdGrupo'];
     $nombre = $_POST['NombreGrupo'];
     $color = $_POST['Color_Grupo'];
@@ -40,6 +45,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
     $contG->actualizarGrupo($idGrupo, $nombre, $color, $santo, $imagen, $frase);
     header("Location: vistaCoordinador.php");
+    exit();
 }
 
 
@@ -57,11 +63,12 @@ function getActiveNotifications($conn)
             FROM notificaciones n 
             INNER JOIN catequista c ON n.CiNotificador = c.CiCat 
             INNER JOIN `persona` p ON c.CiCat = p.CiPersona 
-            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ?
+            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ? AND n.Sacramento = ?
             ORDER BY n.FechaNotFin ASC";
 
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("s", $currentDateTime);
+    $sacramentoActual = $_SESSION['CiPersona']['Sacramento'] ?? '';
+    $stmt->bind_param("ss", $currentDateTime, $sacramentoActual);
     $stmt->execute();
     $result = $stmt->get_result();
 
@@ -207,11 +214,6 @@ $activeNotifications = getActiveNotifications($conn);
                                 <a class="dropdown-item" href="ReunionesCat.php"><i class="fa-fw bi bi-calendar2-check me-2"></i>Fecha de Reuniones</a>
                             </li>
                             <li>
-                                <a class="dropdown-item" href="Documentos.php">
-                                    <i class="fa-fw bi bi-card-text me-2"></i>Documentación
-                                </a>
-                            </li>
-                            <li>
                                 <a class="dropdown-item" href="Reglamento.php">
                                     <i class="fa-fw bi bi-list-check me-2"></i>Reglamento
                                 </a>
@@ -258,7 +260,7 @@ $activeNotifications = getActiveNotifications($conn);
             </div>
             <div class="row justify-content-between g-0">
 
-                <div class="col-md-2 col-lg-3 col-xxl-4 mt-n4">
+                <div class="col-md-2 col-lg-2 col-xxl-2 mt-n4">
                     <div class="nav-sidenav p-4 bg-mode h-100 custom-scrollbar">
                         <div class="d-flex justify-content-end d-lg-none mb-2">
                             <button class="btn btn-light btn-sm sidebar-start-close" type="button" aria-label="Cerrar menú"><i class="bi bi-x-lg"></i></button>
@@ -292,24 +294,14 @@ $activeNotifications = getActiveNotifications($conn);
                                 <a class="nav-link" href="VistaPersona.php"> <i class="<bi bi-person-vcard nav-icon"></i> <span class="nav-text">Persona </span></a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link" href="Configuracion.php"> <i class="bi bi-gear-wide-connected nav-icon"></i> <span class="nav-text">Configuración </span></a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link" href="VistaTodosCat.php"> <i class="bi bi-calendar-check nav-icon"></i> <span class="nav-text">Listado Catequistas</span></a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link" href="VistaTodosCat.php"> <i class="bi bi-file-earmark-text nav-icon"></i> <span class="nav-text">Reporte </span></a>
-                            </li>
-                            <h6 class="nav-text badge bg-primary text-white mt-2 me-2 border border-white border-3 rounded"><i class="bi bi-caret-down-fill"></i>&nbsp;&nbsp; Publico</h6>
-                            <li class="nav-item">
-                                <a class="nav-link" href="VistaMensajeCoor.php"> <i class="bi bi-file-earmark-text nav-icon"></i> <span class="nav-text">Mensaje Público</span></a>
+                                <a class="nav-link" href="VistaTodosCat.php"> <i class="bi bi-calendar-check nav-icon"></i> <span class="nav-text">Reporte Activos Inactivos</span></a>
                             </li>
                         </ul>
                     </div>
                 </div>
 
 
-                <section class="pt-0 ">
+                <section class="pt-0 col-md-10 col-lg-10 col-xxl-10 pe-lg-5">
                     <div class="container">
                         <div class="card">
                             <div class="card-body">
@@ -327,7 +319,7 @@ $activeNotifications = getActiveNotifications($conn);
                                                     </div>
                                                     <div class="me-md-3">
                                                         <h6>Nueva Imagen</h6>
-                                                        <img id="preview" alt="Selecciona una imagen" style="width: 100%; height:200px;" />
+                                                        <img id="preview" alt="Selecciona una imagen" style="width: 100%; height:200px; display:none;" />
                                                     </div>
                                                 </li>
                                                 <input type="file" id="inputImagenGrupo" name="Imagen_Grupo" accept="image/*" class="btn btn-secondary-soft me-2" onchange="mostrarImagen(event)">
@@ -336,7 +328,7 @@ $activeNotifications = getActiveNotifications($conn);
                                         <div class="card-body col-lg-6">
                                             <h3 class="py-3 col-lg-12">Más Información</h3>
                                             <div class="col-lg-8">
-                                                <label class="form-label">Santo del Grupo</label>
+                                                <label class="form-label">Nombre del Grupo (Santo, Carismas etc)</label>
                                                 <input type="text" class="form-control" name="Santo_Grupo" value="<?php echo $grupo['Santo_Grupo']; ?>">
                                             </div>
                                             <div class="col-lg-4">
@@ -354,7 +346,7 @@ $activeNotifications = getActiveNotifications($conn);
 
                                     <div class="col-lg-12 d-flex p-4">
                                         <div class="col-sm-6 col-lg-6">
-                                            <button type="submit" class="btn btn-primary-soft mb-0 me-2">Actualizar datos de Grupo</button>
+                                            <button type="submit" name="actualizar_grupo" class="btn btn-primary-soft mb-0 me-2">Actualizar datos de Grupo</button>
                                         </div>
                                         <div class="col-sm-6 col-lg-6">
                                             <a href="ListadeGrupo.php?Gr=<?php echo $grupo['IdGrupo']; ?>&N=<?php echo $grupo['NombreGrupo']; ?>" class="btn btn-primary-soft mb-0 me-2" target="_blank">Generar Lista de integrantes</a>
@@ -499,6 +491,7 @@ $activeNotifications = getActiveNotifications($conn);
         function mostrarImagen(event) {
             var output = document.getElementById('preview');
             output.src = URL.createObjectURL(event.target.files[0]);
+            output.style.display = 'block';
             output.onload = function() {
                 URL.revokeObjectURL(output.src)
             }

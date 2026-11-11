@@ -17,27 +17,59 @@ class CatequistaAsisControlador {
     }
 
     public function registrarAsistencia($catequistas, $fechaAsis) {
+        if (!is_array($catequistas)) {
+            return;
+        }
+
         foreach ($catequistas as $catequista) {
+            if (!is_array($catequista)
+                || !isset($catequista['Gestion'], $catequista['ciCat'], $catequista['idGrupo'])) {
+                continue;
+            }
+
+            $detalleAsis = $catequista['detalleAsis'] ?? 'Falta';
+            if (!in_array($detalleAsis, ['Presente', 'Falta', 'Permiso'], true)) {
+                $detalleAsis = 'Falta';
+            }
+
             $this->model->registrarAsistencia(
                 $catequista['Gestion'],
                 $catequista['ciCat'],
                 $catequista['idGrupo'],
-                $catequista['detalleAsis'],
+                $detalleAsis,
                 $fechaAsis
             );
         }
     }
     
     public function ActualizarAsistencia($catequistas, $fechaAsis) {
+        if (!is_array($catequistas)) {
+            return;
+        }
+
         foreach ($catequistas as $catequista) {
+            if (!is_array($catequista)
+                || !isset($catequista['Gestion'], $catequista['ciCat'], $catequista['idGrupo'])) {
+                continue;
+            }
+
+            $detalleAsis = $catequista['detalleAsis'] ?? 'Falta';
+            if (!in_array($detalleAsis, ['Presente', 'Falta', 'Permiso'], true)) {
+                $detalleAsis = 'Falta';
+            }
+
             $this->model->ActualizarAsistencia(
                 $catequista['Gestion'],
                 $catequista['ciCat'],
                 $catequista['idGrupo'],
-                $catequista['detalleAsis'],
+                $detalleAsis,
                 $fechaAsis
             );
         }
+    }
+
+    public function eliminarAsistencia($sacramento, $fechaAsis) {
+        return $this->model->eliminarAsistenciaPorFecha($sacramento, $fechaAsis);
     }
 }
 ?>

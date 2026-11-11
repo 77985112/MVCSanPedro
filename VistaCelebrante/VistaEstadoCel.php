@@ -9,6 +9,8 @@ if (!isset($_SESSION['CiPersona'])) {
     exit();
 }
 $Celebrante = $_SESSION['CiPersona'];
+require_once __DIR__ . '/../Controlador/controladorAccesoCelebrante.php';
+ControladorAccesoCelebrante::exigirCambioClave();
 $idIns = $Celebrante['IdInscripcion'];
 
 $conexion = new Conexion();
@@ -42,11 +44,12 @@ function getActiveNotifications($conn)
             FROM notificaciones n 
             INNER JOIN catequista c ON n.CiNotificador = c.CiCat 
             INNER JOIN `persona` p ON c.CiCat = p.CiPersona 
-            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ?
+            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ? AND n.Sacramento = ?
             ORDER BY n.FechaNotFin ASC";
 
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("s", $currentDateTime);
+    $sacramentoActual = $_SESSION['CiPersona']['Sacramento'] ?? '';
+    $stmt->bind_param("ss", $currentDateTime, $sacramentoActual);
     $stmt->execute();
     $result = $stmt->get_result();
 
@@ -361,11 +364,15 @@ $activeNotifications = getActiveNotifications($conn);
                                                     <?php $total = 0;
                                                     if (!empty($celebrantes)) {
                                                         foreach ($celebrantes as $celebrante) {
-                                                            $total = ($celebrante['NotaExamen1'] + $celebrante['NotaExamen2'] + $celebrante['NotaExamen3'] + $celebrante['NotaExamen4']) / 4; ?>
+                                                            $cantidadNotas = (stripos((string) $celebrante['Sacramento'], 'Confirmación') !== false) ? 3 : 2;
+                                                            $total = $cantidadNotas === 3
+                                                                ? ($celebrante['NotaExamen1'] + $celebrante['NotaExamen2'] + $celebrante['NotaExamen3']) / 3
+                                                                : ($celebrante['NotaExamen1'] + $celebrante['NotaExamen2']) / 2; ?>
                                                             <p>Examen 1 | <strong><?= htmlspecialchars($celebrante['NotaExamen1']) ?> Pts.</strong></p>
                                                             <p>Examen 2 | <strong><?= htmlspecialchars($celebrante['NotaExamen2']) ?> Pts.</strong></p>
-                                                            <p>Examen 3 | <strong><?= htmlspecialchars($celebrante['NotaExamen3']) ?> Pts.</strong></p>
-                                                            <p>Examen 4 | <strong><?= htmlspecialchars($celebrante['NotaExamen4']) ?> Pts.</strong></p>
+                                                            <?php if ($cantidadNotas >= 3): ?>
+                                                                <p>Examen 3 | <strong><?= htmlspecialchars($celebrante['NotaExamen3']) ?> Pts.</strong></p>
+                                                            <?php endif; ?>
                                                             <p>Promedio | <strong><?= htmlspecialchars(round($total)) ?> Pts.</strong></p>
                                                             <p>Estado | <strong><?= htmlspecialchars($celebrante['EstadoExamen']) ?></strong></p>
                                                         <?php  }

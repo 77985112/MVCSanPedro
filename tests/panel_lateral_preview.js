@@ -64,8 +64,7 @@ async function capturarCard(page, nombre) {
       'VistaGesPersonal.php': ['Personal', 'Gestión'],
       'VistaCoordinadorAdmin.php': ['Coordinadores', 'Gestión'],
       'VistaSolicitante.php': ['Certificado', 'Documentos'],
-      'VistaEmitidos.php': ['Certificado Emitido', 'Documentos'],
-      'VistaGoogleDrive.php': ['Google Drive', 'Documentos']
+      'VistaEmitidos.php': ['Certificado Emitido', 'Documentos']
     };
     const items = [];
     Array.from(card.querySelectorAll('ul a')).forEach(a => {
@@ -463,7 +462,7 @@ async function capturarCard(page, nombre) {
     img{display:block;height:1080px;width:auto}
   </style></head><body>
     <h1>Panel lateral — Propuesta final</h1>
-    <p class="sub">Letras más grandes, aura de contraste clara. En modo oscuro el hover pasa a fondo dorado con letras blancas. Coordinadores y Google Drive adaptados al modo oscuro.</p>
+    <p class="sub">Letras más grandes, aura de contraste clara. En modo oscuro el hover pasa a fondo dorado con letras blancas. Coordinadores adaptados al modo oscuro.</p>
     <div class="row">
       <div class="col"><span class="tag a">ACTUAL</span><img src="${b64(antes)}"></div>
       <div class="col"><span class="tag b">CLARA</span><img src="${b64(clara)}"></div>

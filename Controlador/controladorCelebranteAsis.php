@@ -18,12 +18,16 @@ class AsistenciaController
 
             foreach ($_POST['IdInscripcion'] as $idInscripcion) {
                 $TipoAsis = isset($_POST['TipoAsis'][$idInscripcion]) ? $_POST['TipoAsis'][$idInscripcion] : 'Falta';
+                if (!in_array($TipoAsis, ['Presente', 'Falta', 'Licencia'], true)) {
+                    $TipoAsis = 'Falta';
+                }
                 $detalleAsis = $_POST['DetalleAsis'];
                 $FechaReg = $_POST['FechaReg'];
                 $this->modelo->registrarAsistencia($idInscripcion, $FechaReg, $horaActual, $detalleAsis, $TipoAsis);
             }
 
-            header('Location: ' . $_SERVER['PHP_SELF']);
+            $fechaDestino = $_POST['FechaReg'] ?? date('Y-m-d');
+            header('Location: ' . $_SERVER['PHP_SELF'] . '?fecha=' . urlencode($fechaDestino));
             exit();
         }
     }
@@ -37,10 +41,14 @@ class AsistenciaController
 
             foreach ($CodAsisArray as $CodAsis) {
                 $tipoAsis = isset($TipoAsisArray[$CodAsis]) ? $TipoAsisArray[$CodAsis] : 'Falta';
+                if (!in_array($tipoAsis, ['Presente', 'Falta', 'Licencia'], true)) {
+                    $tipoAsis = 'Falta';
+                }
 
                 $this->modelo->modificarAsistencia($CodAsis, $tipoAsis);
             }
-            header('Location: ' . $_SERVER['PHP_SELF']);
+            $fechaDestino = $_POST['FechaReg'] ?? date('Y-m-d');
+            header('Location: ' . $_SERVER['PHP_SELF'] . '?fecha=' . urlencode($fechaDestino));
             exit();
         }
     }

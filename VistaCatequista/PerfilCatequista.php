@@ -5,6 +5,8 @@ if (!isset($_SESSION['CiPersona'])) {
     exit();
 }
 $Catequista = $_SESSION['CiPersona'];
+require_once __DIR__ . '/../Controlador/controladorAccesoCatequista.php';
+ControladorAccesoCatequista::exigirCambioClave();
 
 $CatCi = $Catequista['CiCat'];
 $CatGr = $Catequista['IdGrupo'];
@@ -31,11 +33,12 @@ function getActiveNotifications($conn)
             FROM notificaciones n 
             INNER JOIN catequista c ON n.CiNotificador = c.CiCat 
             INNER JOIN `persona` p ON c.CiCat = p.CiPersona 
-            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ?
+            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ? AND n.Sacramento = ?
             ORDER BY n.FechaNotFin ASC";
 
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("s", $currentDateTime);
+    $sacramentoActual = $_SESSION['CiPersona']['Sacramento'] ?? '';
+    $stmt->bind_param("ss", $currentDateTime, $sacramentoActual);
     $stmt->execute();
     $result = $stmt->get_result();
 
@@ -137,11 +140,6 @@ $activeNotifications = getActiveNotifications($conn);
                             </li>
                             <li>
                                 <a class="dropdown-item" href="ReunionesCat.php"><i class="fa-fw bi bi-calendar2-check me-2"></i>Fecha de Reuniones</a>
-                            </li>
-                            <li>
-                                <a class="dropdown-item" href="Documentos.php">
-                                    <i class="fa-fw bi bi-card-text me-2"></i>Documentación
-                                </a>
                             </li>
                             <li>
                                 <a class="dropdown-item" href="Reglamento.php">
@@ -275,11 +273,6 @@ $activeNotifications = getActiveNotifications($conn);
                                                         <div class="card-footer p-2 border-0">
                                                             <a href="PerfilAjenoCat.php?IpCS=<?php echo htmlspecialchars($cates['CiCat']); ?>"><button class="btn btn-sm btn-primary" data-bs-toggle="tooltip" data-bs-placement="top" title="Ver Perfil"> <i class="bi bi-eye-fill"></i>
                                                             </button></a>
-                                                            <?php if ($Catequista['RolCat'] == "Titular" && $Catequista['EstadoCat'] == "Activo") : ?>
-                                                                <button class="btn btn-sm btn-danger" data-bs-toggle="tooltip" data-bs-placement="top" title="Asignar Tarea">
-                                                                    <i class="bi bi-person-x"></i>
-                                                                </button>
-                                                            <?php endif; ?>
                                                         </div>
                                                     </div>
                                                 </div>

@@ -29,7 +29,6 @@ if ($result->num_rows > 0) {
     $_SESSION['usuario']['Estado'] = $row['Estado'];
     $_SESSION['usuario']['DescripCar'] = $row['DescripCar'];
 
-    $_SESSION['usuario']['ClavePer'] = $row['ClavePer'];
     $_SESSION['usuario']['ContactoPer'] = $row['ContactoPer'];
     $_SESSION['usuario']['PerfilPer'] = $row['PerfilPer'];
     $_SESSION['usuario']['FondoPer'] = $row['FondoPer'];
@@ -39,7 +38,6 @@ if ($result->num_rows > 0) {
     
 } else {
     $error = ['error' => 'No se encontraron datos'];
-    error_log(print_r($error, true));
     echo json_encode($error);
 }
 

@@ -8,20 +8,32 @@ class ControladorCoordinadorAdmin {
         $this->modelo = new ModeloCoordinadorAdmin();
     }
 
-    public function obtenerCoordinadores() {
-        return $this->modelo->obtenerCoordinadores();
+    public function obtenerCoordinadores($gestion = null) {
+        return $this->modelo->obtenerCoordinadores($gestion);
     }
 
     public function buscarPersona($ci) {
         return $this->modelo->buscarPersona($ci);
     }
 
-    public function verificarCoordinadorExistente($sacramento) {
-        return $this->modelo->verificarCoordinadorExistente($sacramento);
+    public function verificarCoordinadorExistente($sacramento, $excluirCi = '', $gestion = null) {
+        return $this->modelo->verificarCoordinadorExistente($sacramento, $excluirCi, $gestion);
     }
 
-    public function registrarCoordinador($ci, $sacramento, $idGrupo, $usuario, $clave) {
-        return $this->modelo->registrarCoordinador($ci, $sacramento, $idGrupo, $usuario, $clave);
+    public function verificarUsuarioDisponible($usuario, $excluirCi = '') {
+        return $this->modelo->verificarUsuarioDisponible($usuario, $excluirCi);
+    }
+
+    public function actualizarCargo($ci, $sacramento, $idGrupo, $usuario, $clave) {
+        return $this->modelo->actualizarCargo($ci, $sacramento, $idGrupo, $usuario, $clave);
+    }
+
+    public function cerrarAsignacion($ci, $gestion) {
+        return $this->modelo->cerrarAsignacion($ci, $gestion);
+    }
+
+    public function registrarCoordinador($ci, $sacramento, $idGrupo, $usuario, $clave, $gestion = null) {
+        return $this->modelo->registrarCoordinador($ci, $sacramento, $idGrupo, $usuario, $clave, $gestion);
     }
 
     public function obtenerTodosLosGrupos() {

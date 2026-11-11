@@ -31,10 +31,31 @@ class Celebrante {
 
 
     public function updatePassword($newPassword) {
-        $query = "UPDATE " . $this->table_name . " SET ClaveCel = ? WHERE CiCel = ?";
+        $query = "UPDATE " . $this->table_name . " SET ClaveCel = ?, DebeCambiarClave = 0 WHERE CiCel = ?";
         $stmt = $this->conn->prepare($query);
         $stmt->bind_param("ss", $newPassword, $this->CiCel);
         return $stmt->execute();
+    }
+
+    /** Comprueba la clave actual contra el hash o una clave antigua en texto plano. */
+    public function verifyPassword($clave) {
+        $query = "SELECT ClaveCel FROM " . $this->table_name . " WHERE CiCel = ? LIMIT 1";
+        $stmt = $this->conn->prepare($query);
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param("s", $this->CiCel);
+        $stmt->execute();
+        $fila = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        $guardada = (string) ($fila['ClaveCel'] ?? '');
+        $info = password_get_info($guardada);
+        $esHash = (int) ($info['algo'] ?? 0) !== 0;
+
+        return $esHash
+            ? password_verify((string) $clave, $guardada)
+            : hash_equals($guardada, (string) $clave);
     }
 
     public function deactivateAccount() {

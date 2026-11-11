@@ -10,12 +10,24 @@ class CatequistaModel {
     }
 
     public function getActCatequistas() {
-        $sql = "SELECT catequista.CiCat, CONCAT(persona.Nombre, ' ', persona.ApPaterno, ' ', persona.ApMaterno) AS NombreCompleto, catequista.ImagenCat, catequista.Sacramento 
-                FROM catequista 
+        $sql = "SELECT catequista.CiCat,
+                       CONCAT(persona.Nombre, ' ', persona.ApPaterno, ' ', persona.ApMaterno) AS NombreCompleto,
+                       catequista.ImagenCat,
+                       catequista.Sacramento,
+                       COALESCE(GROUP_CONCAT(DISTINCT asignacion.RolCat
+                           ORDER BY FIELD(asignacion.RolCat, 'Coordinador', 'Titular', 'Catequista')
+                           SEPARATOR ' / '), 'Sin asignación') AS Roles,
+                       COALESCE(GROUP_CONCAT(DISTINCT CONCAT('Grupo ', grupo.NombreGrupo)
+                           ORDER BY grupo.NombreGrupo SEPARATOR ', '), 'Sin grupo') AS Grupos
+                FROM catequista
                 INNER JOIN `persona` ON catequista.CiCat = persona.CiPersona
+                LEFT JOIN asignacion ON asignacion.CiCat = catequista.CiCat
+                LEFT JOIN grupo ON grupo.IdGrupo = asignacion.IdGrupo
                 WHERE catequista.EstadoCat = 'Activo'
-                ORDER BY RAND()
-                LIMIT 10";
+                GROUP BY catequista.CiCat, persona.Nombre, persona.ApPaterno, persona.ApMaterno,
+                         catequista.ImagenCat, catequista.Sacramento
+                ORDER BY COALESCE(MIN(FIELD(asignacion.RolCat, 'Coordinador', 'Titular', 'Catequista')), 4),
+                         persona.ApPaterno, persona.ApMaterno, persona.Nombre";
                 
                 $stmt = $this->conn->prepare($sql);
                 $stmt->execute();
@@ -54,7 +66,7 @@ class CatequistaModel {
             INNER JOIN `grupo` g ON g.IdGrupo = ins.IdGrupo
             LEFT JOIN `detalletipoins` dti ON dti.IdInscripcion = ins.IdInscripcion
             LEFT JOIN `tipoins` ti ON ti.CodTipoItem = dti.CodTipoItem
-            WHERE c.CiCel = ? AND c.Sacramento = ?";
+            WHERE c.CiCel = ? AND c.Sacramento LIKE CONCAT(?, '%')";
 
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param("ss", $ciCel, $SacramentoCel);

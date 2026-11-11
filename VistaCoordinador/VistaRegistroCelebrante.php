@@ -12,6 +12,11 @@ require_once '../Controlador/controladorCelAdmin.php';
 $controllerCel = new CelebranteControllerAdmin();
 $DetalleIns = $controllerCel->verificarIns($Catequista['Sacramento']);
 
+$esCoordinador = ($Catequista['RolCat'] ?? '') === 'Coordinador';
+$inicioPanel = $esCoordinador ? 'VistaCoordinador.php' : '../VistaCatequista/VistaCatequista.php';
+$asistenciaPanel = $esCoordinador ? 'VistaAsisCat.php' : '../VistaCatequista/VistaCelebranteAsis.php';
+$registrosPanel = $esCoordinador ? 'VistaCeleAdmin.php' : '../VistaCatequista/VistaDocCel.php';
+
 $inscripcionesActivas = false;
 foreach ($DetalleIns as $inscripcion) {
     if ($inscripcion['EstadoIns'] === 'Online' && $inscripcion['ActividadSac'] === 'Inscripción') {
@@ -21,6 +26,21 @@ foreach ($DetalleIns as $inscripcion) {
 }
 
 $controller = new ControladorPersona();
+
+if (isset($_GET['buscarPersona'])) {
+    $termino = trim((string) $_GET['buscarPersona']);
+    $personas = $termino === '' ? [] : $controller->buscarPersonas($termino, 10);
+    $salida = [];
+    foreach ($personas as $p) {
+        $salida[] = [
+            'CiPersona' => $p['CiPersona'],
+            'NombreCompleto' => trim($p['Nombre'] . ' ' . $p['ApPaterno'] . ' ' . $p['ApMaterno']),
+        ];
+    }
+    echo json_encode($salida);
+    exit;
+}
+
 if (isset($_GET['ciPersona'])) {
     $ciPersona = $_GET['ciPersona'];
     $persona = $controller->buscarPersona($ciPersona);
@@ -55,7 +75,7 @@ if (isset($_GET['ciPersona'])) {
     <header class="navbar-light fixed-top header-static bg-mode">
         <nav class="navbar navbar-expand-lg">
             <div class="container">
-                <a class="navbar-brand" href="VistaCatequista.php">
+                <a class="navbar-brand" href="<?php echo $inicioPanel; ?>">
                     <img class="light-mode-item navbar-brand-item" src="../assets/images/logo.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo.png') ?>" alt="logo">
                     <img class="dark-mode-item navbar-brand-item" src="../assets/images/logo-light.png?v=<?= filemtime(__DIR__ . '/../assets/images/logo-light.png') ?>" alt="logo">
                 </a>
@@ -90,11 +110,6 @@ if (isset($_GET['ciPersona'])) {
                             </li>
                             <li>
                                 <a class="dropdown-item" href="ReunionesCat.php"><i class="fa-fw bi bi-calendar2-check me-2"></i>Fecha de Reuniones</a>
-                            </li>
-                            <li>
-                                <a class="dropdown-item" href="Documentos.php">
-                                    <i class="fa-fw bi bi-card-text me-2"></i>Documentación
-                                </a>
                             </li>
                             <li>
                                 <a class="dropdown-item" href="Reglamento.php">
@@ -199,33 +214,33 @@ if (isset($_GET['ciPersona'])) {
 
                                         <ul class="nav nav-link-secondary flex-column fw-bold gap-2">
                                             <li class="nav-item">
-                                                <a class="nav-link" href="VistaCatequista.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/mensaje.png" alt=""><span>Inicio </span></a>
+                                                <a class="nav-link" href="<?php echo $inicioPanel; ?>"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/mensaje.png" alt=""><span>Inicio </span></a>
                                             </li>
                                             <li class="nav-item">
                                                 <a class="nav-link" href="VistaPersona.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/nuevo.png" alt=""><span>Persona </span></a>
                                             </li>
                                             <?php if ($Catequista['RolCat'] == "Titular") { ?>
                                                 <li class="nav-item">
-                                                    <a class="nav-link" href="VistaReuniones.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/instrucciones.png" alt=""><span>Reuniones / Actividades</span></a>
+                                                    <a class="nav-link" href="../VistaCatequista/VistaReuniones.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/instrucciones.png" alt=""><span>Reuniones / Actividades</span></a>
                                                 </li>
                                             <?php } ?>
                                             <li class="nav-item">
                                                 <a class="nav-link" href="GrupoEsp.php?id=<?php echo $Catequista['IdGrupo']; ?>"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/contrato.png" alt=""><span>Grupo </span></a>
                                             </li>
                                             <li class="nav-item">
-                                                <a class="nav-link" href="VistaCelebranteAsis.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/ListaCelebrante.png" alt=""><span>Asistencia a Catquesis </span></a>
+                                                <a class="nav-link" href="<?php echo $asistenciaPanel; ?>"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/ListaCelebrante.png" alt=""><span>Asistencia a Catequesis </span></a>
                                             </li>
                                             <?php if ($Catequista['PoderCat'] == "Habilitado") { ?>
                                                 <li class="nav-item">
-                                                    <a class="nav-link active" href="VistaDocCel.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/Documentos.png" alt=""><span>Registros</span></a>
+                                                    <a class="nav-link active" href="<?php echo $registrosPanel; ?>"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/Documentos.png" alt=""><span>Registros</span></a>
                                                 </li>
                                             <?php } ?>
                                             <?php if ($Catequista['RolCat'] == "Titular") { ?>
                                                 <li class="nav-item">
-                                                    <a class="nav-link" href="VistaCelExamen.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/Examen.png" alt=""><span>Pruebas</span></a>
+                                                    <a class="nav-link" href="../VistaCatequista/VistaCelExamen.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/Examen.png" alt=""><span>Pruebas</span></a>
                                                 </li>
                                                 <li class="nav-item">
-                                                    <a class="nav-link" href="VistaReporteGrupo.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/reporte.png" alt=""><span>Reporte General</span></a>
+                                                    <a class="nav-link" href="../VistaCatequista/VistaReporteGrupo.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/reporte.png" alt=""><span>Reporte General</span></a>
                                                 </li>
                                             <?php } ?>
                                         </ul>
@@ -265,9 +280,10 @@ if (isset($_GET['ciPersona'])) {
 
                                 <h4>Registrar Apoderado para todos los Catequisandos</h4>
                                 <form id="form-apoderado" method="POST" action="../src/registrar_apoderado.php">
-                                    <div class="form-group">
-                                        <label for="ciFamiliar">CI del Apoderado:</label>
-                                        <input type="text" class="form-control" id="ciFamiliar" name="ciFamiliar" required>
+                                    <div class="form-group position-relative">
+                                        <label for="ciFamiliar">Apoderado (nombre, apellido o CI):</label>
+                                        <input type="text" class="form-control" id="ciFamiliar" name="ciFamiliar" placeholder="Nombre, apellido o CI" autocomplete="off" required>
+                                        <div class="list-group position-absolute w-100 shadow-sm resultados-persona" style="z-index:1050;max-height:220px;overflow:auto;display:none;background:#fff;border-radius:.5rem;"></div>
                                         <a class="celAp btn btn-sm btn-dashed rounded mt-0" href="javascript:abrirModalPersona()"> <i class="bi bi-plus-circle-dotted me-1"></i>registrar a la Persona</a>
                                     </div>
 
@@ -282,7 +298,7 @@ if (isset($_GET['ciPersona'])) {
                                     </div>
                                     <br>
                                     <button type="submit" class="btn btn-success-soft">Registrar Apoderado para Todos los Catequisandos</button>
-                                    <button type="button" class="btn btn-primary-soft" onclick="GenerarReporte()">Generar Comprobante</button>
+                                    <button type="button" class="btn btn-primary-soft" onclick="GenerarReporte()">Generar Compromiso</button>
                                 </form>
                             </div>
                         <?php else: ?>
@@ -369,56 +385,70 @@ if (isset($_GET['ciPersona'])) {
 
 
     <script>
-        $(document).ready(function() {
-            $('#formularios-celebrantes').on('input', 'input[name^="celebrantes"][name$="[ciCel]"]', function() {
-                var ciPersona = $(this).val();
-                var $celebranteDiv = $(this).closest('.form-celebrante');
+        if (new URLSearchParams(window.location.search).get('nuevo') === '1') {
+            sessionStorage.removeItem('resumenCelebrantesCoord');
+            sessionStorage.removeItem('apoderadoCoord');
+            if (window.history && window.history.replaceState) {
+                window.history.replaceState(null, '', window.location.pathname);
+            }
+        }
 
-                if (ciPersona.length >= 6 || ciPersona.length <= 0) {
-                    $.ajax({
-                        url: '',
-                        type: 'GET',
-                        data: {
-                            ciPersona: ciPersona
-                        },
-                        success: function(response) {
-                            var persona = JSON.parse(response);
-                            if (persona.error) {
-                                $celebranteDiv.find('.celebrantenew').html(
-                                    `<i class="bi bi-plus-circle-dotted me-1"></i> Datos no encontrados`
-                                );
-                            } else {
-                                var form = `${persona.Nombre} ${persona.ApPaterno}`;
-                                $celebranteDiv.find('.celebrantenew').html(form);
-                            }
-                        }
-                    });
+        $(document).ready(function() {
+            $(document).on('input', 'input[name$="[ciCel]"], input[name="ciFamiliar"]', function() {
+                var $input = $(this);
+                var $contenedor = $input.closest('.form-group');
+                var $resultados = $contenedor.find('.resultados-persona');
+                var texto = $input.val().trim();
+
+                clearTimeout($input.data('timerPersona'));
+
+                if (texto.length < 2) {
+                    $resultados.hide();
+                    return;
                 }
-            });
-        });
 
-        $(document).ready(function() {
-            $('input[name="ciFamiliar"]').on('input', function() {
-                var ciPersona = $(this).val();
-                if (ciPersona.length >= 6 || ciPersona.length <= 0) {
+                $input.data('timerPersona', setTimeout(function() {
                     $.ajax({
                         url: '',
                         type: 'GET',
-                        data: {
-                            ciPersona: ciPersona
-                        },
-                        success: function(response) {
-                            var persona = JSON.parse(response);
-                            if (persona.error) {
-                                $('.celAp').html(
-                                    `<i class="bi bi-plus-circle-dotted me-1""></i>registrar a la Persona`
-                                );
-                            } else {
-                                var form = `${persona.Nombre} ${persona.ApPaterno}`;
-                                $('.celAp').html(form);
+                        data: { buscarPersona: texto },
+                        dataType: 'json',
+                        success: function(personas) {
+                            $resultados.empty();
+
+                            if (!personas || personas.length === 0) {
+                                $resultados.hide();
+                                return;
                             }
+
+                            personas.forEach(function(persona) {
+                                var $boton = $('<button>', {
+                                    type: 'button',
+                                    class: 'list-group-item list-group-item-action py-2'
+                                });
+
+                                $('<strong>').text(persona.NombreCompleto).appendTo($boton);
+                                $boton.append('<br>');
+                                $('<small>', { class: 'text-muted' }).text('CI: ' + persona.CiPersona).appendTo($boton);
+
+                                $boton.on('click', function() {
+                                    $input.val(persona.CiPersona);
+                                    $contenedor.find('.celebrantenew, .celAp').text(persona.NombreCompleto);
+                                    $resultados.hide();
+                                });
+
+                                $resultados.append($boton);
+                            });
+
+                            $resultados.show();
                         }
                     });
+                }, 250));
+            });
+
+            $(document).on('click', function(evento) {
+                if (!$(evento.target).closest('.resultados-persona, input[name$="[ciCel]"], input[name="ciFamiliar"]').length) {
+                    $('.resultados-persona').hide();
                 }
             });
         });
@@ -463,10 +493,16 @@ if (isset($_GET['ciPersona'])) {
             contadorCelebrantes++;
             const formCelebrante = `<br><div class="card-body pt-0 border border-white border-3 rounded col-lg-3 me-2">
         <div class="form-celebrante" id="celebrante-${contadorCelebrantes}">
-            <h6>Catequisando ${contadorCelebrantes}</h6>
-                <div class="form-group">
-                    <label class="form-label">CI del Catequisando</label>
-                    <input type="text" class="form-control" id="CiCelNuevo" name="celebrantes[${contadorCelebrantes}][ciCel]" placeholder="CI Persona">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="mb-0">Catequisando ${contadorCelebrantes}</h6>
+                <button type="button" class="btn btn-sm btn-outline-danger btn-quitar-celebrante" style="display:none;" onclick="quitarFormularioCelebrante(${contadorCelebrantes})" title="Quitar este catequizando">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+                <div class="form-group position-relative">
+                    <label class="form-label">Catequizando (nombre, apellido o CI)</label>
+                    <input type="text" class="form-control" id="CiCelNuevo" name="celebrantes[${contadorCelebrantes}][ciCel]" placeholder="Nombre, apellido o CI" autocomplete="off">
+                    <div class="list-group position-absolute w-100 shadow-sm resultados-persona" style="z-index:1050;max-height:220px;overflow:auto;display:none;background:#fff;border-radius:.5rem;"></div>
                     <a class="celebrantenew btn btn-sm btn-dashed rounded mt-0" href="javascript:abrirModalPersona(${contadorCelebrantes})"> <i class="bi bi-plus-circle-dotted me-1"></i>registrar a la Persona</a>
                 </div>
 
@@ -495,11 +531,46 @@ if (isset($_GET['ciPersona'])) {
                     <label for="PreValor" class="form-label">Monto Cancelado</label>
                     <input type="text" class="form-control" name="celebrantes[${contadorCelebrantes}][preValor]" required><br>
                 </div>
+                <div class="form-group">
+                    <label class="form-label">Documentos presentados</label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="celebrantes[${contadorCelebrantes}][documentos][]" value="Certificado de Nacimiento" id="docNac${contadorCelebrantes}">
+                        <label class="form-check-label" for="docNac${contadorCelebrantes}">Certificado de Nacimiento</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="celebrantes[${contadorCelebrantes}][documentos][]" value="Bautizo" id="docBau${contadorCelebrantes}">
+                        <label class="form-check-label" for="docBau${contadorCelebrantes}">Certificado de Bautizo</label>
+                    </div>
+                    <small class="text-muted">Marca los documentos que se presentaron.</small>
+                </div>
         </div></div>`;
             document.getElementById('formularios-celebrantes').insertAdjacentHTML('beforeend', formCelebrante);
+            actualizarBotonesQuitar();
+        }
+
+        function actualizarBotonesQuitar() {
+            $('.btn-quitar-celebrante').hide();
+            $('#formularios-celebrantes .form-celebrante').last().find('.btn-quitar-celebrante').show();
+        }
+
+        function quitarFormularioCelebrante(id) {
+            if (id !== contadorCelebrantes) {
+                return;
+            }
+
+            const $formulario = $('#celebrante-' + id);
+            if (!$formulario.length) {
+                return;
+            }
+
+            $formulario.closest('.card-body').remove();
+            contadorCelebrantes--;
+            actualizarBotonesQuitar();
         }
 
         function abrirModalPersona(idCelebrante = null) {
+            const formPersona = document.getElementById('form-persona');
+            if (formPersona) formPersona.reset();
             $('#celebrante-id-actual').val(idCelebrante);
             $('#modalPersona').modal('show');
         }
@@ -521,7 +592,7 @@ if (isset($_GET['ciPersona'])) {
                 nombre: $('#nombre').val(),
                 apPaterno: $('#apPaterno').val(),
                 apMaterno: $('#apMaterno').val(),
-                sexo: $('#sexo').val(),
+                sexo: $('input[name="sexo"]:checked').val(),
                 fechaNac: $('#fechaNac').val(),
                 direccion: $('#direccion').val(),
                 contacto: $('#contacto').val(),
@@ -531,10 +602,14 @@ if (isset($_GET['ciPersona'])) {
             $.post('../src/registrar_persona.php', dataPersona, function(response) {
                 if (response.success) {
                     const ciPersona = dataPersona.ciPersona;
+                    const nombreCompleto = [dataPersona.nombre, dataPersona.apPaterno, dataPersona.apMaterno].filter(Boolean).join(' ');
                     if (idCelebrante) {
-                        $(`#celebrante-${idCelebrante} [name="celebrantes[${idCelebrante}][ciCel]"]`).val(ciPersona);
+                        const $contenedor = $(`#celebrante-${idCelebrante}`);
+                        $contenedor.find(`[name="celebrantes[${idCelebrante}][ciCel]"]`).val(ciPersona);
+                        $contenedor.find('.celebrantenew').text(nombreCompleto);
                     } else {
                         $('#ciFamiliar').val(ciPersona);
+                        $('.celAp').text(nombreCompleto);
                     }
                     $('#modalPersona').modal('hide');
                     mostrarAlerta('Persona registrada correctamente', 'success');
@@ -549,13 +624,27 @@ if (isset($_GET['ciPersona'])) {
             listaResumen.innerHTML = '';
             celebrantes.forEach(celebrante => {
                 const li = document.createElement('li');
-                li.textContent = `Código: ${celebrante.idins}, Catequisando: ${celebrante.Celebrante}, Usuario: ${celebrante.usuario}, Clave: ${celebrante.clave}`;
+                li.textContent = `Código: ${celebrante.idins}, Catequisando: ${celebrante.Celebrante}, Usuario: ${celebrante.usuario}, Contraseña de un solo uso: ${celebrante.clave}`;
                 listaResumen.appendChild(li);
             });
         }
 
         document.getElementById('form-celebrantes').addEventListener('submit', function(e) {
             e.preventDefault();
+
+            if (document.querySelectorAll('#formularios-celebrantes .form-celebrante').length === 0) {
+                mostrarAlerta('Añade al menos un catequizando.', 'danger');
+                return;
+            }
+
+            const catequizandosInvalidos = Array.from(this.querySelectorAll('input[name$="[ciCel]"]')).some(function(input) {
+                const valor = input.value.trim();
+                return valor !== '' && !/^[A-Za-z0-9.-]{3,30}$/.test(valor);
+            });
+            if (catequizandosInvalidos) {
+                mostrarAlerta('Selecciona al catequizando de la lista de resultados.', 'danger');
+                return;
+            }
 
             const formData = new FormData(this);
 
@@ -566,24 +655,31 @@ if (isset($_GET['ciPersona'])) {
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        alert('Catequisandos registrados con éxito');
+                        mostrarAlerta('Catequisandos registrados con éxito', 'success');
                         actualizarResumenCelebrantes(data.celebrantes);
                         resumenCelebrantes = data.celebrantes;
+                        sessionStorage.setItem('resumenCelebrantesCoord', JSON.stringify(data.celebrantes));
 
                         document.getElementById('formularios-celebrantes').style.display = 'none';
                         document.getElementById('form-celebrantes').style.display = 'none';
                         document.getElementById('resumen-celebrantes').style.display = 'block';
                     } else {
-                        alert('Error al registrar catequisandos: ' + data.message);
+                        mostrarAlerta('Error al registrar catequisandos: ' + data.message, 'danger');
                     }
                 })
                 .catch(error => {
                     console.error('Error:', error);
-                    alert('Error al procesar la solicitud');
+                    mostrarAlerta('Error al procesar la solicitud', 'danger');
                 });
         });
         document.getElementById('form-apoderado').addEventListener('submit', function(e) {
             e.preventDefault();
+
+            const ciFamiliar = document.getElementById('ciFamiliar').value.trim();
+            if (!/^[A-Za-z0-9.-]{3,30}$/.test(ciFamiliar)) {
+                mostrarAlerta('Selecciona al apoderado de la lista de resultados.', 'danger');
+                return;
+            }
 
             const formData = new FormData(this);
             resumenCelebrantes.forEach(celebrante => {
@@ -597,23 +693,58 @@ if (isset($_GET['ciPersona'])) {
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        alert('Apoderado registrado con éxito para todos los catequisandos');
+                        mostrarAlerta('Apoderado registrado con éxito para todos los catequisandos', 'success');
+                        sessionStorage.setItem('apoderadoCoord', JSON.stringify({
+                            ci: ciFamiliar,
+                            rol: document.getElementById('rolFam').value.trim(),
+                            parentesco: document.getElementById('parentesco').value.trim(),
+                            nombre: document.querySelector('.celAp').textContent.trim()
+                        }));
                     } else {
-                        alert('Error al registrar apoderado: ' + data.message);
+                        mostrarAlerta('Error al registrar apoderado: ' + data.message, 'danger');
                     }
                 })
                 .catch(error => {
                     console.error('Error:', error);
-                    alert('Error al procesar la solicitud');
+                    mostrarAlerta('Error al procesar la solicitud', 'danger');
                 });
         });
 
+        $(document).ready(function() {
+            try {
+                const guardado = sessionStorage.getItem('resumenCelebrantesCoord');
+                if (!guardado) {
+                    return;
+                }
+
+                const celebrantes = JSON.parse(guardado);
+                if (!Array.isArray(celebrantes) || celebrantes.length === 0) {
+                    return;
+                }
+
+                resumenCelebrantes = celebrantes;
+                actualizarResumenCelebrantes(celebrantes);
+                document.getElementById('formularios-celebrantes').style.display = 'none';
+                document.getElementById('form-celebrantes').style.display = 'none';
+                document.getElementById('resumen-celebrantes').style.display = 'block';
+
+                const apoderadoGuardado = sessionStorage.getItem('apoderadoCoord');
+                if (apoderadoGuardado) {
+                    const apoderado = JSON.parse(apoderadoGuardado);
+                    $('#ciFamiliar').val(apoderado.ci || '');
+                    $('#rolFam').val(apoderado.rol || '');
+                    $('#parentesco').val(apoderado.parentesco || '');
+                    if (apoderado.nombre) {
+                        $('.celAp').text(apoderado.nombre);
+                    }
+                }
+            } catch (error) {
+                console.error('No se pudo restaurar el registro:', error);
+            }
+        });
+
         function GenerarReporte() {
-            const ciFamiliar = document.getElementById('ciFamiliar').value;
-            // Construir la URL con el parámetro ciFamiliar
-            const url = `../src/Reporte_Compromiso.php?ciFamiliar=${encodeURIComponent(ciFamiliar)}`;
-            // Abrir la nueva pestaña con la URL
-            window.open(url, '_blank', 'width=800,height=600');
+            window.open('../src/Reporte_Compromiso.php', '_blank');
         }
     </script>
     <script src="../assets/vendor/bootstrap/dist/js/bootstrap.bundle.min.js"></script>

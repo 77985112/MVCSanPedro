@@ -88,21 +88,47 @@ class UsuarioController
         return false;
     }
 
-    public function cambiarContrasena($ciPersonal, $actualC, $nuevoC1, $nuevoC2, $claveActual)
+    public function cambiarContrasena($ciPersonal, $actualC, $nuevoC1, $nuevoC2, $verificarActual = true)
     {
-        if ($actualC === $claveActual) {
-            if ($nuevoC1 === $nuevoC2) {
-                if ($this->usuarioModel->actualizarContrasena($ciPersonal, $nuevoC1)) {
-                    $_SESSION['usuario']['ClavePer'] = $nuevoC1;
-                    return true;
-                }
+        // En el primer ingreso con una clave de un solo uso no se pide la clave
+        // actual: el usuario ya se autenticó con ella. En los cambios normales
+        // sí se exige para evitar que alguien cambie la clave sin conocerla.
+        if ($verificarActual) {
+            $usuario = $this->usuarioModel->obtenerUsuarioPorCI($ciPersonal);
+            $claveGuardada = (string) ($usuario['ClavePer'] ?? '');
+            $info = password_get_info($claveGuardada);
+            $esHash = (int) ($info['algo'] ?? 0) !== 0;
+            $actualC = (string) $actualC;
+
+            $claveCorrecta = $esHash
+                ? (password_verify($actualC, $claveGuardada)
+                    || (!empty($_SESSION['usuario']['DebeCambiarClave'])
+                        && password_verify(trim($actualC), $claveGuardada)))
+                : hash_equals($claveGuardada, $actualC);
+
+            if (!$claveCorrecta) {
+                echo "La contraseña actual no es válida.";
                 return false;
-            } else {
-                echo "Las nuevas contraseñas no coinciden.";
             }
-        } else {
-            echo "La contraseña actual no es válida.";
         }
+
+        if ($nuevoC1 === '') {
+            echo "La nueva contraseña no puede estar vacía.";
+            return false;
+        }
+
+        if ($nuevoC1 !== $nuevoC2) {
+            echo "Las nuevas contraseñas no coinciden.";
+            return false;
+        }
+
+        $nuevoHash = password_hash($nuevoC1, PASSWORD_DEFAULT);
+        if ($this->usuarioModel->actualizarContrasena($ciPersonal, $nuevoHash)) {
+            unset($_SESSION['usuario']['ClavePer']);
+            $_SESSION['usuario']['DebeCambiarClave'] = 0;
+            return true;
+        }
+
         return false;
     }
 

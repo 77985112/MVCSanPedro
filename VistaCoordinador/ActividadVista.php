@@ -10,7 +10,7 @@ $Catequista = $_SESSION['CiPersona'];
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($_POST) && empty($_FILES)
     && (int) ($_SERVER['CONTENT_LENGTH'] ?? 0) > 0) {
     http_response_code(413);
-    exit('El archivo supera el límite de carga. Use una imagen de hasta 5 MB o un video de hasta 100 MB.');
+    exit('El archivo supera el límite de carga. Use una imagen de hasta 2 MB o un video de hasta 10 MB.');
 }
 
 
@@ -22,6 +22,9 @@ $fechaMinimaActividad = ControladorActividad::fechaMinimaActividad();
 $sesionCoordinador = $_SESSION['CiPersona'] ?? null;
 $esCoordinador = is_array($sesionCoordinador) && ($sesionCoordinador['RolCat'] ?? '') === 'Coordinador';
 $sacramentoCoordinador = $esCoordinador ? (string) ($sesionCoordinador['Sacramento'] ?? '') : '';
+$tipoActividadFijo = in_array($sacramentoCoordinador, ['Primera Comunión', 'Confirmación'], true)
+    ? $sacramentoCoordinador
+    : (($Catequista['Sacramento'] ?? '') === 'Confirmación' ? 'Confirmación' : (($Catequista['Sacramento'] ?? '') === 'Primera Comunión' ? 'Primera Comunión' : 'Parroquia'));
 if (empty($_SESSION['csrf_actividad_eliminar'])) {
     $_SESSION['csrf_actividad_eliminar'] = bin2hex(random_bytes(32));
 }
@@ -88,6 +91,44 @@ $actividadesPrimeraComunion = $controlador->obtenerActividades('Primera Comunió
 $actividadesConfirmacion = $controlador->obtenerActividades('Confirmación');
 $actividadesTodas = $controlador->obtenerActividades();
 
+function renderActividadLista($actividad, $esCoordinador, $sacramentoCoordinador)
+{
+    $idActividad = (int) $actividad['idActividad'];
+    $titulo = htmlspecialchars($actividad['TituloActividad'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    $lugar = htmlspecialchars($actividad['LugarAct'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    $estado = htmlspecialchars($actividad['EstActividad'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    $editable = $esCoordinador && $actividad['TipoActividad'] === $sacramentoCoordinador;
+    ?>
+    <div class="card border-0 shadow-sm">
+        <div class="row g-0 align-items-stretch">
+            <div class="col-4 col-md-3 col-lg-2 position-relative">
+                <div class="h-100 overflow-hidden rounded-start bg-light">
+                    <?php echo ControladorActividad::mediaActividad($actividad, '140px'); ?>
+                </div>
+                <span class="badge bg-<?php echo $actividad['EstActividad'] === 'Activo' ? 'success' : 'danger'; ?> text-white position-absolute top-0 end-0 m-2"><?php echo $estado; ?></span>
+            </div>
+            <div class="col-8 col-md-9 col-lg-10">
+                <div class="card-body py-3">
+                    <h5 class="mb-2"><a href="DetalleActividad.php?idActividad=<?php echo $idActividad; ?>"><?php echo $titulo; ?></a></h5>
+                    <p class="mb-1 small"><i class="bi bi-calendar-check pe-1"></i><?php echo $actividad['FechaActividad']; ?> a <?php echo $actividad['HoraAct']; ?></p>
+                    <p class="mb-0 small"><i class="bi bi-geo-alt pe-1"></i><?php echo $lugar; ?></p>
+                    <?php if ($editable && ControladorActividad::esActividadEditable($actividad)): ?>
+                        <a class="btn btn-primary-soft btn-sm w-100 mt-3" href="DetalleActividad.php?idActividad=<?php echo $idActividad; ?>&amp;editar=1#updateForm">
+                            <i class="bi bi-pencil-square me-1"></i>Editar
+                        </a>
+                    <?php endif; ?>
+                    <?php if ($editable): ?>
+                        <button type="button" class="btn btn-outline-danger btn-sm w-100 mt-2" data-bs-toggle="modal" data-bs-target="#modalEliminarActividad" data-id="<?php echo $idActividad; ?>" data-titulo="<?php echo $titulo; ?>">
+                            <i class="bi bi-trash3 me-1"></i>Eliminar
+                        </button>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+    <?php
+}
+
 require_once '../Controlador/controladorCatCoor.php';
 $contCats = new CatsController();
 $catequistas = $contCats->index($Catequista['CiCat']);
@@ -107,11 +148,12 @@ function getActiveNotifications($conn)
             FROM notificaciones n 
             INNER JOIN catequista c ON n.CiNotificador = c.CiCat 
             INNER JOIN `persona` p ON c.CiCat = p.CiPersona 
-            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ?
+            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ? AND n.Sacramento = ?
             ORDER BY n.FechaNotFin ASC";
 
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("s", $currentDateTime);
+    $sacramentoActual = $_SESSION['CiPersona']['Sacramento'] ?? '';
+    $stmt->bind_param("ss", $currentDateTime, $sacramentoActual);
     $stmt->execute();
     $result = $stmt->get_result();
 
@@ -139,6 +181,12 @@ $activeNotifications = getActiveNotifications($conn);
     <link rel="stylesheet" type="text/css" href="../assets/vendor/bootstrap-icons/bootstrap-icons.css">
     <link rel="stylesheet" type="text/css" href="../assets/css/style.css">
     <link rel="stylesheet" type="text/css" href="../assets/css/logo-cabecera.css?v=<?= filemtime(__DIR__ . '/../assets/css/logo-cabecera.css') ?>">
+    <style>
+        /* Contiene el contenido de actividades dentro de la pantalla */
+        .actividades-contenido { min-width: 0; }
+        .actividades-contenido .nav-tabs { flex-wrap: wrap; row-gap: .35rem; }
+        .actividades-contenido .card-header .btn { white-space: nowrap; }
+    </style>
     <script src="../assets/js/jquery-3.6.4.min.js"></script>
 </head>
 
@@ -223,11 +271,6 @@ $activeNotifications = getActiveNotifications($conn);
                             <a class="dropdown-item" href="ReunionesCat.php"><i class="fa-fw bi bi-calendar2-check me-2"></i>Fecha de Reuniones</a>
                         </li>
                         <li>
-                            <a class="dropdown-item" href="Documentos.php">
-                                <i class="fa-fw bi bi-card-text me-2"></i>Documentación
-                            </a>
-                        </li>
-                        <li>
                             <a class="dropdown-item" href="Reglamento.php">
                                 <i class="fa-fw bi bi-list-check me-2"></i>Reglamento
                             </a>
@@ -274,7 +317,7 @@ $activeNotifications = getActiveNotifications($conn);
         </div>
         <div class="row justify-content-between g-0">
 
-            <div class="col-md-2 col-lg-3 col-xxl-4 mt-n4">
+            <div class="col-md-2 col-lg-3 col-xxl-2 mt-n4">
                 <div class="nav-sidenav p-4 bg-mode h-100 custom-scrollbar">
                     <div class="d-flex justify-content-end d-lg-none mb-2">
                         <button class="btn btn-light btn-sm sidebar-start-close" type="button" aria-label="Cerrar menú"><i class="bi bi-x-lg"></i></button>
@@ -308,31 +351,23 @@ $activeNotifications = getActiveNotifications($conn);
                             <a class="nav-link" href="VistaPersona.php"> <i class="<bi bi-person-vcard nav-icon"></i> <span class="nav-text">Persona </span></a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="Configuracion.php"> <i class="bi bi-gear-wide-connected nav-icon"></i> <span class="nav-text">Configuración </span></a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="VistaTodosCat.php"> <i class="bi bi-calendar-check nav-icon"></i> <span class="nav-text">Listado Catequistas</span></a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="VistaTodosCat.php"> <i class="bi bi-file-earmark-text nav-icon"></i> <span class="nav-text">Reporte </span></a>
-                        </li>
-                        <h6 class="nav-text badge bg-primary text-white mt-2 me-2 border border-white border-3 rounded"><i class="bi bi-caret-down-fill"></i>&nbsp;&nbsp; Publico</h6>
-                        <li class="nav-item">
-                            <a class="nav-link" href="VistaMensajeCoor.php"> <i class="bi bi-file-earmark-text nav-icon"></i> <span class="nav-text">Mensaje Público</span></a>
+                            <a class="nav-link" href="VistaTodosCat.php"> <i class="bi bi-calendar-check nav-icon"></i> <span class="nav-text">Reporte Activos Inactivos</span></a>
                         </li>
                     </ul>
                 </div>
             </div>
 
 
-            <section class="pt-0 ">
-                <div class="container">
+            <section class="pt-0 col-md-10 col-lg-9 col-xxl-10 pe-4 actividades-contenido">
+                <div class="container-fluid px-3">
                     <div class="card">
 
-                        <div class="card-header d-sm-flex align-items-center text-center justify-content-sm-between border-0 pb-0 py-5">
-                            <h1 class="h4 card-title">Actividades Registradas</h1>
-                            <div class="mb-3 d-flex align-items-end">
-                                <button type="button" class="btn btn-primary-soft me-2" data-bs-toggle="modal" data-bs-target="#feedActionActividad"><i class="bi bi-plus-circle"></i></button>
+                        <div class="card-header border-0 pb-0 py-4">
+                            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                                <h1 class="h4 card-title mb-0">Actividades Registradas</h1>
+                                <button type="button" class="btn btn-primary-soft flex-shrink-0" data-bs-toggle="modal" data-bs-target="#feedActionActividad">
+                                    <i class="bi bi-plus-circle me-1"></i>Nueva actividad
+                                </button>
                             </div>
                         </div>
 
@@ -352,156 +387,55 @@ $activeNotifications = getActiveNotifications($conn);
                             <div class="tab-content mb-0 pb-0">
 
                                 <div class="tab-pane fade show active" id="tab-1">
-                                    <div class="row g-4">
-                                        <?php if (empty($actividadesTodas)): ?>
-                                            <div class="my-sm-5 py-sm-5 text-center">
-                                                <i class="display-1 text-body-secondary bi bi-calendar2-event"></i>
-                                                <h4 class="mt-2 mb-3 text-body">No hay Actividades</h4>
-                                            </div>
-                                        <?php else: ?>
-                                            <?php foreach ($actividadesTodas as $actividad): ?>
-                                                <div class="col-sm-6 col-xl-4">
-                                                    <div class="card h-100">
-                                                        <div class="position-relative">
-                    <?php echo ControladorActividad::mediaActividad($actividad, '150px'); ?>
-                                                            <div class="badge bg-<?php echo $actividad['EstActividad'] == 'Activo' ? 'success' : 'danger'; ?> text-white mt-2 me-2 position-absolute top-0 end-0"><?php echo $actividad['EstActividad']; ?></div>
-                                                        </div>
-                                                        <div class="card-body position-relative pt-0">
-                                                            <input type="hidden" value="<?php echo $actividad['idActividad']; ?>">
-                                                            <h6 class="mt-3"><a href="DetalleActividad.php?idActividad=<?php echo $actividad['idActividad']; ?>"><?php echo htmlspecialchars($actividad['TituloActividad'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></a></h6>
-                                                            <p class="mb-0 small"><i class="bi bi-calendar-check pe-1"></i><?php echo $actividad['FechaActividad']; ?> a <?php echo $actividad['HoraAct']; ?></p>
-                                                            <p class="small"><i class="bi bi-geo-alt pe-1"></i><?php echo htmlspecialchars($actividad['LugarAct'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></p>
-                                                            <?php if ($esCoordinador && $actividad['TipoActividad'] === $sacramentoCoordinador && ControladorActividad::esActividadEditable($actividad)): ?>
-                                                                <a class="btn btn-primary-soft btn-sm w-100 mt-3" href="DetalleActividad.php?idActividad=<?php echo (int) $actividad['idActividad']; ?>&amp;editar=1#updateForm">
-                                                                    <i class="bi bi-pencil-square me-1"></i>Editar
-                                                                </a>
-                                                            <?php endif; ?>
-                                                            <?php if ($esCoordinador && $actividad['TipoActividad'] === $sacramentoCoordinador): ?>
-                                                                <button type="button" class="btn btn-outline-danger btn-sm w-100 mt-3" data-bs-toggle="modal" data-bs-target="#modalEliminarActividad" data-id="<?php echo $actividad['idActividad']; ?>" data-titulo="<?php echo htmlspecialchars($actividad['TituloActividad'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>">
-                                                                    <i class="bi bi-trash3 me-1"></i>Eliminar
-                                                                </button>
-                                                            <?php endif; ?>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            <?php endforeach; ?>
-                                        <?php endif; ?>
-                                    </div>
+                                    <?php if (empty($actividadesTodas)): ?>
+                                        <div class="my-sm-5 py-sm-5 text-center">
+                                            <i class="display-1 text-body-secondary bi bi-calendar2-event"></i>
+                                            <h4 class="mt-2 mb-3 text-body">No hay Actividades</h4>
+                                        </div>
+                                    <?php else: ?>
+                                        <div class="vstack gap-3">
+                                            <?php foreach ($actividadesTodas as $actividad) { renderActividadLista($actividad, $esCoordinador, $sacramentoCoordinador); } ?>
+                                        </div>
+                                    <?php endif; ?>
                                 </div>
 
                                 <div class="tab-pane fade" id="tab-2">
-                                    <div class="row g-4">
-                                        <?php if (empty($actividadesParroquia)): ?>
-                                            <div class="my-sm-5 py-sm-5 text-center">
-                                                <i class="display-1 text-body-secondary bi bi-calendar2-event"></i>
-                                                <h4 class="mt-2 mb-3 text-body">No hay Actividades</h4>
-                                            </div>
-                                        <?php else: ?>
-                                            <?php foreach ($actividadesParroquia as $actividad): ?>
-                                                <div class="col-sm-6 col-xl-4">
-                                                    <div class="card h-100">
-                                                        <div class="position-relative">
-                    <?php echo ControladorActividad::mediaActividad($actividad, '150px'); ?>
-                                                            <div class="badge bg-<?php echo $actividad['EstActividad'] == 'Activo' ? 'success' : 'danger'; ?> text-white mt-2 me-2 position-absolute top-0 end-0"><?php echo $actividad['EstActividad']; ?></div>
-                                                        </div>
-                                                        <div class="card-body position-relative pt-0">
-                                                            <input type="hidden" value="<?php echo $actividad['idActividad']; ?>">
-                                                            <h6 class="mt-3"><a href="DetalleActividad.php?idActividad=<?php echo $actividad['idActividad']; ?>"><?php echo htmlspecialchars($actividad['TituloActividad'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></a></h6>
-                                                            <p class="mb-0 small"><i class="bi bi-calendar-check pe-1"></i><?php echo $actividad['FechaActividad']; ?> a <?php echo $actividad['HoraAct']; ?></p>
-                                                            <p class="small"><i class="bi bi-geo-alt pe-1"></i><?php echo htmlspecialchars($actividad['LugarAct'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></p>
-                                                            <?php if ($esCoordinador && $actividad['TipoActividad'] === $sacramentoCoordinador && ControladorActividad::esActividadEditable($actividad)): ?>
-                                                                <a class="btn btn-primary-soft btn-sm w-100 mt-3" href="DetalleActividad.php?idActividad=<?php echo (int) $actividad['idActividad']; ?>&amp;editar=1#updateForm">
-                                                                    <i class="bi bi-pencil-square me-1"></i>Editar
-                                                                </a>
-                                                            <?php endif; ?>
-                                                            <?php if ($esCoordinador && $actividad['TipoActividad'] === $sacramentoCoordinador): ?>
-                                                                <button type="button" class="btn btn-outline-danger btn-sm w-100 mt-3" data-bs-toggle="modal" data-bs-target="#modalEliminarActividad" data-id="<?php echo $actividad['idActividad']; ?>" data-titulo="<?php echo htmlspecialchars($actividad['TituloActividad'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>">
-                                                                    <i class="bi bi-trash3 me-1"></i>Eliminar
-                                                                </button>
-                                                            <?php endif; ?>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            <?php endforeach; ?>
-                                        <?php endif; ?>
-                                    </div>
+                                    <?php if (empty($actividadesParroquia)): ?>
+                                        <div class="my-sm-5 py-sm-5 text-center">
+                                            <i class="display-1 text-body-secondary bi bi-calendar2-event"></i>
+                                            <h4 class="mt-2 mb-3 text-body">No hay Actividades</h4>
+                                        </div>
+                                    <?php else: ?>
+                                        <div class="vstack gap-3">
+                                            <?php foreach ($actividadesParroquia as $actividad) { renderActividadLista($actividad, $esCoordinador, $sacramentoCoordinador); } ?>
+                                        </div>
+                                    <?php endif; ?>
                                 </div>
 
                                 <div class="tab-pane fade" id="tab-3">
-                                    <div class="row g-4">
-                                        <?php if (empty($actividadesPrimeraComunion)): ?>
-                                            <div class="my-sm-5 py-sm-5 text-center">
-                                                <i class="display-1 text-body-secondary bi bi-calendar2-event"></i>
-                                                <h4 class="mt-2 mb-3 text-body">No hay Actividades</h4>
-                                            </div>
-                                        <?php else: ?>
-                                            <?php foreach ($actividadesPrimeraComunion as $actividad): ?>
-                                                <div class="col-sm-6 col-xl-4">
-                                                    <div class="card h-100">
-                                                        <div class="position-relative">
-                    <?php echo ControladorActividad::mediaActividad($actividad, '150px'); ?>
-                                                            <div class="badge bg-<?php echo $actividad['EstActividad'] == 'Activo' ? 'success' : 'danger'; ?> text-white mt-2 me-2 position-absolute top-0 end-0"><?php echo $actividad['EstActividad']; ?></div>
-                                                        </div>
-                                                        <div class="card-body position-relative pt-0">
-                                                            <input type="hidden" value="<?php echo $actividad['idActividad']; ?>">
-                                                            <h6 class="mt-3"><a href="DetalleActividad.php?idActividad=<?php echo $actividad['idActividad']; ?>"><?php echo htmlspecialchars($actividad['TituloActividad'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></a></h6>
-                                                            <p class="mb-0 small"><i class="bi bi-calendar-check pe-1"></i><?php echo $actividad['FechaActividad']; ?> a <?php echo $actividad['HoraAct']; ?></p>
-                                                            <p class="small"><i class="bi bi-geo-alt pe-1"></i><?php echo htmlspecialchars($actividad['LugarAct'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></p>
-                                                            <?php if ($esCoordinador && $actividad['TipoActividad'] === $sacramentoCoordinador && ControladorActividad::esActividadEditable($actividad)): ?>
-                                                                <a class="btn btn-primary-soft btn-sm w-100 mt-3" href="DetalleActividad.php?idActividad=<?php echo (int) $actividad['idActividad']; ?>&amp;editar=1#updateForm">
-                                                                    <i class="bi bi-pencil-square me-1"></i>Editar
-                                                                </a>
-                                                            <?php endif; ?>
-                                                            <?php if ($esCoordinador && $actividad['TipoActividad'] === $sacramentoCoordinador): ?>
-                                                                <button type="button" class="btn btn-outline-danger btn-sm w-100 mt-3" data-bs-toggle="modal" data-bs-target="#modalEliminarActividad" data-id="<?php echo $actividad['idActividad']; ?>" data-titulo="<?php echo htmlspecialchars($actividad['TituloActividad'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>">
-                                                                    <i class="bi bi-trash3 me-1"></i>Eliminar
-                                                                </button>
-                                                            <?php endif; ?>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            <?php endforeach; ?>
-                                        <?php endif; ?>
-                                    </div>
+                                    <?php if (empty($actividadesPrimeraComunion)): ?>
+                                        <div class="my-sm-5 py-sm-5 text-center">
+                                            <i class="display-1 text-body-secondary bi bi-calendar2-event"></i>
+                                            <h4 class="mt-2 mb-3 text-body">No hay Actividades</h4>
+                                        </div>
+                                    <?php else: ?>
+                                        <div class="vstack gap-3">
+                                            <?php foreach ($actividadesPrimeraComunion as $actividad) { renderActividadLista($actividad, $esCoordinador, $sacramentoCoordinador); } ?>
+                                        </div>
+                                    <?php endif; ?>
                                 </div>
 
                                 <div class="tab-pane fade" id="tab-4">
-                                    <div class="row g-4">
-                                        <?php if (empty($actividadesConfirmacion)): ?>
-                                            <div class="my-sm-5 py-sm-5 text-center">
-                                                <i class="display-1 text-body-secondary bi bi-calendar2-event"></i>
-                                                <h4 class="mt-2 mb-3 text-body">No hay Actividades</h4>
-                                            </div>
-                                        <?php else: ?>
-                                            <?php foreach ($actividadesConfirmacion as $actividad): ?>
-                                                <div class="col-sm-6 col-xl-4">
-                                                    <div class="card h-100">
-                                                        <div class="position-relative">
-                    <?php echo ControladorActividad::mediaActividad($actividad, '150px'); ?>
-                                                            <div class="badge bg-<?php echo $actividad['EstActividad'] == 'Activo' ? 'success' : 'danger'; ?> text-white mt-2 me-2 position-absolute top-0 end-0"><?php echo $actividad['EstActividad']; ?></div>
-                                                        </div>
-                                                        <div class="card-body position-relative pt-0">
-                                                            <input type="hidden" value="<?php echo $actividad['idActividad']; ?>">
-                                                            <h6 class="mt-3"><a href="DetalleActividad.php?idActividad=<?php echo $actividad['idActividad']; ?>"><?php echo htmlspecialchars($actividad['TituloActividad'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></a></h6>
-                                                            <p class="mb-0 small"><i class="bi bi-calendar-check pe-1"></i><?php echo $actividad['FechaActividad']; ?> a <?php echo $actividad['HoraAct']; ?></p>
-                                                            <p class="small"><i class="bi bi-geo-alt pe-1"></i><?php echo htmlspecialchars($actividad['LugarAct'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></p>
-                                                            <?php if ($esCoordinador && $actividad['TipoActividad'] === $sacramentoCoordinador && ControladorActividad::esActividadEditable($actividad)): ?>
-                                                                <a class="btn btn-primary-soft btn-sm w-100 mt-3" href="DetalleActividad.php?idActividad=<?php echo (int) $actividad['idActividad']; ?>&amp;editar=1#updateForm">
-                                                                    <i class="bi bi-pencil-square me-1"></i>Editar
-                                                                </a>
-                                                            <?php endif; ?>
-                                                            <?php if ($esCoordinador && $actividad['TipoActividad'] === $sacramentoCoordinador): ?>
-                                                                <button type="button" class="btn btn-outline-danger btn-sm w-100 mt-3" data-bs-toggle="modal" data-bs-target="#modalEliminarActividad" data-id="<?php echo $actividad['idActividad']; ?>" data-titulo="<?php echo htmlspecialchars($actividad['TituloActividad'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>">
-                                                                    <i class="bi bi-trash3 me-1"></i>Eliminar
-                                                                </button>
-                                                            <?php endif; ?>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            <?php endforeach; ?>
-                                        <?php endif; ?>
-
-                                    </div>
+                                    <?php if (empty($actividadesConfirmacion)): ?>
+                                        <div class="my-sm-5 py-sm-5 text-center">
+                                            <i class="display-1 text-body-secondary bi bi-calendar2-event"></i>
+                                            <h4 class="mt-2 mb-3 text-body">No hay Actividades</h4>
+                                        </div>
+                                    <?php else: ?>
+                                        <div class="vstack gap-3">
+                                            <?php foreach ($actividadesConfirmacion as $actividad) { renderActividadLista($actividad, $esCoordinador, $sacramentoCoordinador); } ?>
+                                        </div>
+                                    <?php endif; ?>
                                 </div>
                             </div>
                         </div>
@@ -590,7 +524,7 @@ $activeNotifications = getActiveNotifications($conn);
 
 
 <div class="modal fade" id="feedActionActividad" tabindex="-1" aria-labelledby="feedActionActividad" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="feedActionPhotoLabel">Registrar Nueva Actividad</h5>
@@ -606,49 +540,55 @@ $activeNotifications = getActiveNotifications($conn);
                     </div>
                 </div>
                 <div class="w-100">
-                    <textarea class="form-control pe-4 fs-3 lh-1 border-0" name="DetalleActividad" rows="4" maxlength="<?php echo ControladorActividad::LIMITE_DESCRIPCION; ?>" aria-describedby="ayudaDescripcionActividad" placeholder="Detalle de la Actividad..." required></textarea>
+                    <textarea class="form-control" name="DetalleActividad" rows="4" maxlength="<?php echo ControladorActividad::LIMITE_DESCRIPCION; ?>" aria-describedby="ayudaDescripcionActividad" placeholder="Detalle de la Actividad..." required></textarea>
                     <div id="ayudaDescripcionActividad" class="form-text">Hasta 5.000 caracteres.</div>
                 </div>
                 <hr>
 
-                <div class="col-sm-6 col-lg-4 form-group">
+                <div class="col-sm-6 col-lg-6 form-group">
                     <label for="FechaActividad">Fecha:</label>
                     <input type="date" class="form-control" name="FechaActividad" id="FechaActividad" min="<?php echo $fechaMinimaActividad; ?>" required>
                     <div class="form-text">Solo puede registrar fechas desde hoy en adelante; al pasar la fecha la actividad quedará concluida automáticamente.</div>
                 </div>
-                <div class="col-sm-6 col-lg-4 form-group">
+                <div class="col-sm-6 col-lg-6 form-group">
                     <label for="HoraAct">Hora:</label>
                     <input type="time" class="form-control" name="HoraAct" id="HoraAct" required>
                 </div>
 
+                <input type="hidden" name="TipoActividad" id="tipoActividadFormulario" value="<?php echo htmlspecialchars($tipoActividadFijo, ENT_QUOTES, 'UTF-8'); ?>">
                 <input type="hidden" name="ImagenActividad" id="ImagenActividad">
 
-                <input type="hidden" name="TipoActividad" id="tipoActividadFormulario" value="Parroquia">
-
-                <div class="col-sm-6 col-lg-8 form-group">
+                <div class="col-12 form-group">
                     <label for="LugarAct">Lugar de Actividad:</label>
                     <input type="text" class="form-control" name="LugarAct" maxlength="<?php echo ControladorActividad::LIMITE_LUGAR; ?>" aria-describedby="ayudaLugarActividad" required>
                     <div id="ayudaLugarActividad" class="form-text">Hasta 255 caracteres; puede incluir la dirección y referencias.</div>
                 </div>
 
+                <div class="col-12 form-group">
+                    <label for="VideoUrl">Enlace de video (YouTube, TikTok o Facebook):</label>
+                    <input type="url" class="form-control" name="VideoUrl" id="VideoUrl" maxlength="255" placeholder="https://www.youtube.com/watch?v=...">
+                    <div class="form-text">Opcional. También puede subir un video MP4/WebM.</div>
+                    <div id="previewVideoUrl" class="mt-2"></div>
+                </div>
+
                 <input type="hidden" name="CiCat" value="<?php echo $Catequista['CiCat'] ?>" required>
                 <br>
                 <div>
-                    <label class="form-label">Agregue una imagen o un video de la actividad</label>
+                    <label class="form-label">Agregue una imagen, un video o un enlace de la actividad</label>
                     <div class="card shadow-none p-3">
                         <div class="row g-3">
                             <div class="col-sm-6">
-                                <label class="form-label small mb-1" for="NuevaImagenActividad">Imágenes (JPG/PNG, hasta 5 MB c/u, máximo 7)</label>
+                                <label class="form-label small mb-1" for="NuevaImagenActividad">Imágenes (JPG/PNG, hasta 2 MB c/u, máximo 5)</label>
                                 <input type="file" class="form-control py-2" id="NuevaImagenActividad" name="NuevaImagenActividad[]" multiple accept=".jpg,.jpeg,.png,image/jpeg,image/png" data-actividad-imagen="previewImagen" data-actividad-grupo="actividadCoordinador" data-actividad-requerido="true" data-actividad-maximas="<?php echo ControladorActividad::MAXIMO_IMAGENES; ?>">
                             </div>
                             <div class="col-sm-6">
-                                <label class="form-label small mb-1" for="NuevaVideoActividad">Video (MP4/WebM, hasta 100 MB)</label>
+                                <label class="form-label small mb-1" for="NuevaVideoActividad">Video (MP4/WebM, hasta 10 MB)</label>
                                 <input type="file" class="form-control py-2" id="NuevaVideoActividad" name="NuevaVideoActividad" accept=".mp4,.webm,video/mp4,video/webm" data-actividad-video="previewVideo" data-actividad-grupo="actividadCoordinador" data-actividad-requerido="true">
                                 <video id="previewVideo" class="w-100 rounded mt-3 d-none actividad-video" controls playsinline preload="metadata" style="max-height:300px;"></video>
                             </div>
                         </div>
                         <div id="previewImagen" class="d-flex flex-wrap gap-2 mt-3"></div>
-                        <div class="form-text mt-2">Puede adjuntar hasta 7 imágenes (JPG/PNG, hasta 5 MB c/u) y/o un video; al menos uno es obligatorio. La primera imagen será la principal.</div>
+                        <div class="form-text mt-2">Puede adjuntar hasta 5 imágenes (JPG/PNG, hasta 2 MB c/u), un video MP4/WebM o pegar un enlace de YouTube, TikTok o Facebook. La primera imagen será la principal.</div>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -688,18 +628,6 @@ $activeNotifications = getActiveNotifications($conn);
 
 <script>
     (function () {
-        // El tipo de actividad se toma de la pestaña desde la que se abre el formulario
-        // (Todos/Parroquia -> Parroquia, Primera Comunión -> Primera Comunión, Confirmación -> Confirmación).
-        var tiposPorPestana = { 'tab-1': 'Parroquia', 'tab-2': 'Parroquia', 'tab-3': 'Primera Comunión', 'tab-4': 'Confirmación' };
-        var modalNueva = document.getElementById('feedActionActividad');
-        if (modalNueva) {
-            modalNueva.addEventListener('show.bs.modal', function () {
-                var activa = document.querySelector('.nav-tabs .nav-link.active');
-                var pestana = activa ? (activa.getAttribute('href') || '').replace('#', '') : '';
-                var campo = document.getElementById('tipoActividadFormulario');
-                if (campo) campo.value = tiposPorPestana[pestana] || 'Parroquia';
-            });
-        }
         // Modal de eliminar: carga el id y el título de la tarjeta elegida.
         var modalEliminar = document.getElementById('modalEliminarActividad');
         if (modalEliminar && window.bootstrap) {
@@ -710,6 +638,70 @@ $activeNotifications = getActiveNotifications($conn);
                 document.getElementById('eliminarActividadTitulo').textContent = boton.getAttribute('data-titulo') || '';
             });
         }
+    })();
+</script>
+<script>
+    // Vista previa del video por enlace (YouTube, TikTok o Facebook).
+    (function () {
+        var campo = document.getElementById('VideoUrl');
+        var caja = document.getElementById('previewVideoUrl');
+        if (!campo || !caja) return;
+
+        function embed(url) {
+            var u;
+            try { u = new URL(url); } catch (e) { return null; }
+            var host = u.hostname.toLowerCase().replace(/^www\./, '');
+            var ruta = u.pathname || '';
+            var m;
+
+            if (['youtube.com', 'm.youtube.com', 'youtube-nocookie.com'].indexOf(host) >= 0) {
+                var id = u.searchParams.get('v') || '';
+                if (!id && (m = ruta.match(/^\/(?:shorts|embed|live|v)\/([A-Za-z0-9_-]{6,20})/))) id = m[1];
+                return /^[A-Za-z0-9_-]{6,20}$/.test(id) ? 'https://www.youtube.com/embed/' + id : null;
+            }
+            if (host === 'youtu.be') {
+                m = ruta.match(/^\/([A-Za-z0-9_-]{6,20})/);
+                return m ? 'https://www.youtube.com/embed/' + m[1] : null;
+            }
+            if (host === 'tiktok.com' || host === 'm.tiktok.com') {
+                m = ruta.match(/\/video\/(\d{6,25})/);
+                return m ? 'https://www.tiktok.com/embed/v2/' + m[1] : null;
+            }
+            if (['facebook.com', 'm.facebook.com', 'web.facebook.com', 'fb.watch'].indexOf(host) >= 0) {
+                return 'https://www.facebook.com/plugins/video.php?href=' + encodeURIComponent(url) + '&show_text=false';
+            }
+            return null;
+        }
+
+        function actualizar() {
+            var valor = campo.value.trim();
+            caja.replaceChildren();
+            if (!valor) return;
+
+            var src = embed(valor);
+            if (!src) {
+                var error = document.createElement('div');
+                error.className = 'form-text text-danger';
+                error.textContent = 'Use un enlace de YouTube, TikTok o Facebook.';
+                caja.appendChild(error);
+                return;
+            }
+
+            var marco = document.createElement('iframe');
+            marco.src = src;
+            marco.className = 'w-100 rounded';
+            marco.style.cssText = 'height:340px;border:0;background:#101722;';
+            marco.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share');
+            marco.setAttribute('allowfullscreen', '');
+            marco.setAttribute('loading', 'lazy');
+            marco.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+            marco.title = 'Vista previa del video';
+            caja.appendChild(marco);
+        }
+
+        campo.addEventListener('input', actualizar);
+        campo.addEventListener('change', actualizar);
+        actualizar();
     })();
 </script>
 <script>
@@ -761,6 +753,7 @@ $activeNotifications = getActiveNotifications($conn);
 <script src="../assets/js/functions.js"></script>
 <script src="../assets/js/tema.js"></script>
   <script src="../assets/js/actividad-multimedia.js?v=<?php echo filemtime(__DIR__ . '/../assets/js/actividad-multimedia.js'); ?>"></script>
+    <script src="../assets/js/actividad-compresion.js?v=<?php echo filemtime(__DIR__ . '/../assets/js/actividad-compresion.js'); ?>"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         var abrir = document.querySelector('.sidebar-start-toggle-mobile');

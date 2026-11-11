@@ -6,6 +6,13 @@ if (!isset($_SESSION['CiPersona'])) {
 }
 $Catequista = $_SESSION['CiPersona'];
 
+if (($Catequista['RolCat'] ?? '') !== 'Titular'
+    && ($Catequista['PoderCat'] ?? '') !== 'Habilitado'
+    && empty($Catequista['PuedeAsistenciaApoderados'])) {
+    header('Location: VistaCatequista.php');
+    exit;
+}
+
 require_once '../Controlador/controladorReunion.php';
 
 $conexion = new Conexion();
@@ -23,6 +30,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 }
 $idGrupo = $Catequista['IdGrupo'];
 
+$fechasReuniones = $controlador->obtenerReunion($Catequista['Sacramento']);
+
 $celebrantes = $controlador->obtenerCelebrantes($idGrupo);
 
 
@@ -38,11 +47,12 @@ function getActiveNotifications($conn)
             FROM notificaciones n 
             INNER JOIN catequista c ON n.CiNotificador = c.CiCat 
             INNER JOIN `persona` p ON c.CiCat = p.CiPersona 
-            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ?
+            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ? AND n.Sacramento = ?
             ORDER BY n.FechaNotFin ASC";
 
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("s", $currentDateTime);
+    $sacramentoActual = $_SESSION['CiPersona']['Sacramento'] ?? '';
+    $stmt->bind_param("ss", $currentDateTime, $sacramentoActual);
     $stmt->execute();
     $result = $stmt->get_result();
 
@@ -145,11 +155,6 @@ $activeNotifications = getActiveNotifications($conn);
                             </li>
                             <li>
                                 <a class="dropdown-item" href="ReunionesCat.php"><i class="fa-fw bi bi-calendar2-check me-2"></i>Fecha de Reuniones</a>
-                            </li>
-                            <li>
-                                <a class="dropdown-item" href="Documentos.php">
-                                    <i class="fa-fw bi bi-card-text me-2"></i>Documentación
-                                </a>
                             </li>
                             <li>
                                 <a class="dropdown-item" href="Reglamento.php">
@@ -269,7 +274,7 @@ $activeNotifications = getActiveNotifications($conn);
                                             <li class="nav-item">
                                                 <a class="nav-link" href="VistaCelebranteAsis.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/ListaCelebrante.png" alt=""><span>Asistencia a Catquesis </span></a>
                                             </li>
-                                            <?php if ($Catequista['PoderCat'] == "Habilitado") { ?>
+                                            <?php if ($Catequista['PoderCat'] == "Habilitado" || !empty($Catequista['PuedeRegistrarCatequizandos'])) { ?>
                                                 <li class="nav-item">
                                                     <a class="nav-link" href="VistaDocCel.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/Documentos.png" alt=""><span>Registros</span></a>
                                                 </li>
@@ -311,18 +316,44 @@ $activeNotifications = getActiveNotifications($conn);
                                             <form method="POST" class="row align-items-end g-4">
                                                 <div class="col-sm-6 col-lg-6">
                                                     <label for="fecha" class="form-label">Fecha Actual:</label>
-                                                    <input type="date" name="fecha" id="fecha" class="form-control">
+                                                    <input type="date" name="fecha" id="fecha" class="form-control" value="<?php echo htmlspecialchars($_POST['fecha'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
                                                 </div>
                                                 <div class="col-sm-6 col-lg-6">
                                                     <button type="submit" class="btn btn-primary-soft w-100" data-bs-toggle="tooltip" data-bs-placement="top" title="Buscar"><i class="bi bi-search"></i></button>
                                                 </div>
 
+                                                <div class="col-12">
+                                                    <?php if (!empty($fechasReuniones)): ?>
+                                                        <label class="form-label small text-muted mb-1">Fechas registradas (hacé clic para seleccionar):</label>
+                                                        <div class="d-flex flex-wrap gap-2">
+                                                            <?php foreach ($fechasReuniones as $fechaReunion): ?>
+                                                                <button type="button"
+                                                                        class="btn btn-sm btn-outline-primary text-start fecha-reunion"
+                                                                        data-fecha="<?php echo htmlspecialchars($fechaReunion['FechaReu'], ENT_QUOTES, 'UTF-8'); ?>"
+                                                                        title="<?php echo htmlspecialchars($fechaReunion['DetalleReu'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+                                                                    <span class="d-block">
+                                                                        <i class="bi bi-calendar-event me-1"></i>
+                                                                        <?php echo date('d/m/Y', strtotime($fechaReunion['FechaReu'])); ?>
+                                                                        <?php if (!empty($fechaReunion['HoraReu'])): ?>
+                                                                            · <?php echo date('H:i', strtotime($fechaReunion['HoraReu'])); ?>
+                                                                        <?php endif; ?>
+                                                                    </span>
+                                                                    <?php if (!empty($fechaReunion['DetalleReu'])): ?>
+                                                                        <span class="d-block small fw-normal"><?php echo htmlspecialchars($fechaReunion['DetalleReu'], ENT_QUOTES, 'UTF-8'); ?></span>
+                                                                    <?php endif; ?>
+                                                                </button>
+                                                            <?php endforeach; ?>
+                                                        </div>
+                                                    <?php else: ?>
+                                                        <div class="alert alert-warning mb-0 py-2 small">No hay reuniones registradas.</div>
+                                                    <?php endif; ?>
+                                                </div>
                                             </form>
                                             <br>
-											<form action="ReuAct_pdf.php" method="post">
+											<form action="ReuAct_pdf.php" method="post" target="_blank">
 												<input type="hidden" value="<?php echo $idGrupo; ?>" name="idGrupo">
 												<input type="hidden" value="<?php echo $Catequista['NombreGrupo'];; ?>" name="NombreGr">
-												<button type="submit" class="btn btn-primary-soft w-100" target="_blank" data-bs-toggle="tooltip" data-bs-placement="top" title="PDF de Reunión y Actividades">
+												<button type="submit" class="btn btn-primary-soft w-100" data-bs-toggle="tooltip" data-bs-placement="top" title="PDF de Reunión y Actividades">
 													<i class="bi bi-file-earmark-spreadsheet"></i> Generar PDF de las Asistencias
 												</button>
 											</form>
@@ -431,6 +462,7 @@ $activeNotifications = getActiveNotifications($conn);
     <script>
         function setCurrentDate() {
             var fechaInput = document.getElementById('fecha');
+            if (!fechaInput || fechaInput.value) return;
 
             var today = new Date();
             var year = today.getFullYear();
@@ -441,6 +473,23 @@ $activeNotifications = getActiveNotifications($conn);
             fechaInput.value = todayDate;
         }
         window.onload = setCurrentDate;
+
+        // Al hacer clic en una fecha registrada, se coloca en el campo para buscar.
+        document.addEventListener('DOMContentLoaded', function() {
+            var fechaInput = document.getElementById('fecha');
+            var botonesFecha = document.querySelectorAll('.fecha-reunion');
+            botonesFecha.forEach(function(boton) {
+                boton.addEventListener('click', function() {
+                    if (!fechaInput) return;
+                    fechaInput.value = this.getAttribute('data-fecha');
+                    botonesFecha.forEach(function(b) {
+                        b.classList.remove('active');
+                    });
+                    this.classList.add('active');
+                    fechaInput.focus();
+                });
+            });
+        });
 
         $(document).ready(function() {
             function obtenerEstado() {

@@ -100,9 +100,10 @@ class AsistenciaApoderadoModel
         return $idReunion;
     }
 
-    public function obtenerReunion()
+    public function obtenerReunion($sacramento)
     {
-        $stmt = $this->conn->prepare("SELECT * FROM `reunioncel`");
+        $stmt = $this->conn->prepare("SELECT * FROM `reunioncel` WHERE Sacramento = ? ORDER BY FechaReu, HoraReu");
+        $stmt->bind_param("s", $sacramento);
         $stmt->execute();
         return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
     }

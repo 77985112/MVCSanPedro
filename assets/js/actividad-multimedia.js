@@ -10,32 +10,37 @@
         const base = parseInt(entrada.dataset.actividadMaximas, 10);
         let maximo = Number.isNaN(base) ? 7 : Math.max(0, base);
         const quitarTodas = entrada.form && entrada.form.querySelector('input[data-quitar-actividad="' + entrada.id + '"]');
-        if (quitarTodas && quitarTodas.checked) return 7;
+        if (quitarTodas && quitarTodas.checked) return 5;
         const galeria = document.getElementById(entrada.dataset.actividadGaleria || '');
         if (galeria) maximo += galeria.querySelectorAll('input[name="QuitarImagenExtra[]"]:checked').length;
-        return Math.min(7, maximo);
+        return Math.min(5, maximo);
     }
     function errorArchivo(entrada) {
         const archivos = Array.from(entrada.files || []);
         const esVideo = entrada.hasAttribute('data-actividad-video');
         if (!esVideo && archivos.length > maximasDe(entrada)) {
-            return 'Puede agregar hasta ' + maximasDe(entrada) + ' imágenes más. El máximo por actividad es 7; quite alguna para liberar espacio.';
+            return 'Puede agregar hasta ' + maximasDe(entrada) + ' imágenes más. El máximo por actividad es 5; quite alguna para liberar espacio.';
         }
         const extensiones = esVideo ? ['mp4', 'webm'] : ['jpg', 'jpeg', 'png'];
-        const maximo = (esVideo ? 100 : 5) * 1024 * 1024;
+        const maximo = (esVideo ? 10 : 2) * 1024 * 1024;
         return archivos.some(function (archivo) {
             return !extensiones.includes(archivo.name.split('.').pop().toLowerCase())
                 || archivo.size === 0 || archivo.size > maximo;
-        }) ? (esVideo ? 'Seleccione un video MP4/WebM de hasta 100 MB.'
-            : 'Seleccione imágenes JPG/PNG de hasta 5 MB cada una.') : '';
+        }) ? (esVideo ? 'Seleccione un video MP4/WebM de hasta 10 MB.'
+            : 'Seleccione imágenes JPG/PNG de hasta 2 MB cada una.') : '';
+    }
+    function hayVideoUrl() {
+        const campo = document.querySelector('input[name="VideoUrl"]');
+        return !!(campo && campo.value.trim() !== '');
     }
     function validarGrupos() {
+        const urlVideo = hayVideoUrl();
         grupos.forEach(function (grupo) {
             const adjunto = grupo.entradas.some(function (entrada) { return entrada.files.length > 0; });
             grupo.entradas.forEach(function (entrada, indice) {
                 const error = errorArchivo(entrada);
-                entrada.setCustomValidity(error || (grupo.requerido && !adjunto && indice === 0
-                    ? 'Adjunte hasta 7 imágenes JPG/PNG, un video MP4/WebM o ambos.' : ''));
+                entrada.setCustomValidity(error || (grupo.requerido && !adjunto && !urlVideo && indice === 0
+                    ? 'Adjunte hasta 5 imágenes JPG/PNG, un video MP4/WebM, ambos o pegue un enlace de video.' : ''));
             });
         });
     }
@@ -266,6 +271,10 @@
             });
             validarGrupos();
         });
+    });
+    document.querySelectorAll('input[name="VideoUrl"]').forEach(function (campo) {
+        campo.addEventListener('input', validarGrupos);
+        campo.addEventListener('change', validarGrupos);
     });
     validarGrupos();
     document.addEventListener('hidden.bs.modal', function (event) {

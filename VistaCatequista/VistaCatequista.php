@@ -6,6 +6,8 @@ if (!isset($_SESSION['CiPersona'])) {
 	exit();
 }
 $Catequista = $_SESSION['CiPersona'];
+require_once __DIR__ . '/../Controlador/controladorAccesoCatequista.php';
+ControladorAccesoCatequista::exigirCambioClave();
 
 $controlador = new ControladorActividad();
 $actividadesParroquia = $controlador->obtenerActividades('Parroquia');
@@ -26,11 +28,12 @@ function getActiveNotifications($conn)
             FROM notificaciones n 
             INNER JOIN catequista c ON n.CiNotificador = c.CiCat 
             INNER JOIN `persona` p ON c.CiCat = p.CiPersona 
-            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ?
+            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ? AND n.Sacramento = ?
             ORDER BY n.FechaNotFin ASC";
 
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("s", $currentDateTime);
+    $sacramentoActual = $_SESSION['CiPersona']['Sacramento'] ?? '';
+    $stmt->bind_param("ss", $currentDateTime, $sacramentoActual);
     $stmt->execute();
     $result = $stmt->get_result();
 
@@ -133,11 +136,6 @@ $activeNotifications = getActiveNotifications($conn);
 							</li>
 							<li>
 								<a class="dropdown-item" href="ReunionesCat.php"><i class="fa-fw bi bi-calendar2-check me-2"></i>Fecha de Reuniones</a>
-							</li>
-							<li>
-								<a class="dropdown-item" href="Documentos.php">
-									<i class="fa-fw bi bi-card-text me-2"></i>Documentación
-								</a>
 							</li>
 							<li>
 								<a class="dropdown-item" href="Reglamento.php">
@@ -246,7 +244,7 @@ $activeNotifications = getActiveNotifications($conn);
 											<li class="nav-item">
 												<a class="nav-link" href="VistaPersona.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/nuevo.png" alt=""><span>Persona </span></a>
 											</li>
-											<?php if ($Catequista['RolCat'] == "Titular") { ?>
+											<?php if ($Catequista['RolCat'] == "Titular" || !empty($Catequista['PuedeAsistenciaApoderados'])) { ?>
 												<li class="nav-item">
 													<a class="nav-link" href="VistaReuniones.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/instrucciones.png" alt=""><span>Reuniones / Actividades</span></a>
 												</li>
@@ -257,15 +255,17 @@ $activeNotifications = getActiveNotifications($conn);
 											<li class="nav-item">
 												<a class="nav-link" href="VistaCelebranteAsis.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/ListaCelebrante.png" alt=""><span>Asistencia a Catquesis </span></a>
 											</li>
-											<?php if ($Catequista['PoderCat'] == "Habilitado") { ?>
+											<?php if ($Catequista['PoderCat'] == "Habilitado" || !empty($Catequista['PuedeRegistrarCatequizandos'])) { ?>
                                                 <li class="nav-item">
                                                     <a class="nav-link" href="VistaDocCel.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/Documentos.png" alt=""><span>Registros</span></a>
                                                 </li>
                                             <?php } ?>
-                                            <?php if ($Catequista['RolCat'] == "Titular") { ?>
+                                            <?php if ($Catequista['RolCat'] == "Titular" || !empty($Catequista['PuedePuntajeExamenes'])) { ?>
 												<li class="nav-item">
 													<a class="nav-link" href="VistaCelExamen.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/Examen.png" alt=""><span>Pruebas</span></a>
 												</li>
+											<?php } ?>
+											<?php if ($Catequista['RolCat'] == "Titular") { ?>
 												<li class="nav-item">
 													<a class="nav-link" href="VistaReporteGrupo.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/reporte.png" alt=""><span>Reporte General</span></a>
 												</li>

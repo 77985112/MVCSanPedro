@@ -148,54 +148,119 @@ class modeloReporteGeneral {
     }
 
     public function obtenerCatesActivos($data) {
-        $stmt = $this->conn->prepare("CALL CatsActCoor(?)");
+        $sql = "SELECT a.RolCat,
+                       CONCAT(p.Nombre, ' ', p.ApPaterno, ' ', p.ApMaterno) AS DatosCatequistaCoor,
+                       p.Contacto AS ContactoCatequista,
+                       g.NombreGrupo
+                FROM catequista c
+                INNER JOIN asignacion a ON a.CiCat = c.CiCat
+                INNER JOIN grupo g ON g.IdGrupo = a.IdGrupo
+                INNER JOIN persona p ON p.CiPersona = c.CiCat
+                WHERE c.Sacramento = ? AND c.EstadoCat = 'Activo'
+                ORDER BY g.IdGrupo,
+                         FIELD(a.RolCat, 'Coordinador', 'Titular', 'Catequista'),
+                         p.ApPaterno, p.ApMaterno, p.Nombre";
+        $stmt = $this->conn->prepare($sql);
         $stmt->bind_param("s", $data);
         $stmt->execute();
 
         $result = $stmt->get_result();
         $catequistas = [];
-        
+
         if ($result && $result->num_rows > 0) {
             while ($fila = $result->fetch_assoc()) {
                 $catequistas[] = $fila;
             }
         }
-        
+
         return $catequistas;
     }
 
 
     public function obtenerCatesInactivos($data) {
-        $stmt = $this->conn->prepare("CALL CatsInCoor(?)");
+        $sql = "SELECT e.ApoyoEst,
+                       a.RolCat,
+                       CONCAT(p.Nombre, ' ', p.ApPaterno, ' ', p.ApMaterno) AS DatosCatequistaCoor,
+                       p.Contacto AS ContactoCatequista,
+                       g.NombreGrupo
+                FROM catequista c
+                INNER JOIN asignacion a ON a.CiCat = c.CiCat
+                INNER JOIN grupo g ON g.IdGrupo = a.IdGrupo
+                INNER JOIN persona p ON p.CiPersona = c.CiCat
+                LEFT JOIN estrellacat e ON e.CiCatEst = c.CiCat
+                WHERE c.Sacramento = ? AND c.EstadoCat = 'Inactivo'
+                ORDER BY g.IdGrupo,
+                         FIELD(a.RolCat, 'Coordinador', 'Titular', 'Catequista'),
+                         p.ApPaterno, p.ApMaterno, p.Nombre";
+        $stmt = $this->conn->prepare($sql);
         $stmt->bind_param("s", $data);
         $stmt->execute();
 
         $result = $stmt->get_result();
         $catequistas = [];
-        
+
         if ($result && $result->num_rows > 0) {
             while ($fila = $result->fetch_assoc()) {
                 $catequistas[] = $fila;
             }
         }
-        
+
         return $catequistas;
     }
 
     public function obtenerCeleApp($data1, $data2) {
-        $stmt = $this->conn->prepare("CALL DatosGFinal(?,?)");
-        $stmt->bind_param("is", $data2, $data1);
+        $sql = "SELECT
+                    p_cel.Nombre AS NombreCelebrante,
+                    CONCAT(p_cel.ApPaterno, ' ', p_cel.ApMaterno) AS ApellidoCelebrante,
+                    d.ParroquiaDoc, d.LibroDoc, d.PaginaDoc, d.PartidaDoc, d.FechaDoc,
+                    CONCAT_WS(' y ',
+                        (SELECT GROUP_CONCAT(CONCAT(pp.Nombre, ' ', pp.ApPaterno, ' ', IFNULL(pp.ApMaterno, '')) SEPARATOR ' y ')
+                         FROM insfamiliar inf
+                         INNER JOIN familiar f ON inf.CiFamiliar = f.CiFamiliar
+                         INNER JOIN persona pp ON f.CiFamiliar = pp.CiPersona
+                         WHERE inf.IdInscripcion = i.IdInscripcion AND inf.RolFam = 'Padrino'),
+                        (SELECT GROUP_CONCAT(CONCAT(pmd.Nombre, ' ', pmd.Apellido) SEPARATOR ' y ')
+                         FROM padrinocel pmd
+                         WHERE pmd.IdInscripcion = i.IdInscripcion AND pmd.RolFam = 'Padrino')
+                    ) AS NombrePadrino,
+                    CONCAT_WS(' y ',
+                        (SELECT GROUP_CONCAT(CONCAT(pm.Nombre, ' ', pm.ApPaterno, ' ', IFNULL(pm.ApMaterno, '')) SEPARATOR ' y ')
+                         FROM insfamiliar inf
+                         INNER JOIN familiar f ON inf.CiFamiliar = f.CiFamiliar
+                         INNER JOIN persona pm ON f.CiFamiliar = pm.CiPersona
+                         WHERE inf.IdInscripcion = i.IdInscripcion AND inf.RolFam = 'Madrina'),
+                        (SELECT GROUP_CONCAT(CONCAT(pmd2.Nombre, ' ', pmd2.Apellido) SEPARATOR ' y ')
+                         FROM padrinocel pmd2
+                         WHERE pmd2.IdInscripcion = i.IdInscripcion AND pmd2.RolFam = 'Madrina')
+                    ) AS NombreMadrina,
+                    p_cel.FechaNac
+                FROM celebrante ce
+                INNER JOIN inscripcion i ON i.CiCel = ce.CiCel
+                INNER JOIN persona p_cel ON p_cel.CiPersona = ce.CiCel
+                LEFT JOIN documento d ON d.IdInscripcion = i.IdInscripcion
+                    AND d.idRegistro = (
+                        SELECT d2.idRegistro
+                        FROM documento d2
+                        WHERE d2.IdInscripcion = i.IdInscripcion
+                        ORDER BY (d2.DetalleDoc = 'Bautizo') DESC, d2.idRegistro ASC
+                        LIMIT 1
+                    )
+                WHERE i.IdGrupo = ? AND ce.EstadoCel = 'Activo'
+                ORDER BY p_cel.Nombre, p_cel.ApPaterno, p_cel.ApMaterno";
+
+        $stmt = $this->conn->prepare($sql);
+        $stmt->bind_param("i", $data2);
         $stmt->execute();
 
         $result = $stmt->get_result();
         $celebrantes = [];
-        
+
         if ($result && $result->num_rows > 0) {
             while ($fila = $result->fetch_assoc()) {
                 $celebrantes[] = $fila;
             }
         }
-        
+
         return $celebrantes;
     }
 
@@ -251,8 +316,13 @@ class modeloReporteGeneral {
     }
 
     public function obtenerAsistencias($data) {
-        $stmt = $this->conn->prepare("CALL MiAsistencia(?)");
-        $stmt->bind_param("s", $data);
+        $stmt = $this->conn->prepare(
+            "SELECT FechaAsisConf, DetalleAsis, TipoAsis
+             FROM asistenciacel
+             WHERE IdInscripcion = ?
+             ORDER BY FechaAsisConf, HoraAsisConf"
+        );
+        $stmt->bind_param("i", $data);
         $stmt->execute();
 
         $result = $stmt->get_result();
@@ -263,13 +333,20 @@ class modeloReporteGeneral {
                 $celebAsis[] = $fila;
             }
         }
-        
+
+        $stmt->close();
         return $celebAsis;
     }
 
     public function obtenerReuniones($data) {
-        $stmt = $this->conn->prepare("CALL MiReunion(?)");
-        $stmt->bind_param("s", $data);
+        $stmt = $this->conn->prepare(
+            "SELECT r.FechaReu, aa.DetalleAsis, aa.MontoAsis
+             FROM asistenciaapoderado aa
+             INNER JOIN reunioncel r ON aa.IdReunion = r.IdReunion
+             WHERE aa.IdInscripcion = ?
+             ORDER BY r.FechaReu, r.HoraReu"
+        );
+        $stmt->bind_param("i", $data);
         $stmt->execute();
 
         $result = $stmt->get_result();
@@ -280,7 +357,8 @@ class modeloReporteGeneral {
                 $celebReu[] = $fila;
             }
         }
-        
+
+        $stmt->close();
         return $celebReu;
     }
 }

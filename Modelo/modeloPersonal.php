@@ -61,7 +61,7 @@ class Personal
             }
 
             $stmt = $this->conn->prepare(
-                "UPDATE `personal` SET UsuarioPer = ?, ClavePer = ? WHERE CodPer = ?"
+                "UPDATE `personal` SET UsuarioPer = ?, ClavePer = ?, DebeCambiarClave = 1 WHERE CodPer = ?"
             );
             $stmt->bind_param("ssi", $usuario, $clave, $registro['CodPer']);
             if (!$stmt->execute()) {
@@ -143,16 +143,38 @@ class Personal
         return (int) $this->conn->insert_id;
     }
 
+    /** Reemplaza la clave por una nueva de un solo uso y obliga a cambiarla. */
+    public function restablecerClave($ciPersonal, $claveHash)
+    {
+        $stmt = $this->conn->prepare(
+            "UPDATE `personal` SET ClavePer = ?, DebeCambiarClave = 1 WHERE CiPersonal = ?"
+        );
+        $stmt->bind_param("ss", $claveHash, $ciPersonal);
+        return $stmt->execute();
+    }
+
     public function modificarPersonalPorCi($data)
     {
         $correo = $data['Correo'] ?? null;
         $fechaNac = ($data['FechaNac'] ?? '') !== '' ? $data['FechaNac'] : null;
         $fechaOrdenacion = ($data['FechaOrdenacion'] ?? '') !== '' ? $data['FechaOrdenacion'] : null;
+
+        // Si el formulario no envía contraseña, se conserva la actual.
+        $clave = trim((string) ($data['ClavePer'] ?? ''));
+        if ($clave === '') {
+            $stmt = $this->conn->prepare("SELECT ClavePer FROM `personal` WHERE CiPersonal = ? ORDER BY CodPer DESC LIMIT 1");
+            $stmt->bind_param("s", $data['CiPersonal']);
+            $stmt->execute();
+            $registroClave = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+            $clave = (string) ($registroClave['ClavePer'] ?? '');
+        }
+
         $stmt = $this->conn->prepare("CALL ModificarPersonalPorCi(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         $stmt->bind_param(
             "sssssssssssssssi",
             $data['CiPersonal'],
-            $data['ClavePer'],
+            $clave,
             $data['Nombre'],
             $data['Paterno'],
             $data['Materno'],

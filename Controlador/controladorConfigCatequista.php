@@ -72,21 +72,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if (isset($_POST['cambiarContracat'])) {
-        $CActual = $_POST['ActualC'];
-        $CNuevo1 = $_POST['NuevoC1'];
-        $CNuevo2 = $_POST['NuevoC2'];
+        $CActual = (string) ($_POST['ActualC'] ?? '');
+        $CNuevo1 = (string) ($_POST['NuevoC1'] ?? '');
+        $CNuevo2 = (string) ($_POST['NuevoC2'] ?? '');
 
-        if ($CActual == $_SESSION['CiPersona']['ClaveCat']) {
-            if ($CNuevo1 == $CNuevo2) {
-                $Usuario->updateClave($CNuevo2);
-                header("Location: ../logout.php");
+        // En el primer ingreso con una clave de un solo uso no se pide la clave
+        // actual: el catequista ya se autenticó con ella.
+        $verificarActual = empty($_SESSION['CiPersona']['DebeCambiarClave']);
+
+        if (!$verificarActual || $Usuario->verificarClave($CActual)) {
+            if ($CNuevo1 === '') {
+                $_SESSION['errorClave'] = 'La nueva contraseña no puede estar vacía.';
+                header("Location: Configuracion.php");
                 exit();
-            } else {
-                echo "Las nuevas contraseñas no coinciden.";
             }
-        } else {
-            echo "La contraseña actual no es válida.";
+            if ($CNuevo1 !== $CNuevo2) {
+                $_SESSION['errorClave'] = 'Las nuevas contraseñas no coinciden.';
+                header("Location: Configuracion.php");
+                exit();
+            }
+
+            $Usuario->updateClave(password_hash($CNuevo1, PASSWORD_DEFAULT));
+            unset($_SESSION['CiPersona']['ClaveCat']);
+            $_SESSION['CiPersona']['DebeCambiarClave'] = 0;
+            $_SESSION['mensajeClave'] = 'Contraseña cambiada correctamente.';
+            header("Location: Configuracion.php");
+            exit();
         }
+
+        $_SESSION['errorClave'] = 'La contraseña actual no es válida.';
+        header("Location: Configuracion.php");
+        exit();
+    }
+
+    if (isset($_POST['guardarPrivacidad'])) {
+        $Usuario->guardarPrivacidad(
+            ($_POST['MostrarContacto'] ?? '0') === '1',
+            ($_POST['MostrarFechaNac'] ?? '0') === '1',
+            ($_POST['MostrarEstado'] ?? '0') === '1',
+            ($_POST['MostrarDireccion'] ?? '0') === '1'
+        );
+        $_SESSION['mensajePrivacidad'] = 'Preferencias de privacidad guardadas correctamente.';
+        header("Location: Configuracion.php#nav-setting-tab-2");
+        exit();
     }
 
     if (isset($_POST['EliminarCount'])) {
@@ -100,4 +128,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 }
+
+$Privacidad = $Usuario->obtenerPrivacidad();
 ?>

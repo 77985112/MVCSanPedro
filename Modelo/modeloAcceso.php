@@ -57,7 +57,7 @@ class ModeloAcceso {
         }
 
         $stmt = $this->conexion->prepare(
-            'SELECT Inicio, Persona, Celebracion, Personal, Coordinador, Certificado, Emitidos, Drive
+            'SELECT Inicio, Persona, Celebracion, Personal, Coordinador, Certificado, Emitidos
              FROM permiso_acceso WHERE CodPer = ? LIMIT 1'
         );
         $stmt->bind_param('i', $codPer);
@@ -102,13 +102,10 @@ class ModeloAcceso {
             $valores['personal'] = 0;
         }
 
-        // Drive forma parte de Certificados Emitidos y comparte su permiso.
-        $valores['drive'] = $valores['emitidos'];
-
         $stmt = $this->conexion->prepare(
             'INSERT INTO permiso_acceso
-                (CodPer, Inicio, Persona, Celebracion, Personal, Coordinador, Certificado, Emitidos, Drive, ActualizadoEn)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+                (CodPer, Inicio, Persona, Celebracion, Personal, Coordinador, Certificado, Emitidos, ActualizadoEn)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
              ON DUPLICATE KEY UPDATE
                 Inicio = VALUES(Inicio),
                 Persona = VALUES(Persona),
@@ -117,11 +114,10 @@ class ModeloAcceso {
                 Coordinador = VALUES(Coordinador),
                 Certificado = VALUES(Certificado),
                 Emitidos = VALUES(Emitidos),
-                Drive = VALUES(Drive),
                 ActualizadoEn = NOW()'
         );
         $stmt->bind_param(
-            'iiiiiiiii',
+            'iiiiiiii',
             $codPer,
             $valores['inicio'],
             $valores['persona'],
@@ -129,8 +125,7 @@ class ModeloAcceso {
             $valores['personal'],
             $valores['coordinador'],
             $valores['certificado'],
-            $valores['emitidos'],
-            $valores['drive']
+            $valores['emitidos']
         );
         $ok = $stmt->execute();
         $stmt->close();

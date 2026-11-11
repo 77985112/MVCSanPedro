@@ -53,6 +53,14 @@ class ControladorAcceso {
             header('Location: ../logout.php');
             exit();
         }
+
+        // Mientras tenga una contraseña temporal, solo puede acceder a su configuración.
+        $archivoActual = basename($_SERVER['SCRIPT_NAME'] ?? '');
+        if (!empty($_SESSION['usuario']['DebeCambiarClave']) && $archivoActual !== 'Configuracion.php') {
+            header('Location: Configuracion.php?cambio_obligatorio=1');
+            exit();
+        }
+
         if (!self::puede($modulo)) {
             $_SESSION['acceso_denegado'] = true;
             header('Location: VistaPersonal.php');
@@ -86,8 +94,7 @@ class ControladorAcceso {
 
     /**
      * Menú lateral compartido por las vistas de personal.
-     * $opciones: 'costos' (mostrar precios). Google Drive se muestra cuando
-     * la persona tiene permiso para ese módulo.
+     * $opciones: 'costos' (mostrar precios).
      */
     public static function renderMenu(array $opciones = []) {
         $activo = self::moduloActual();

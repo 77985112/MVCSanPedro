@@ -233,3 +233,53 @@
         grid-column: auto;
     }
 }
+
+/* Redes sociales al final del contenido del sacramento */
+.sacramento-redes {
+    margin-top: 2.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid rgba(0, 0, 0, 0.08);
+    text-align: center;
+}
+
+.sacramento-redes-titulo {
+    margin-bottom: 0.9rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #555;
+}
+
+.sacramento-redes-iconos {
+    display: flex;
+    justify-content: center;
+    gap: 0.9rem;
+}
+
+.sacramento-red {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    color: #fff;
+    font-size: 1.35rem;
+    text-decoration: none;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+}
+
+.sacramento-red:hover,
+.sacramento-red:focus-visible {
+    color: #fff;
+    transform: translateY(-2px);
+    filter: brightness(1.05);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
+}
+
+.sacramento-red--facebook {
+    background: #1877f2;
+}
+
+.sacramento-red--tiktok {
+    background: #010101;
+}

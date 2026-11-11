@@ -392,7 +392,7 @@ foreach ($aniosGrafico as $anio) {
 
                                         <hr>
 
-                                        <?php ControladorAcceso::renderMenu(['drive' => true]); ?>
+                                        <?php ControladorAcceso::renderMenu(); ?>
                                     </div>
                                     <div class="card-footer text-center py-2">
                                         <a class="btn btn-link btn-sm" href="PerfilAdmin.php">Ver mi Perfil</a>

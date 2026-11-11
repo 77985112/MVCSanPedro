@@ -20,9 +20,11 @@ class ControladorLogin {
             $modeloAcceso = new ModeloAcceso();
             $_SESSION['permisos'] = $modeloAcceso->obtener((int) $personalData['CodPer'], $personalData['DescripCar']);
 
-            // Todo el personal activo con credenciales válidas puede ingresar,
-            // sin depender de un listado fijo de cargos.
-            header("Location: ../VistaPersonal/VistaDashboard.php");
+            // Si la contraseña es temporal, debe cambiarla antes de continuar.
+            $destino = !empty($personalData['DebeCambiarClave'])
+                ? '../VistaPersonal/Configuracion.php?cambio_obligatorio=1'
+                : '../VistaPersonal/VistaDashboard.php';
+            header("Location: " . $destino);
             exit();
         }
 
@@ -30,6 +32,16 @@ class ControladorLogin {
         if ($catequistaData) {
 
             $_SESSION['CiPersona'] = $catequistaData;
+
+            // Si la contraseña es de un solo uso, debe cambiarla antes de continuar.
+            if (!empty($catequistaData['DebeCambiarClave'])) {
+                $destino = ($catequistaData['RolCat'] ?? '') === 'Coordinador'
+                    ? '../VistaCoordinador/Configuracion.php?cambio_obligatorio=1'
+                    : '../VistaCatequista/Configuracion.php?cambio_obligatorio=1';
+                header("Location: " . $destino);
+                exit();
+            }
+
             if ($catequistaData['RolCat'] == 'Catequista'|| $catequistaData['RolCat'] == 'Titular') {
                 header("Location: ../VistaCatequista/VistaCatequista.php");
             } else if ($catequistaData['RolCat'] == 'Coordinador') {
@@ -43,7 +55,16 @@ class ControladorLogin {
         $celebranteData = $this->modeloLogin->getCelebranteData($username, $password);
         if ($celebranteData) {
             $_SESSION['CiPersona'] = $celebranteData;
-            if ($celebranteData['Sacramento'] == 'Confirmación' || $celebranteData['Sacramento'] == 'Primera Comunión') {
+
+            // Si la contraseña es de un solo uso, debe cambiarla antes de continuar.
+            if (!empty($celebranteData['DebeCambiarClave'])) {
+                header("Location: ../VistaCelebrante/Configuracion.php?cambio_obligatorio=1");
+                exit();
+            }
+
+            $sacramentoLogin = (string) ($celebranteData['Sacramento'] ?? '');
+            if (stripos($sacramentoLogin, 'Confirmación') !== false
+                || stripos($sacramentoLogin, 'Primera Comunión') !== false) {
                 header("Location: ../VistaCelebrante/VistaCelebrante.php");
             } else {
                 header("Location: ../logout.php");

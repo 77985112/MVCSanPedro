@@ -22,7 +22,12 @@ if (isset($_GET['id'])) {
     }
 }
 
-if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+if (!$grupo) {
+    header('Location: VistaCatequista.php');
+    exit();
+}
+
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['actualizar_grupo'])) {
     $idGrupo = $_POST['IdGrupo'];
     $nombre = $_POST['NombreGrupo'];
     $color = $_POST['Color_Grupo'];
@@ -32,6 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
     $contG->actualizarGrupo($idGrupo, $nombre, $color, $santo, $imagen, $frase);
     header("Location: GrupoEsp.php?id=" . $Catequista['IdGrupo']);
+    exit();
 }
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['ver_apoderado_padrino'])) {
@@ -54,11 +60,12 @@ function getActiveNotifications($conn)
             FROM notificaciones n 
             INNER JOIN catequista c ON n.CiNotificador = c.CiCat 
             INNER JOIN `persona` p ON c.CiCat = p.CiPersona 
-            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ?
+            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ? AND n.Sacramento = ?
             ORDER BY n.FechaNotFin ASC";
 
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("s", $currentDateTime);
+    $sacramentoActual = $_SESSION['CiPersona']['Sacramento'] ?? '';
+    $stmt->bind_param("ss", $currentDateTime, $sacramentoActual);
     $stmt->execute();
     $result = $stmt->get_result();
 
@@ -159,11 +166,6 @@ $activeNotifications = getActiveNotifications($conn);
                             </li>
                             <li>
                                 <a class="dropdown-item" href="ReunionesCat.php"><i class="fa-fw bi bi-calendar2-check me-2"></i>Fecha de Reuniones</a>
-                            </li>
-                            <li>
-                                <a class="dropdown-item" href="Documentos.php">
-                                    <i class="fa-fw bi bi-card-text me-2"></i>Documentación
-                                </a>
                             </li>
                             <li>
                                 <a class="dropdown-item" href="Reglamento.php">
@@ -387,7 +389,7 @@ $activeNotifications = getActiveNotifications($conn);
                             <div class="card-body col-lg-4">
                                 <h3 class="py-3 col-lg-12">Más Información</h3>
                                 <div class="col-lg-8">
-                                    <label class="form-label">Santo del Grupo</label>
+                                    <label class="form-label">Nombre del Grupo (Santo, Carismas etc)</label>
                                     <input type="text" class="form-control" name="Santo_Grupo" value="<?php echo $grupo['Santo_Grupo']; ?>">
                                 </div>
                                 <div class="col-lg-4">
@@ -403,7 +405,7 @@ $activeNotifications = getActiveNotifications($conn);
                         <input type="hidden" name="IdGrupo" value="<?php echo $grupo['IdGrupo']; ?>">
                         <input type="hidden" name="NombreGrupo" value="<?php echo $grupo['NombreGrupo']; ?>">
                         <br>
-                        <button type="submit" class="btn btn-primary-soft mb-0 w-50">Actualizar datos de Grupo</button>
+                        <button type="submit" name="actualizar_grupo" class="btn btn-primary-soft mb-0 w-50">Actualizar datos de Grupo</button>
                     </form>
                 </div>
             </div>

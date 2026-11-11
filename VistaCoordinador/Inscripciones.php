@@ -63,11 +63,12 @@ function getActiveNotifications($conn)
             FROM notificaciones n 
             INNER JOIN catequista c ON n.CiNotificador = c.CiCat 
             INNER JOIN `persona` p ON c.CiCat = p.CiPersona 
-            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ?
+            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ? AND n.Sacramento = ?
             ORDER BY n.FechaNotFin ASC";
 
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("s", $currentDateTime);
+    $sacramentoActual = $_SESSION['CiPersona']['Sacramento'] ?? '';
+    $stmt->bind_param("ss", $currentDateTime, $sacramentoActual);
     $stmt->execute();
     $result = $stmt->get_result();
 
@@ -177,11 +178,6 @@ $activeNotifications = getActiveNotifications($conn);
                                 <a class="dropdown-item" href="ReunionesCat.php"><i class="fa-fw bi bi-calendar2-check me-2"></i>Fecha de Reuniones</a>
                             </li>
                             <li>
-                                <a class="dropdown-item" href="Documentos.php">
-                                    <i class="fa-fw bi bi-card-text me-2"></i>Documentación
-                                </a>
-                            </li>
-                            <li>
                                 <a class="dropdown-item" href="Reglamento.php">
                                     <i class="fa-fw bi bi-list-check me-2"></i>Reglamento
                                 </a>
@@ -262,17 +258,7 @@ $activeNotifications = getActiveNotifications($conn);
                                 <a class="nav-link" href="VistaPersona.php"> <i class="<bi bi-person-vcard nav-icon"></i> <span class="nav-text">Persona </span></a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link" href="Configuracion.php"> <i class="bi bi-gear-wide-connected nav-icon"></i> <span class="nav-text">Configuración </span></a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link" href="VistaTodosCat.php"> <i class="bi bi-calendar-check nav-icon"></i> <span class="nav-text">Listado Catequistas</span></a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link" href="VistaTodosCat.php"> <i class="bi bi-file-earmark-text nav-icon"></i> <span class="nav-text">Reporte </span></a>
-                            </li>
-                            <h6 class="nav-text badge bg-primary text-white mt-2 me-2 border border-white border-3 rounded"><i class="bi bi-caret-down-fill"></i>&nbsp;&nbsp; Publico</h6>
-                            <li class="nav-item">
-                                <a class="nav-link" href="VistaMensajeCoor.php"> <i class="bi bi-file-earmark-text nav-icon"></i> <span class="nav-text">Mensaje Público</span></a>
+                                <a class="nav-link" href="VistaTodosCat.php"> <i class="bi bi-calendar-check nav-icon"></i> <span class="nav-text">Reporte Activos Inactivos</span></a>
                             </li>
                         </ul>
                     </div>
@@ -383,6 +369,16 @@ $activeNotifications = getActiveNotifications($conn);
 
 
                             <?php if ($Catequista['RolCat'] == 'Coordinador'): ?>
+                                <?php
+                                $inscripcionActual = null;
+                                foreach ($sacramentos as $s) {
+                                    if (($s['ActividadSac'] ?? '') === 'Inscripción') {
+                                        $inscripcionActual = $s;
+                                        break;
+                                    }
+                                }
+                                $estadoInscripcion = $inscripcionActual && $inscripcionActual['EstadoIns'] === 'Online';
+                                ?>
                                 <div class="mx-auto bg-mode shadow rounded p-4 mt-5">
                                     <div class="text-center">
                                         <h5>Modificar Datos de Informaciones</h5>
@@ -391,8 +387,8 @@ $activeNotifications = getActiveNotifications($conn);
                                     <div class="card-header border-0 pb-0 d-flex">
                                         <p class="mb-0"><i class="bi bi-caret-right-fill"></i> Estado para realizar las inscripciones de Catequisandos:&nbsp;&nbsp;&nbsp; </p>
                                         <input type="hidden" name="estadito" value="Offline">&nbsp;
-                                        <input type="checkbox" id="estaditoCheckbox" name="estaditoCheckbox" value="Online">&nbsp;
-                                        <label for="estaditoCheckbox" id="estadoLabel"> Offline</label>
+                                        <input type="checkbox" id="estaditoCheckbox" name="estaditoCheckbox" value="Online" <?php echo $estadoInscripcion ? 'checked' : ''; ?>>&nbsp;
+                                        <label for="estaditoCheckbox" id="estadoLabel"><?php echo $estadoInscripcion ? 'Online' : 'Offline'; ?></label>
                                     </div>
                                     <input type="hidden" name="CiCatCat" value="<?php echo $Catequista['CiPersona']; ?>">
 
@@ -402,7 +398,7 @@ $activeNotifications = getActiveNotifications($conn);
                                             <option value="">Seleccione...</option>
                                             <?php if (count($sacramentos) > 0): ?>
                                                 <?php foreach ($sacramentos as $row): ?>
-                                                    <option value="<?php echo $row['idSacramento']; ?>"><?php echo $row['ActividadSac']; ?></option>
+                                                    <option value="<?php echo $row['idSacramento']; ?>" <?php echo ($inscripcionActual && (int) $inscripcionActual['idSacramento'] === (int) $row['idSacramento']) ? 'selected' : ''; ?>><?php echo $row['ActividadSac']; ?></option>
                                                 <?php endforeach; ?>
                                             <?php endif; ?>
                                         </select>
@@ -410,19 +406,19 @@ $activeNotifications = getActiveNotifications($conn);
 
                                     <div class="col-sm-6 col-lg-2">
                                         <label class="form-label">Fecha de Inicio</label>
-                                        <input type="date" class="form-control" id="fechaIni" name="Fecha_Ini" required>
+                                        <input type="date" class="form-control" id="fechaIni" name="Fecha_Ini" value="<?php echo $inscripcionActual ? date('Y-m-d', strtotime($inscripcionActual['Fecha_Ini'])) : ''; ?>" required>
                                     </div>
                                     <div class="col-sm-6 col-lg-2">
                                         <label class="form-label">Fecha de Finalización</label>
-                                        <input type="date" class="form-control" id="fechaFin" name="Fecha_Fin" required>
+                                        <input type="date" class="form-control" id="fechaFin" name="Fecha_Fin" value="<?php echo $inscripcionActual ? date('Y-m-d', strtotime($inscripcionActual['Fecha_Fin'])) : ''; ?>" required>
                                     </div>
                                     <div class="col-sm-6 col-lg-2">
                                         <label class="form-label">Hora Inicio</label>
-                                        <input type="time" class="form-control" id="horaIni" name="Hora_Ini" required>
+                                        <input type="time" class="form-control" id="horaIni" name="Hora_Ini" value="<?php echo $inscripcionActual ? date('H:i', strtotime($inscripcionActual['Fecha_Ini'])) : ''; ?>" required>
                                     </div>
                                     <div class="col-sm-6 col-lg-2">
                                         <label class="form-label">Hora Final</label>
-                                        <input type="time" class="form-control" id="horaFin" name="Hora_Fin" required>
+                                        <input type="time" class="form-control" id="horaFin" name="Hora_Fin" value="<?php echo $inscripcionActual ? date('H:i', strtotime($inscripcionActual['Fecha_Fin'])) : ''; ?>" required>
                                     </div>
                                     <div class="col-sm-12 col-lg-12">
                                         <button class="btn btn-primary-soft w-100" type="submit" name="accion" value="ModificarDatos">Modificar fechas de información</button>

@@ -8,15 +8,32 @@ $Catequista = $_SESSION['CiPersona'];
 require_once '../Controlador/controladorSMS.php';
 
 $controller = new ControladorMensaje();
-$mensajes = null;
-
-$mensajes = $controller->listarMensajes();
-
-
-if (isset($_GET['action']) && $_GET['action'] == 'leer' && isset($_GET['id'])) {
-    $controller->leerMensaje($_GET['id']);
-    $mensajes = $controller->listarMensajes();
+$filtro = $_GET['filtro'] ?? 'todos';
+if (!in_array($filtro, ['todos', 'pendientes', 'leidos'], true)) {
+    $filtro = 'todos';
 }
+$estadoFiltro = ($filtro === 'pendientes') ? 'Pendiente' : (($filtro === 'leidos') ? 'Leído' : null);
+
+if (isset($_GET['action']) && $_GET['action'] === 'leer' && isset($_GET['id'])) {
+    $controller->leerMensaje((int) $_GET['id']);
+    header('Location: VistaMensajeCoor.php?filtro=' . urlencode($filtro));
+    exit();
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['eliminar_mensaje'])) {
+    $controller->eliminarMensaje((int) ($_POST['idMensaje'] ?? 0));
+    $filtroDestino = $_POST['filtro'] ?? 'todos';
+    if (!in_array($filtroDestino, ['todos', 'pendientes', 'leidos'], true)) {
+        $filtroDestino = 'todos';
+    }
+    header('Location: VistaMensajeCoor.php?filtro=' . urlencode($filtroDestino));
+    exit();
+}
+
+$mensajes = $controller->listarMensajes($estadoFiltro);
+$pendientes = $controller->contarMensajes('Pendiente');
+$leidos = $controller->contarMensajes('Leído');
+$totalMensajes = $controller->contarMensajes();
 
 
 require_once '../Controlador/controladorCatCoor.php';
@@ -37,11 +54,12 @@ function getActiveNotifications($conn)
             FROM notificaciones n 
             INNER JOIN catequista c ON n.CiNotificador = c.CiCat 
             INNER JOIN `persona` p ON c.CiCat = p.CiPersona 
-            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ?
+            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ? AND n.Sacramento = ?
             ORDER BY n.FechaNotFin ASC";
 
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("s", $currentDateTime);
+    $sacramentoActual = $_SESSION['CiPersona']['Sacramento'] ?? '';
+    $stmt->bind_param("ss", $currentDateTime, $sacramentoActual);
     $stmt->execute();
     $result = $stmt->get_result();
 
@@ -164,11 +182,6 @@ $activeNotifications = getActiveNotifications($conn);
                                         class="fa-fw bi bi-calendar2-check me-2"></i>Fecha de Reuniones</a>
                             </li>
                             <li>
-                                <a class="dropdown-item" href="Documentos.php">
-                                    <i class="fa-fw bi bi-card-text me-2"></i>Documentación
-                                </a>
-                            </li>
-                            <li>
                                 <a class="dropdown-item" href="Reglamento.php">
                                     <i class="fa-fw bi bi-list-check me-2"></i>Reglamento
                                 </a>
@@ -264,17 +277,7 @@ $activeNotifications = getActiveNotifications($conn);
                                 <a class="nav-link" href="VistaPersona.php"> <i class="<bi bi-person-vcard nav-icon"></i> <span class="nav-text">Persona </span></a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link" href="Configuracion.php"> <i class="bi bi-gear-wide-connected nav-icon"></i> <span class="nav-text">Configuración </span></a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link" href="VistaTodosCat.php"> <i class="bi bi-calendar-check nav-icon"></i> <span class="nav-text">Listado Catequistas</span></a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link" href="VistaTodosCat.php"> <i class="bi bi-file-earmark-text nav-icon"></i> <span class="nav-text">Reporte </span></a>
-                            </li>
-                            <h6 class="nav-text badge bg-primary text-white mt-2 me-2 border border-white border-3 rounded"><i class="bi bi-caret-down-fill"></i>&nbsp;&nbsp; Publico</h6>
-                            <li class="nav-item">
-                                <a class="nav-link active" href="VistaMensajeCoor.php"> <i class="bi bi-file-earmark-text nav-icon"></i> <span class="nav-text">Mensaje Público</span></a>
+                                <a class="nav-link" href="VistaTodosCat.php"> <i class="bi bi-calendar-check nav-icon"></i> <span class="nav-text">Reporte Activos Inactivos</span></a>
                             </li>
                         </ul>
                     </div>
@@ -284,8 +287,20 @@ $activeNotifications = getActiveNotifications($conn);
                 <section class="pt-0 ">
                     <div class="container">
                         <div class="card p-3">
-                            <h4>Detalle de Mensaje Publicos</h1>
+                            <h4>Detalle de Mensajes Públicos</h4>
 
+                            <?php if ($pendientes > 0): ?>
+                                <div class="alert alert-warning d-flex align-items-center gap-2" role="alert">
+                                    <i class="bi bi-exclamation-circle-fill"></i>
+                                    <span>Tienes <strong><?php echo $pendientes; ?></strong> mensaje(s) pendiente(s) de atender.</span>
+                                </div>
+                            <?php endif; ?>
+
+                            <div class="d-flex flex-wrap gap-2 mb-3">
+                                <a href="VistaMensajeCoor.php?filtro=todos" class="btn btn-sm <?php echo $filtro === 'todos' ? 'btn-primary' : 'btn-outline-primary'; ?>">Todos (<?php echo $totalMensajes; ?>)</a>
+                                <a href="VistaMensajeCoor.php?filtro=pendientes" class="btn btn-sm <?php echo $filtro === 'pendientes' ? 'btn-warning text-dark' : 'btn-outline-warning'; ?>">Pendientes (<?php echo $pendientes; ?>)</a>
+                                <a href="VistaMensajeCoor.php?filtro=leidos" class="btn btn-sm <?php echo $filtro === 'leidos' ? 'btn-success' : 'btn-outline-success'; ?>">Leídos (<?php echo $leidos; ?>)</a>
+                            </div>
 
                                 <div class="card-body p-5">
                                     <ul class="list-unstyled">
@@ -296,7 +311,11 @@ $activeNotifications = getActiveNotifications($conn);
 
                                         <li>
                                             <input type="hidden" value="<?php echo $fila['FechaMensaje']; ?>"></input>
-                                            <div class="rounded b-1  <?php if ($fila['EstadoMensaje'] == 'Pendiente') { echo 'badge-unread';} ?> d-sm-flex border-0 mb-1 p-3 position-relative">
+                                            <?php
+                                            $fechaMensaje = !empty($fila['FechaMensaje']) ? date('d/m/Y H:i', strtotime($fila['FechaMensaje'])) : '';
+                                            $esPendiente = ($fila['EstadoMensaje'] === 'Pendiente');
+                                            ?>
+                                            <div class="rounded b-1 <?php if ($esPendiente) { echo 'badge-unread'; } ?> d-sm-flex border-0 mb-1 p-3 position-relative">
                                                 <div class="mx-sm-3 my-2 my-sm-0">
                                                     <p class="small mb-0"><b><?php echo $fila['ConceptoMensaje']; ?></b>
                                                     </p>
@@ -304,16 +323,26 @@ $activeNotifications = getActiveNotifications($conn);
                                                     <p class="small mb-0">
                                                         <strong><i class="bi bi-person-fill"></i> <?php echo $fila['NombreMensaje']; ?></strong> - <i class="bi bi-whatsapp"></i> <a href="https://wa.me/591<?php echo $fila['NumCorrMensaje']; ?>"><?php echo $fila['NumCorrMensaje']; ?></a>
                                                     </p>
-
+                                                    <p class="small mb-0 mt-1">
+                                                        <span class="badge <?php echo $esPendiente ? 'bg-warning text-dark' : 'bg-success'; ?>"><?php echo $fila['EstadoMensaje']; ?></span>
+                                                        <span class="text-muted ms-2"><i class="bi bi-clock"></i> <?php echo $fechaMensaje; ?></span>
+                                                    </p>
                                                 </div>
-                                                <div class="d-flex ms-auto">
-                                                    <p class="small me-5 text-nowrap">Justo Ahora</p>
-                                                    <?php if ($fila['EstadoMensaje'] == 'Pendiente') { ?>
-                                                    <a href="VistaMensajeCoor.php?action=leer&id=<?php echo $fila['idMensaje']; ?>">
-                                                        <i class="bi bi-check-square"></i></a>
+                                                <div class="d-flex align-items-center ms-auto gap-2">
+                                                    <?php if ($esPendiente) { ?>
+                                                        <a href="VistaMensajeCoor.php?action=leer&id=<?php echo (int) $fila['idMensaje']; ?>&filtro=<?php echo urlencode($filtro); ?>" class="btn btn-sm btn-success-soft" title="Marcar como leído">
+                                                            <i class="bi bi-check-square"></i>
+                                                        </a>
                                                     <?php } else { ?>
-                                                    <span><strong><i class="bi bi-check2-all"></i></strong></span>
+                                                        <span class="text-success" title="Leído"><strong><i class="bi bi-check2-all"></i></strong></span>
                                                     <?php } ?>
+                                                    <form method="POST" action="VistaMensajeCoor.php?filtro=<?php echo urlencode($filtro); ?>" onsubmit="return confirm('¿Eliminar este mensaje?');">
+                                                        <input type="hidden" name="idMensaje" value="<?php echo (int) $fila['idMensaje']; ?>">
+                                                        <input type="hidden" name="filtro" value="<?php echo htmlspecialchars($filtro, ENT_QUOTES, 'UTF-8'); ?>">
+                                                        <button type="submit" name="eliminar_mensaje" class="btn btn-sm btn-danger-soft" title="Eliminar mensaje">
+                                                            <i class="bi bi-trash"></i>
+                                                        </button>
+                                                    </form>
                                                 </div>
                                             </div>
                                         </li>

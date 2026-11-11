@@ -33,8 +33,22 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['actualizar'])) {
 }
 
 $persona = null;
-if (isset($_POST['ciPersona'])) {
-  $persona = $controlador->buscarPersona($_POST['ciPersona']);
+$resultadosPersona = [];
+$busquedaRealizada = false;
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['ciPersona'])) {
+  $busquedaRealizada = true;
+
+  if (isset($_GET['seleccion'])) {
+    // Se eligio una persona de la lista de coincidencias.
+    $persona = $controlador->buscarPersona(trim((string) $_GET['ciPersona']));
+  } else {
+    $terminoBusqueda = trim((string) $_GET['ciPersona']);
+    $resultadosPersona = $terminoBusqueda === '' ? [] : $controlador->buscarPersonas($terminoBusqueda);
+
+    if (count($resultadosPersona) === 1) {
+      $persona = $controlador->buscarPersona($resultadosPersona[0]['CiPersona']);
+    }
+  }
 }
 
 
@@ -51,11 +65,12 @@ function getActiveNotifications($conn)
             FROM notificaciones n 
             INNER JOIN catequista c ON n.CiNotificador = c.CiCat 
             INNER JOIN `persona` p ON c.CiCat = p.CiPersona 
-            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ?
+            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ? AND n.Sacramento = ?
             ORDER BY n.FechaNotFin ASC";
 
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("s", $currentDateTime);
+    $sacramentoActual = $_SESSION['CiPersona']['Sacramento'] ?? '';
+    $stmt->bind_param("ss", $currentDateTime, $sacramentoActual);
     $stmt->execute();
     $result = $stmt->get_result();
 
@@ -165,11 +180,6 @@ $activeNotifications = getActiveNotifications($conn);
                 <a class="dropdown-item" href="ReunionesCat.php"><i class="fa-fw bi bi-calendar2-check me-2"></i>Fecha de Reuniones</a>
               </li>
               <li>
-                <a class="dropdown-item" href="Documentos.php">
-                  <i class="fa-fw bi bi-card-text me-2"></i>Documentación
-                </a>
-              </li>
-              <li>
                 <a class="dropdown-item" href="Reglamento.php">
                   <i class="fa-fw bi bi-list-check me-2"></i>Reglamento
                 </a>
@@ -250,17 +260,7 @@ $activeNotifications = getActiveNotifications($conn);
                 <a class="nav-link active" href="VistaPersona.php"> <i class="<bi bi-person-vcard nav-icon"></i> <span class="nav-text">Persona </span></a>
               </li>
               <li class="nav-item">
-                <a class="nav-link" href="Configuracion.php"> <i class="bi bi-gear-wide-connected nav-icon"></i> <span class="nav-text">Configuración </span></a>
-              </li>
-              <li class="nav-item">
-                <a class="nav-link" href="VistaTodosCat.php"> <i class="bi bi-calendar-check nav-icon"></i> <span class="nav-text">Listado Catequistas</span></a>
-              </li>
-              <li class="nav-item">
-                <a class="nav-link" href="VistaTodosCat.php"> <i class="bi bi-file-earmark-text nav-icon"></i> <span class="nav-text">Reporte </span></a>
-              </li>
-              <h6 class="nav-text badge bg-primary text-white mt-2 me-2 border border-white border-3 rounded"><i class="bi bi-caret-down-fill"></i>&nbsp;&nbsp; Publico</h6>
-              <li class="nav-item">
-                <a class="nav-link" href="VistaMensajeCoor.php"> <i class="bi bi-file-earmark-text nav-icon"></i> <span class="nav-text">Mensaje Público</span></a>
+                <a class="nav-link" href="VistaTodosCat.php"> <i class="bi bi-calendar-check nav-icon"></i> <span class="nav-text">Reporte Activos Inactivos</span></a>
               </li>
             </ul>
           </div>
@@ -285,9 +285,9 @@ $activeNotifications = getActiveNotifications($conn);
 
               <div class="card-header d-sm-flex align-items-center text-center justify-content-sm-between border-0 pb-0">
                 <h1 class="h4 card-title">Datos de Persona</h1>
-                <form method="POST" class="mb-3 d-flex align-items-end">
+                <form method="GET" class="mb-3 d-flex align-items-end">
                   <div class="form-group mb-0 me-2">
-                    <input type="text" class="form-control" name="ciPersona" placeholder="CI Persona" required>
+                    <input type="text" class="form-control" name="ciPersona" placeholder="Nombre, apellido o CI" value="<?php echo htmlspecialchars($_GET['ciPersona'] ?? ''); ?>" required>
                   </div>
                   <button type="submit" name="search" class="btn btn-primary-soft me-2" data-bs-toggle="tooltip" data-bs-placement="top" title="Buscar"><i class="bi bi-search"></i></button>
                   <button type="button" class="btn btn-primary-soft me-2" data-bs-toggle="modal" data-bs-target="#MostrarModal"><i class="bi bi-plus-circle"></i></button>
@@ -297,9 +297,37 @@ $activeNotifications = getActiveNotifications($conn);
 
               <div class="card-body">
 
+                <?php if ($busquedaRealizada && !$persona): ?>
+                  <?php if ($resultadosPersona): ?>
+                    <div class="mb-4">
+                      <p class="text-muted mb-2">Se encontraron <?php echo count($resultadosPersona); ?> coincidencias. Selecciona una persona:</p>
+                      <div class="list-group">
+                        <?php foreach ($resultadosPersona as $resultado): ?>
+                          <form method="GET" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center gap-2">
+                            <input type="hidden" name="ciPersona" value="<?php echo htmlspecialchars($resultado['CiPersona']); ?>">
+                            <input type="hidden" name="seleccion" value="1">
+                            <div>
+                              <strong><?php echo htmlspecialchars(trim($resultado['Nombre'] . ' ' . $resultado['ApPaterno'] . ' ' . $resultado['ApMaterno'])); ?></strong>
+                              <br><small class="text-muted">CI: <?php echo htmlspecialchars($resultado['CiPersona']); ?><?php if (!empty($resultado['NumeroDocumento']) && $resultado['NumeroDocumento'] !== $resultado['CiPersona']): ?> · Doc: <?php echo htmlspecialchars($resultado['NumeroDocumento']); ?><?php endif; ?></small>
+                            </div>
+                            <button type="submit" class="btn btn-sm btn-primary-soft">Seleccionar</button>
+                          </form>
+                        <?php endforeach; ?>
+                      </div>
+                    </div>
+                  <?php else: ?>
+                    <div class="alert alert-warning">No se encontró ninguna persona con ese nombre, apellido o CI.</div>
+                  <?php endif; ?>
+                <?php endif; ?>
+
                 <?php if ($persona): ?>
                   <form method="POST" action="" class="row g-3">
                     <input type="hidden" name="CiPersona" value="<?php echo $persona['CiPersona']; ?>">
+
+                    <div class="col-sm-6 col-lg-4 form-group">
+                      <label class="form-label">CI Persona</label>
+                      <input type="text" class="form-control" id="CiPersonaVista" value="<?php echo htmlspecialchars($persona['CiPersona']); ?>" readonly>
+                    </div>
 
                     <div class="col-sm-6 col-lg-4 form-group">
                       <label class="form-label">Nombres</label>
@@ -338,13 +366,9 @@ $activeNotifications = getActiveNotifications($conn);
                       <label class="form-label">Contacto:</label>
                       <input type="text" class="form-control" id="Contacto" name="Contacto" value="<?php echo $persona['Contacto']; ?>" autocomplete="new-password">
                     </div>
+
                     <div class="col-sm-6 col-lg-4 form-group">
                       <label class="form-label">Estado Civil:</label>
-                      <input type="text" class="form-control" name="Estado_per" value="<?php echo $persona['Estado_per']; ?>" readonly>
-                    </div>
-
-                    <div class="col-sm-6 col-lg-3 me-2">
-                      <label class="form-label" class="form-control">Nuevo Estado Civil:</label>
                       <select class="form-control" name="Estado_per2" data-search-enabled="true">
                         <option value="Soltero" <?php if ($persona['Estado_per'] == "Soltero") echo 'selected'; ?>>Soltero</option>
                         <option value="Soltera" <?php if ($persona['Estado_per'] == "Soltera") echo 'selected'; ?>>Soltera</option>

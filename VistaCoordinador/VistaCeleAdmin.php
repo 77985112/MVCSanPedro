@@ -10,6 +10,8 @@ if (!isset($_SESSION['CiPersona'])) {
 }
 
 $Catequista = $_SESSION['CiPersona'];
+$mensajeAsignacion = $_SESSION['mensaje_asignacion'] ?? '';
+unset($_SESSION['mensaje_asignacion']);
 $saqui = $Catequista['Sacramento'];
 
 require_once '../Controlador/controladorCatCoor.php';
@@ -22,86 +24,308 @@ $celebrantesSinGrupo = $controllerCel->buscarCeleGR($Catequista['Sacramento']);
 
 $conexion = new Conexion();
 $conn = $conexion->getConnection();
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $sql = "SELECT c.CiCel, p.Nombre, p.Sexo, YEAR(CURDATE()) - YEAR(p.FechaNac) AS Edad
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['asignar_grupos'])) {
+    $esConfirmacion = ($saqui === 'Confirmación');
+    $grupoSinAsignar = $esConfirmacion ? 22 : 1;
+    $tiposPermitidos = $esConfirmacion ? '3, 4, 5' : '1, 2';
+
+    $sql = "SELECT DISTINCT c.CiCel, i.IdInscripcion, p.Nombre, p.ApPaterno, p.ApMaterno, p.Sexo,
+                   TIMESTAMPDIFF(YEAR, p.FechaNac, CURDATE()) AS Edad
             FROM `celebrante` c
-            JOIN `persona` p ON c.CiCel = p.CiPersona
-            JOIN inscripcion i ON c.CiCel = i.CiCel
-            WHERE i.IdGrupo = 1 AND c.Sacramento = '$saqui'";
+            INNER JOIN `persona` p ON c.CiCel = p.CiPersona
+            INNER JOIN inscripcion i ON c.CiCel = i.CiCel
+            INNER JOIN detalletipoins dti ON dti.IdInscripcion = i.IdInscripcion
+            WHERE i.IdGrupo = $grupoSinAsignar AND dti.CodTipoItem IN ($tiposPermitidos)
+            ORDER BY Edad ASC, p.ApPaterno, p.ApMaterno, p.Nombre";
 
     $result = $conn->query($sql);
-    $celebrantes = [];
+    $catequizandos = [];
 
     while ($row = $result->fetch_assoc()) {
-        $celebrantes[] = $row;
+        $catequizandos[] = $row;
     }
-    $agrupados = [];
-    foreach ($celebrantes as $celebrante) {
-        $edad = $celebrante['Edad'];
-        $sexo = $celebrante['Sexo'];
 
-        if (!isset($agrupados[$edad])) {
-            $agrupados[$edad] = ['Varon' => [], 'Mujer' => []];
+    $mensajes = [];
+    $asignados = 0;
+
+    if (empty($catequizandos)) {
+        $mensajes[] = 'No hay catequizandos sin grupo para asignar.';
+    } elseif ($esConfirmacion) {
+        // Confirmación: se asigna al grupo cuya edad promedio/range se acerque
+        // más a la edad del catequizando, sin superar el cupo del grupo.
+        $gruposConfirmacion = range(23, 39);
+        $sinCupo = [];
+        asignarConfirmacionPorEdad($catequizandos, $gruposConfirmacion, $conn, $asignados, $sinCupo);
+
+        $mensajes[] = "Se asignaron {$asignados} catequizandos en Confirmación.";
+        if (!empty($sinCupo)) {
+            $mensajes[] = 'No hubo cupo para: ' . listarNombres($sinCupo) . '.';
         }
-        $agrupados[$edad][$sexo][] = $celebrante;
-    }
-    foreach ($agrupados as $edad => $celebrantesPorSexo) {
-        foreach ($celebrantesPorSexo as $sexo => $celebrantes) {
-            foreach ($celebrantes as $celebrante) {
-                $nuevoGrupoId = determinarGrupo($edad);
-                if (grupoExiste($nuevoGrupoId, $conn)) {
-                    if (puedeAsignar($nuevoGrupoId, $conn)) {
-                        $sqlUpdate = "UPDATE inscripcion SET IdGrupo = '$nuevoGrupoId' WHERE CiCel = '{$celebrante['CiCel']}'";
-                        if ($conn->query($sqlUpdate) === TRUE) {
-                            echo "Catequisando {$celebrante['Nombre']} asignado al grupo {$nuevoGrupoId}.<br>";
-                        } else {
-                            echo "Error al asignar catequisando: " . $conn->error . "<br>";
-                        }
-                    }
-                } else {
-                    echo "El grupo {$nuevoGrupoId} no existe.<br>";
-                }
+    } else {
+        // Primera Comunión:
+        // Grupos 01-09 (Ids 2-10): edades 10, 11 y 12.
+        // Grupos 10-16 (Ids 11-17): edades 13, 14 y 15.
+        $rangos = [
+            ['edades' => [10, 11, 12], 'grupos' => [2, 3, 4, 5, 6, 7, 8, 9, 10]],
+            ['edades' => [13, 14, 15], 'grupos' => [11, 12, 13, 14, 15, 16, 17]],
+        ];
+
+        $menores = [];
+        $mayores = [];
+
+        foreach ($catequizandos as $catequizando) {
+            $edad = (int) $catequizando['Edad'];
+            if ($edad < 10) {
+                $menores[] = $catequizando;
+            } elseif ($edad >= 16) {
+                $mayores[] = $catequizando;
             }
         }
+
+        foreach ($rangos as $rango) {
+            $candidatos = array_values(array_filter($catequizandos, function ($catequizando) use ($rango) {
+                return in_array((int) $catequizando['Edad'], $rango['edades'], true);
+            }));
+
+            if (empty($candidatos)) {
+                continue;
+            }
+
+            $sinCupo = [];
+            asignarCatequizandosAGrupos($candidatos, $rango['grupos'], $conn, 'Primera Comunión', $asignados, $sinCupo);
+
+            if (!empty($sinCupo)) {
+                $mensajes[] = 'No hubo cupo para: ' . listarNombres($sinCupo) . '.';
+            }
+        }
+
+        $mensajes[] = "Se asignaron {$asignados} catequizandos en Primera Comunión.";
+
+        if (!empty($menores)) {
+            $mensajes[] = 'Menores de 10 años (no asignados): ' . listarNombres($menores) . '.';
+        }
+        if (!empty($mayores)) {
+            $mensajes[] = '16 años o más (deben ir a Confirmación): ' . listarNombres($mayores) . '.';
+        }
+    }
+
+    $mensajesEscapados = array_map(function ($mensaje) {
+        return htmlspecialchars($mensaje, ENT_QUOTES, 'UTF-8');
+    }, $mensajes);
+
+    $_SESSION['mensaje_asignacion'] = implode('<br>', $mensajesEscapados);
+    header('Location: VistaCeleAdmin.php');
+    exit;
+}
+
+function asignarCatequizandosAGrupos(array $catequizandos, array $grupos, $conn, $sacramento, &$asignados, &$sinCupo)
+{
+    $varones = [];
+    $mujeres = [];
+
+    foreach ($catequizandos as $catequizando) {
+        $sexo = strtolower(trim((string) $catequizando['Sexo']));
+        if ($sexo === 'varon' || $sexo === 'varón') {
+            $varones[] = $catequizando;
+        } else {
+            $mujeres[] = $catequizando;
+        }
+    }
+
+    $iv = 0;
+    $im = 0;
+    $totalVarones = count($varones);
+    $totalMujeres = count($mujeres);
+
+    foreach ($grupos as $grupoId) {
+        if ($iv >= $totalVarones && $im >= $totalMujeres) {
+            break;
+        }
+
+        if (!grupoExiste($grupoId, $conn) || !grupoPerteneceAlSacramento($grupoId, $sacramento, $conn)) {
+            continue;
+        }
+
+        $sexosGrupo = contarSexosGrupo($grupoId, $conn);
+        $totalGrupo = $sexosGrupo['Varon'] + $sexosGrupo['Mujer'];
+        $cupo = max(0, 30 - $totalGrupo);
+
+        if ($cupo === 0) {
+            continue;
+        }
+
+        $varonesGrupo = $sexosGrupo['Varon'];
+        $mujeresGrupo = $sexosGrupo['Mujer'];
+
+        for ($k = 0; $k < $cupo; $k++) {
+            if ($iv >= $totalVarones && $im >= $totalMujeres) {
+                break;
+            }
+
+            if ($iv >= $totalVarones) {
+                $sexo = 'Mujer';
+            } elseif ($im >= $totalMujeres) {
+                $sexo = 'Varon';
+            } elseif ($varonesGrupo < $mujeresGrupo) {
+                $sexo = 'Varon';
+            } elseif ($mujeresGrupo < $varonesGrupo) {
+                $sexo = 'Mujer';
+            } else {
+                $sexo = ($k % 2 === 0) ? 'Varon' : 'Mujer';
+            }
+
+            if ($sexo === 'Varon') {
+                $catequizando = $varones[$iv++];
+                $varonesGrupo++;
+            } else {
+                $catequizando = $mujeres[$im++];
+                $mujeresGrupo++;
+            }
+
+            $idInscripcion = (int) $catequizando['IdInscripcion'];
+            $stmt = $conn->prepare("UPDATE inscripcion SET IdGrupo = ? WHERE IdInscripcion = ?");
+            $stmt->bind_param("ii", $grupoId, $idInscripcion);
+
+            if ($stmt->execute()) {
+                $asignados++;
+            } else {
+                $sinCupo[] = $catequizando;
+            }
+
+            $stmt->close();
+        }
+    }
+
+    while ($iv < $totalVarones) {
+        $sinCupo[] = $varones[$iv++];
+    }
+    while ($im < $totalMujeres) {
+        $sinCupo[] = $mujeres[$im++];
     }
 }
 
-function determinarGrupo($edad)
+function asignarConfirmacionPorEdad(array $catequizandos, array $grupos, $conn, &$asignados, &$sinCupo)
 {
-    switch ($edad) {
-        case 10:
-            return 2;
-        case 11:
-            return 5;
-        case 12:
-            return 8;
-        case 13:
-            return 11;
-        case 14:
-            return 13;
-        case 15:
-            return 17;
-        default:
-            return null;
+    $idsGrupos = array_map('intval', $grupos);
+    $listaGrupos = implode(',', $idsGrupos);
+
+    foreach ($catequizandos as $catequizando) {
+        $edad = (int) ($catequizando['Edad'] ?? 0);
+        $idInscripcion = (int) ($catequizando['IdInscripcion'] ?? 0);
+        if ($idInscripcion <= 0) {
+            $sinCupo[] = $catequizando;
+            continue;
+        }
+
+        $sql = "SELECT i.IdGrupo,
+                       COUNT(*) AS total,
+                       AVG(TIMESTAMPDIFF(YEAR, p.FechaNac, CURDATE())) AS promedio,
+                       MIN(TIMESTAMPDIFF(YEAR, p.FechaNac, CURDATE())) AS edad_min,
+                       MAX(TIMESTAMPDIFF(YEAR, p.FechaNac, CURDATE())) AS edad_max
+                FROM inscripcion i
+                INNER JOIN celebrante c ON c.CiCel = i.CiCel
+                INNER JOIN persona p ON p.CiPersona = c.CiCel
+                WHERE i.IdGrupo IN ($listaGrupos)
+                GROUP BY i.IdGrupo";
+        $result = $conn->query($sql);
+
+        $candidatos = [];
+        while ($grupo = $result->fetch_assoc()) {
+            if ((int) $grupo['total'] >= 30) {
+                continue;
+            }
+            $promedio = (float) $grupo['promedio'];
+            $edadMin = (int) $grupo['edad_min'];
+            $edadMax = (int) $grupo['edad_max'];
+            $candidatos[] = [
+                'id' => (int) $grupo['IdGrupo'],
+                'diferencia' => abs($promedio - $edad),
+                'enRango' => ($edad >= $edadMin - 1 && $edad <= $edadMax + 1),
+            ];
+        }
+        $result->free();
+
+        usort($candidatos, function ($a, $b) {
+            if ($a['enRango'] !== $b['enRango']) {
+                return $a['enRango'] ? -1 : 1;
+            }
+            return $a['diferencia'] <=> $b['diferencia'];
+        });
+
+        if (empty($candidatos)) {
+            $sinCupo[] = $catequizando;
+            continue;
+        }
+
+        $idGrupo = $candidatos[0]['id'];
+        $stmt = $conn->prepare("UPDATE inscripcion SET IdGrupo = ? WHERE IdInscripcion = ?");
+        $stmt->bind_param("ii", $idGrupo, $idInscripcion);
+        if ($stmt->execute()) {
+            $asignados++;
+        } else {
+            $sinCupo[] = $catequizando;
+        }
+        $stmt->close();
     }
 }
 
-function puedeAsignar($grupoId, $conn)
+function contarSexosGrupo($grupoId, $conn)
 {
-    $sqlCount = "SELECT COUNT(*) as total FROM inscripcion WHERE IdGrupo = '$grupoId'";
-    $resultCount = $conn->query($sqlCount);
-    $rowCount = $resultCount->fetch_assoc();
+    $sexos = ['Varon' => 0, 'Mujer' => 0];
 
-    return ($rowCount['total'] < 26);
+    $stmt = $conn->prepare("SELECT p.Sexo, COUNT(*) AS total
+                            FROM inscripcion i
+                            INNER JOIN persona p ON p.CiPersona = i.CiCel
+                            WHERE i.IdGrupo = ?
+                            GROUP BY p.Sexo");
+    $stmt->bind_param("i", $grupoId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+
+    while ($row = $result->fetch_assoc()) {
+        $sexo = strtolower(trim((string) $row['Sexo']));
+        if ($sexo === 'varon' || $sexo === 'varón') {
+            $sexos['Varon'] = (int) $row['total'];
+        } else {
+            $sexos['Mujer'] = (int) $row['total'];
+        }
+    }
+
+    $stmt->close();
+    return $sexos;
+}
+
+function listarNombres(array $catequizandos)
+{
+    $nombres = [];
+
+    foreach ($catequizandos as $catequizando) {
+        $nombres[] = trim(($catequizando['Nombre'] ?? '') . ' ' . ($catequizando['ApPaterno'] ?? '') . ' ' . ($catequizando['ApMaterno'] ?? ''));
+    }
+
+    return implode(', ', $nombres);
+}
+
+function grupoPerteneceAlSacramento($grupoId, $sacramento, $conn)
+{
+    $stmt = $conn->prepare("SELECT COUNT(*) AS total FROM `grupo` WHERE IdGrupo = ? AND SacramentoGrupo = ?");
+    $stmt->bind_param("is", $grupoId, $sacramento);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    return ((int) $row['total']) > 0;
 }
 
 function grupoExiste($grupoId, $conn)
 {
-    $sqlCheckGroup = "SELECT COUNT(*) as total FROM `grupo` WHERE IdGrupo = '$grupoId'";
-    $resultCheckGroup = $conn->query($sqlCheckGroup);
-    $rowCheckGroup = $resultCheckGroup->fetch_assoc();
+    $stmt = $conn->prepare("SELECT COUNT(*) AS total FROM `grupo` WHERE IdGrupo = ?");
+    $stmt->bind_param("i", $grupoId);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
 
-    return ($rowCheckGroup['total'] > 0);
+    return ((int) $row['total']) > 0;
 }
 
 
@@ -110,6 +334,36 @@ function grupoExiste($grupoId, $conn)
 
 $mensaje = '';
 $mensaje1 = '';
+$resultadosBusqueda = [];
+
+// Generar una nueva clave de un solo uso para un catequizando existente.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['restablecer_clave_cel'])) {
+    $ciReset = trim((string) ($_POST['CiCel'] ?? ''));
+    $resultado = $controllerCel->restablecerClaveCelebrante($ciReset, $Catequista['Sacramento']);
+
+    if ($resultado !== false) {
+        $registro = $resultado['registro'];
+        $sacramento = (string) ($registro['Sacramento'] ?? $Catequista['Sacramento']);
+        if (stripos($sacramento, 'Confirmación') !== false) {
+            $sacramento = 'Confirmación';
+        } elseif (stripos($sacramento, 'Primera Comunión') !== false) {
+            $sacramento = 'Primera Comunión';
+        }
+
+        $_SESSION['registroCatequizando'] = [
+            'Nombre' => $registro['CiCel'] ?? $ciReset,
+            'NombreCompleto' => $registro['NombreCompleto'] ?? $ciReset,
+            'NombreGrupo' => !empty($registro['NombreGrupo']) ? $registro['NombreGrupo'] : 'Sin grupo',
+            'Sacramento' => $sacramento,
+            'UsuarioCel' => $registro['UsuarioCel'] ?? '',
+            'ClaveCel' => $resultado['clave']
+        ];
+        header("Location: tiketCel.php?t=" . time());
+        exit;
+    }
+
+    $mensaje1 = 'No se pudo generar la nueva contraseña. Intenta nuevamente.';
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['modificar'])) {
@@ -139,6 +393,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $ciCel = $_POST['CiCel'];
         $SacramentoCel = $Catequista['Sacramento'];
         $celebranteAdmin = $controllerCel->buscarCelebrante($ciCel, $SacramentoCel);
+    }
+}
+
+if (isset($_GET['Buscar_Celebrante'])) {
+    $termino = trim((string) ($_GET['CiCel'] ?? ''));
+
+    if ($termino === '') {
+        $mensaje1 = 'Escribe una identificación, nombre o apellido.';
+    } else {
+        $resultadosBusqueda = $controllerCel->buscarCelebrantes($termino, $Catequista['Sacramento']);
+
+        if (empty($resultadosBusqueda)) {
+            $mensaje1 = 'No se encontró ningún catequizando con ese dato.';
+        } elseif (isset($_GET['ver']) && $_GET['ver'] === '1') {
+            $idInscripcionVer = isset($_GET['ins']) ? (int) $_GET['ins'] : 0;
+
+            if ($idInscripcionVer > 0) {
+                foreach ($resultadosBusqueda as $resultado) {
+                    if ((int) $resultado['IdInscripcion'] === $idInscripcionVer) {
+                        $celebranteAdmin = $resultado;
+                        break;
+                    }
+                }
+            } elseif (count($resultadosBusqueda) === 1) {
+                $celebranteAdmin = $resultadosBusqueda[0];
+            }
+        }
     }
 }
 
@@ -175,11 +456,12 @@ function getActiveNotifications($conn)
             FROM notificaciones n 
             INNER JOIN catequista c ON n.CiNotificador = c.CiCat 
             INNER JOIN `persona` p ON c.CiCat = p.CiPersona 
-            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ?
+            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ? AND n.Sacramento = ?
             ORDER BY n.FechaNotFin ASC";
 
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("s", $currentDateTime);
+    $sacramentoActual = $_SESSION['CiPersona']['Sacramento'] ?? '';
+    $stmt->bind_param("ss", $currentDateTime, $sacramentoActual);
     $stmt->execute();
     $result = $stmt->get_result();
 
@@ -331,11 +613,6 @@ $activeNotifications = getActiveNotifications($conn);
                             <a class="dropdown-item" href="ReunionesCat.php"><i class="fa-fw bi bi-calendar2-check me-2"></i>Fecha de Reuniones</a>
                         </li>
                         <li>
-                            <a class="dropdown-item" href="Documentos.php">
-                                <i class="fa-fw bi bi-card-text me-2"></i>Documentación
-                            </a>
-                        </li>
-                        <li>
                             <a class="dropdown-item" href="Reglamento.php">
                                 <i class="fa-fw bi bi-list-check me-2"></i>Reglamento
                             </a>
@@ -416,17 +693,7 @@ $activeNotifications = getActiveNotifications($conn);
                             <a class="nav-link" href="VistaPersona.php"> <i class="<bi bi-person-vcard nav-icon"></i> <span class="nav-text">Persona </span></a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="Configuracion.php"> <i class="bi bi-gear-wide-connected nav-icon"></i> <span class="nav-text">Configuración </span></a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="VistaTodosCat.php"> <i class="bi bi-calendar-check nav-icon"></i> <span class="nav-text">Listado Catequistas</span></a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="VistaTodosCat.php"> <i class="bi bi-file-earmark-text nav-icon"></i> <span class="nav-text">Reporte </span></a>
-                        </li>
-                        <h6 class="nav-text badge bg-primary text-white mt-2 me-2 border border-white border-3 rounded"><i class="bi bi-caret-down-fill"></i>&nbsp;&nbsp; Publico</h6>
-                        <li class="nav-item">
-                            <a class="nav-link" href="VistaMensajeCoor.php"> <i class="bi bi-file-earmark-text nav-icon"></i> <span class="nav-text">Mensaje Público</span></a>
+                            <a class="nav-link" href="VistaTodosCat.php"> <i class="bi bi-calendar-check nav-icon"></i> <span class="nav-text">Reporte Activos Inactivos</span></a>
                         </li>
                     </ul>
                 </div>
@@ -443,12 +710,12 @@ $activeNotifications = getActiveNotifications($conn);
                         <div class="card-header d-sm-flex align-items-center text-center justify-content-sm-between border-0 pb-0">
                             <h1 class="h4 card-title">Gestionar mis catequisandos</h1>
 
-                            <form method="POST" action="" class="mb-1 d-flex align-items-end">
-                                <input type="text" class="form-control me-2" name="CiCel" placeholder="Identificación de Catequisando" required>
+                            <form method="GET" action="" class="mb-1 d-flex align-items-end">
+                                <input type="text" class="form-control me-2" name="CiCel" placeholder="CI, nombres o apellidos" required>
                                 <input type="hidden" name="SacAdm" value="<?php echo $Catequista['Sacramento']; ?>" required>
 
                                 <button type="submit" class="btn btn-primary-soft me-2" name="Buscar_Celebrante" href="#tab-1" data-bs-toggle="tooltip" data-bs-placement="top" title="Buscar"><i class="bi bi-search"></i></button>
-                                <a href="VistaRegistroCelebrante.php" class="btn btn-primary-soft me-2" data-bs-toggle="tooltip" data-bs-placement="top" title="Registrar Nuevos"><i class="bi bi-plus-circle"></i></a>
+                                <a href="VistaRegistroCelebrante.php?nuevo=1" class="btn btn-primary-soft me-2" data-bs-toggle="tooltip" data-bs-placement="top" title="Registrar Nuevos"><i class="bi bi-plus-circle"></i></a>
                             </form>
                         </div>
 
@@ -458,23 +725,118 @@ $activeNotifications = getActiveNotifications($conn);
                             </div>
                         <?php endif; ?>
 
+                        <?php if (!empty($mensajeAsignacion)) : ?>
+                            <div class="alert alert-info" role="alert">
+                                <?php echo $mensajeAsignacion; ?>
+                            </div>
+                        <?php endif; ?>
+
+                        <?php if (!isset($celebranteAdmin) && count($resultadosBusqueda) > 0) : ?>
+                            <div class="card-body col-lg-12 p-4">
+                                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                                    <div>
+                                        <h4 class="mb-1">Catequizandos encontrados</h4>
+                                        <p class="text-muted mb-0">Resultados para "<?php echo htmlspecialchars($termino, ENT_QUOTES, 'UTF-8'); ?>".</p>
+                                    </div>
+                                    <span class="badge bg-primary"><?php echo count($resultadosBusqueda); ?> resultado(s)</span>
+                                </div>
+                                <div class="table-responsive">
+                                    <table class="table table-striped table-hover align-middle">
+                                        <thead class="table-dark">
+                                            <tr>
+                                                <th>Grupo</th>
+                                                <th>CI</th>
+                                                <th>Nombre</th>
+                                                <th>Apellidos</th>
+                                                <th>Contacto</th>
+                                                <th>Usuario</th>
+                                                <th>Contraseña</th>
+                                                <th>Realizando</th>
+                                                <th>Estado</th>
+                                                <th class="text-end">Ver</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <?php foreach ($resultadosBusqueda as $resultado) : ?>
+                                                <?php
+                                                $idGrupoResultado = (int) ($resultado['IdGrupo'] ?? 0);
+                                                if (in_array($idGrupoResultado, [1, 22], true)) {
+                                                    $etiquetaGrupo = 'Sin grupo';
+                                                    $claseGrupo = 'bg-light text-dark';
+                                                } elseif ($idGrupoResultado === 43) {
+                                                    $etiquetaGrupo = 'Pendiente';
+                                                    $claseGrupo = 'bg-warning text-dark';
+                                                } else {
+                                                    $etiquetaGrupo = 'Grupo ' . ($resultado['NombreGrupo'] ?? '');
+                                                    $claseGrupo = 'bg-secondary';
+                                                }
+                                                ?>
+                                                <tr>
+                                                    <td><span class="badge <?php echo $claseGrupo; ?>"><?php echo htmlspecialchars($etiquetaGrupo, ENT_QUOTES, 'UTF-8'); ?></span></td>
+                                                    <td><?php echo htmlspecialchars($resultado['CiCel'], ENT_QUOTES, 'UTF-8'); ?></td>
+                                                    <td><?php echo htmlspecialchars($resultado['Nombre'], ENT_QUOTES, 'UTF-8'); ?></td>
+                                                    <td><?php echo htmlspecialchars(trim(($resultado['ApPaterno'] ?? '') . ' ' . ($resultado['ApMaterno'] ?? '')), ENT_QUOTES, 'UTF-8'); ?></td>
+                                                    <td><?php echo htmlspecialchars($resultado['Contacto'] ?? '', ENT_QUOTES, 'UTF-8'); ?></td>
+                                                    <td><?php echo htmlspecialchars($resultado['UsuarioCel'] ?? '', ENT_QUOTES, 'UTF-8'); ?></td>
+                                                    <td><span class="text-muted">&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;</span></td>
+                                                    <td><?php echo htmlspecialchars($resultado['DescripItem'] ?? '', ENT_QUOTES, 'UTF-8'); ?></td>
+                                                    <td>
+                                                        <span class="badge <?php echo $resultado['EstadoCel'] === 'Activo' ? 'bg-success' : 'bg-danger'; ?>">
+                                                            <?php echo htmlspecialchars($resultado['EstadoCel'], ENT_QUOTES, 'UTF-8'); ?>
+                                                        </span>
+                                                    </td>
+                                                    <td class="text-end">
+                                                        <a href="VistaCeleAdmin.php?Buscar_Celebrante=1&amp;CiCel=<?php echo urlencode($resultado['CiCel']); ?>&amp;ins=<?php echo urlencode($resultado['IdInscripcion']); ?>&amp;ver=1&amp;SacAdm=<?php echo urlencode($Catequista['Sacramento']); ?>" class="btn btn-sm btn-primary-soft" title="Ver catequizando">
+                                                            <i class="bi bi-eye"></i>
+                                                        </a>
+                                                        <form method="POST" class="d-inline" target="_blank">
+                                                            <input type="hidden" name="CiCel" value="<?php echo htmlspecialchars($resultado['CiCel']); ?>">
+                                                            <button type="submit" name="restablecer_clave_cel" class="btn btn-sm btn-warning-soft ms-1" title="Nueva clave de un solo uso">
+                                                                <i class="bi bi-key"></i>
+                                                            </button>
+                                                        </form>
+                                                    </td>
+                                                </tr>
+                                            <?php endforeach; ?>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        <?php endif; ?>
+
 
 
                         <div class="card-body col-lg-12 p-4">
                             <?php if (isset($celebranteAdmin)): ?>
-                                <form method="post" action="">
-                                    <input type="hidden" name="ACCIns" value="<?= $celebranteAdmin['IdInscripcion'] ?>">
-                                    <div class="col-sm-6 col-lg-6 form-group me-2">
-                                        <button type="submit" name="ver_apoderado_padrino" class="btn btn-primary-soft">Ver Apoderado y Padrinos</button>
+                                <?php
+                                $tipoItemActual = (int) ($celebranteAdmin['CodTipoItem'] ?? 0);
+                                $esPrimeraComunion = in_array($tipoItemActual, [1, 2], true)
+                                    || ($tipoItemActual === 0 && stripos((string) $celebranteAdmin['Sacramento'], 'Primera Comunión') !== false);
+                                $sacramentoCatequizando = $esPrimeraComunion ? 'Primera Comunión' : 'Confirmación';
+                                ?>
+                                <?php if (isset($termino) && $termino !== '' && count($resultadosBusqueda) > 0) : ?>
+                                    <div class="mb-3">
+                                        <a href="VistaCeleAdmin.php?Buscar_Celebrante=1&amp;CiCel=<?php echo urlencode($termino); ?>&amp;SacAdm=<?php echo urlencode($Catequista['Sacramento']); ?>" class="btn btn-sm btn-outline-secondary">
+                                            <i class="bi bi-arrow-left"></i> Volver a resultados
+                                        </a>
                                     </div>
-                                </form>
+                                <?php endif; ?>
+                                <div class="col-sm-6 col-lg-6 form-group me-2 d-flex flex-wrap gap-2">
+                                    <a href="VistaCelApPad.php?accins=<?php echo urlencode($celebranteAdmin['IdInscripcion']); ?>" class="btn btn-primary-soft">Ver Apoderado y Padrinos</a>
+                                    <form method="POST" class="d-inline" target="_blank">
+                                        <input type="hidden" name="CiCel" value="<?= htmlspecialchars($celebranteAdmin['CiCel']) ?>">
+                                        <button type="submit" name="restablecer_clave_cel" class="btn btn-warning-soft">
+                                            <i class="bi bi-key me-1"></i>Nueva clave de un solo uso
+                                        </button>
+                                    </form>
+                                </div>
                                 <br>
                                 <form method="POST" action="" class="row g-3">
                                     <input type="hidden" name="CiCel" value="<?= $celebranteAdmin['CiCel'] ?>">
                                     <input type="hidden" name="PerfilCel" value="<?= $celebranteAdmin['PerfilCel'] ?>">
                                     <input type="hidden" name="FondoCel" value="<?= $celebranteAdmin['FondoCel'] ?>">
                                     <input type="hidden" name="CodTipoItem" value="<?= $celebranteAdmin['CodTipoItem'] ?>">
-                                    <input type="hidden" name="Sacramento" value="<?= $celebranteAdmin['Sacramento'] ?>">
+                                    <input type="hidden" name="Sacramento" value="<?= $sacramentoCatequizando ?>">
 
                                     <ul class="list-group col-lg-12 align-items-center">
 
@@ -523,7 +885,7 @@ $activeNotifications = getActiveNotifications($conn);
 
                                     <div class="col-sm-6 col-lg-3 me-2">
                                         <label class="form-label" class="form-control">Grupo Actual</label>
-                                        <?php if ($celebranteAdmin['Sacramento'] == 'Primera Comunión'): ?>
+                                        <?php if ($esPrimeraComunion): ?>
 
                                             <select class="form-control" name="IdGrupo" data-search-enabled="true">
                                                 <option value="1" <?php if ($celebranteAdmin['IdGrupo'] == "1") echo 'selected'; ?>>Sin Grupo</option>
@@ -550,7 +912,7 @@ $activeNotifications = getActiveNotifications($conn);
                                                 <option value="43" <?php if ($celebranteAdmin['IdGrupo'] == "43") echo 'selected'; ?>>Pendiente</option>
                                             </select>
 
-                                        <?php elseif ($celebranteAdmin['Sacramento'] == 'Confirmación'): ?>
+                                        <?php else: ?>
                                             <select class="form-control" name="IdGrupo" data-search-enabled="true">
                                                 <option value="22" <?php if ($celebranteAdmin['IdGrupo'] == "22") echo 'selected'; ?>>Sin Grupo</option>
                                                 <option value="23" <?php if ($celebranteAdmin['IdGrupo'] == "23") echo 'selected'; ?>>Grupo 01</option>
@@ -583,7 +945,7 @@ $activeNotifications = getActiveNotifications($conn);
                                 </form>
 
                                 
-                            <?php elseif (!isset($celebranteAdmin)): ?>
+                            <?php elseif (!isset($celebranteAdmin) && empty($resultadosBusqueda) && !isset($_GET['Buscar_Celebrante'])): ?>
 
                                 <div class="my-sm-5 py-5 text-center">
                                     <h4>Lista de catequisandos sin grupo</h4>
@@ -613,7 +975,7 @@ $activeNotifications = getActiveNotifications($conn);
                                         <br>
                                         <div class="button-container">
                                             <form method="POST">
-                                                <button type="submit" id="magicButton"><i class="bi bi-magic"></i> Asignar catequisandos a grupos</button>
+                                                <button type="submit" id="magicButton" name="asignar_grupos"><i class="bi bi-magic"></i> Asignar catequisandos a grupos</button>
                                             </form>
                                         </div>
                                     <?php else : ?>

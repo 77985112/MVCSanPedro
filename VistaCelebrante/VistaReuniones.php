@@ -6,6 +6,8 @@ if (!isset($_SESSION['CiPersona'])) {
     exit();
 }
 $Celebrante = $_SESSION['CiPersona'];
+require_once __DIR__ . '/../Controlador/controladorAccesoCelebrante.php';
+ControladorAccesoCelebrante::exigirCambioClave();
 
 $CelGr = $Celebrante['IdGrupo'];
 
@@ -18,7 +20,7 @@ $catequistas = $catequistaModel->CatequistasDelGrupoCel($CelGr);
 
 require_once '../Controlador/controladorReunion.php';
 $contReu = new AsistenciaApoderadoModel;
-$ReunionAll = $contReu->obtenerReunion();
+$ReunionAll = $contReu->obtenerReunion($Celebrante['Sacramento']);
 
 
 
@@ -35,11 +37,12 @@ function getActiveNotifications($conn)
             FROM notificaciones n 
             INNER JOIN catequista c ON n.CiNotificador = c.CiCat 
             INNER JOIN `persona` p ON c.CiCat = p.CiPersona 
-            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ?
+            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ? AND n.Sacramento = ?
             ORDER BY n.FechaNotFin ASC";
 
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("s", $currentDateTime);
+    $sacramentoActual = $_SESSION['CiPersona']['Sacramento'] ?? '';
+    $stmt->bind_param("ss", $currentDateTime, $sacramentoActual);
     $stmt->execute();
     $result = $stmt->get_result();
 

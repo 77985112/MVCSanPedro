@@ -25,9 +25,29 @@ $mensaje1 = '';
 $personal = null;
 $listaPersonal = [];
 
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['restablecer_clave'])) {
+  $resultado = $controller->restablecerClave(trim($_POST['CiPersonal'] ?? ''));
+  if ($resultado !== false) {
+    $registro = $resultado['registro'];
+    $_SESSION['registroPersonal'] = [
+      'Nombre' => trim(($registro['Nombre'] ?? '') . ' ' . ($registro['Paterno'] ?? '') . ' ' . ($registro['Materno'] ?? '')),
+      'UsuarioPer' => $registro['UsuarioPer'] ?? '',
+      'ClavePer' => $resultado['clave'],
+      'DescripCar' => $registro['DescripCar'] ?? ''
+    ];
+    header("Location: generar_ticket.php?t=" . time());
+    exit;
+  }
+  $mensaje1 = "No se pudo generar la nueva contraseña. Verifica que el personal exista.";
+  $personal = $controller->buscarPersonalPorCi(trim($_POST['CiPersonal'] ?? ''));
+}
+
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrar'])) {
   $_POST['UsuarioPer'] = trim($_POST['UsuarioPer'] ?? '');
   $_POST['ClavePer'] = trim($_POST['ClavePer'] ?? '');
+  if ($_POST['ClavePer'] === '') {
+    $_POST['ClavePer'] = $controller->generarClaveTemporal();
+  }
   if ($controller->registrarNuevoPersonal($_POST)) {
     $registrado = $controller->buscarPersonalPorCi($_POST['CiPersonal']);
     $_SESSION['registroPersonal'] = [
@@ -38,7 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrar'])) {
     ];
     $mensaje = "<strong>Personal registrado con éxito.</strong> Nombre: " . htmlspecialchars($_POST['Nombre'], ENT_QUOTES, 'UTF-8')
       . ", Usuario: " . htmlspecialchars($_POST['UsuarioPer'], ENT_QUOTES, 'UTF-8')
-      . ", Clave: " . htmlspecialchars($_POST['ClavePer'], ENT_QUOTES, 'UTF-8');
+      . ". Se generó una contraseña de un solo uso; use el ticket de acceso.";
   } else {
     $mensaje = "Error al registrar el personal.";
   }
@@ -783,7 +803,7 @@ if (!isset($_GET['Cper'])) {
               <?php if ($mensaje): ?>
                 <div class="alert alert-success" role="alert">
                   <?php echo $mensaje; ?>
-                  <a href="generar_ticket.php" target="_blank" class="btn btn-xs btn-success mt-2 mt-lg-0 ms-lg-4">Generar ticket</a>
+                  <a href="generar_ticket.php?t=<?php echo time(); ?>" target="_blank" class="btn btn-xs btn-success mt-2 mt-lg-0 ms-lg-4">Generar ticket</a>
                 </div>
               <?php endif; ?>
               <?php if ($mensaje1): ?>
@@ -853,7 +873,8 @@ if (!isset($_GET['Cper'])) {
 
                   <div class="col-sm-6 col-lg-3 form-group">
                     <label class="form-label">Contraseña</label>
-                    <input type="text" class="form-control" name="ClavePer" value="<?php echo htmlspecialchars($personal['ClavePer']); ?>" autocomplete="off" required>
+                    <input type="text" class="form-control" value="••••••" disabled>
+                    <small class="text-muted">Por seguridad no se muestra.</small>
                   </div>
 
                   <div class="col-sm-6 col-lg-3 form-group">
@@ -913,7 +934,9 @@ if (!isset($_GET['Cper'])) {
 
                   <br>
                   <button type="submit" name="modificar" id="btnActualizar" class="btn btn-success-soft">Actualizar</button>
-                  <a href="generar_ticket.php?ci=<?php echo $personal['CiPersonal']; ?>" target="_blank" class="btn btn-xs btn-success ms-2">Ver ticket de acceso</a>
+                  <button type="submit" name="restablecer_clave" class="btn btn-warning-soft ms-2" formnovalidate formtarget="_blank">
+                    <i class="bi bi-key"></i> Nueva clave de un solo uso
+                  </button>
                 </form>
 
                 <script>
@@ -1168,8 +1191,9 @@ if (!isset($_GET['Cper'])) {
             </div>
 
             <div class="form-group col-lg-3">
-              <label class="form-label">Contraseña:</label>
-              <input type="text" class="form-control" name="ClavePer" placeholder="Contraseña de acceso" autocomplete="new-password" maxlength="100" required>
+              <label class="form-label">Contraseña de un solo uso:</label>
+              <input type="text" class="form-control" name="ClavePer" placeholder="Se genera automáticamente si se deja vacía" autocomplete="new-password" maxlength="100">
+              <small class="text-muted">Se mostrará una sola vez en el ticket y deberá cambiarla al ingresar.</small>
             </div>
 
             <button type="submit" class="btn btn-success-soft" name="registrar"><i class="fas fa-save me-1" aria-hidden="true"></i>Guardar y Cerrar</button>

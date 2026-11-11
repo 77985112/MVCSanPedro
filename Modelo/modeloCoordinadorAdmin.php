@@ -9,19 +9,22 @@ class ModeloCoordinadorAdmin {
         $this->conn = $conexion->getConnection();
     }
 
-    public function obtenerCoordinadores() {
+    public function obtenerCoordinadores($gestion = null) {
+        if ($gestion === null) { $gestion = (int) date('Y'); }
         $stmt = $this->conn->prepare("
             SELECT c.CiCat, c.Sacramento, c.EstadoCat, c.UsuarioCat, c.ClaveCat,
                    p.Nombre, p.ApPaterno, p.ApMaterno,
-                   a.RolCat, a.IdGrupo, a.FechaIniCat, a.FechaFinCat,
+                   a.RolCat, a.IdGrupo, a.Gestion, a.FechaIniCat, a.FechaFinCat,
+                   (a.FechaFinCat IS NULL) AS Vigente,
                    g.NombreGrupo
             FROM catequista c
             INNER JOIN `persona` p ON c.CiCat = p.CiPersona
-            INNER JOIN `asignacion` a ON c.CiCat = a.CiCat
-            INNER JOIN `grupo` g ON a.IdGrupo = g.IdGrupo
-            WHERE a.RolCat = 'Coordinador'
-            ORDER BY c.Sacramento, p.ApPaterno
+            INNER JOIN `asignacion` a ON c.CiCat = a.CiCat AND a.RolCat = 'Coordinador'
+            LEFT JOIN `grupo` g ON g.IdGrupo = a.IdGrupo
+            WHERE YEAR(a.Gestion) = ?
+            ORDER BY c.Sacramento, (a.FechaFinCat IS NULL) DESC, p.ApPaterno
         ");
+        $stmt->bind_param("i", $gestion);
         $stmt->execute();
         return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
     }
@@ -55,25 +58,87 @@ class ModeloCoordinadorAdmin {
         return $stmt->get_result()->fetch_assoc();
     }
 
-    public function verificarCoordinadorExistente($sacramento) {
+    public function verificarCoordinadorExistente($sacramento, $excluirCi = '', $gestion = null) {
+        if ($gestion === null) { $gestion = (int) date('Y'); }
         $stmt = $this->conn->prepare("
-            SELECT c.CiCat
+            SELECT c.CiCat, p.Nombre, p.ApPaterno, a.IdGrupo
             FROM catequista c
+            INNER JOIN `persona` p ON p.CiPersona = c.CiCat
             INNER JOIN `asignacion` a ON c.CiCat = a.CiCat
-            WHERE a.RolCat = 'Coordinador' AND c.Sacramento = ?
+            WHERE a.RolCat = 'Coordinador'
+              AND c.Sacramento = ?
+              AND YEAR(a.Gestion) = ?
+              AND a.FechaFinCat IS NULL
+              AND (? = '' OR c.CiCat <> ?)
+            LIMIT 1
         ");
-        $stmt->bind_param("s", $sacramento);
+        $stmt->bind_param("siss", $sacramento, $gestion, $excluirCi, $excluirCi);
         $stmt->execute();
         return $stmt->get_result()->fetch_assoc();
     }
 
-    public function registrarCoordinador($ci, $sacramento, $idGrupo, $usuario, $clave) {
+    /** Cierra la asignación vigente de un coordinador en una gestión (31/12 de ese año). */
+    public function cerrarAsignacion($ci, $gestion) {
+        $fin = (int) $gestion . '-12-31';
+        $stmt = $this->conn->prepare("
+            UPDATE `asignacion`
+            SET FechaFinCat = ?
+            WHERE CiCat = ? AND RolCat = 'Coordinador' AND YEAR(Gestion) = ? AND FechaFinCat IS NULL
+        ");
+        $stmt->bind_param("ssi", $fin, $ci, $gestion);
+        try {
+            return $stmt->execute();
+        } finally {
+            $stmt->close();
+        }
+    }
+
+    /** Verifica que el usuario de acceso no lo tenga otro catequista. */
+    public function verificarUsuarioDisponible($usuario, $excluirCi = '') {
+        $stmt = $this->conn->prepare("SELECT CiCat FROM catequista WHERE UsuarioCat = ? AND CiCat <> ? LIMIT 1");
+        $stmt->bind_param("ss", $usuario, $excluirCi);
+        $stmt->execute();
+        return $stmt->get_result()->fetch_assoc();
+    }
+
+    /** Actualiza solo los datos del cargo: sacramento, grupo, usuario y clave. */
+    public function actualizarCargo($ci, $sacramento, $idGrupo, $usuario, $clave) {
+        try {
+            $this->conn->begin_transaction();
+
+            $stmt = $this->conn->prepare("UPDATE catequista SET Sacramento = ?, UsuarioCat = ?, ClaveCat = ? WHERE CiCat = ?");
+            $stmt->bind_param("ssss", $sacramento, $usuario, $clave, $ci);
+            try {
+                if (!$stmt->execute()) throw new RuntimeException('No se pudo actualizar el coordinador.');
+            } finally {
+                $stmt->close();
+            }
+
+            $stmt = $this->conn->prepare("UPDATE `asignacion` SET IdGrupo = ? WHERE CiCat = ? AND RolCat = 'Coordinador' ORDER BY Gestion DESC LIMIT 1");
+            $stmt->bind_param("is", $idGrupo, $ci);
+            try {
+                $stmt->execute();
+            } finally {
+                $stmt->close();
+            }
+
+            $this->conn->commit();
+            return true;
+        } catch (Throwable $e) {
+            $this->conn->rollback();
+            error_log('Error al actualizar coordinador: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    public function registrarCoordinador($ci, $sacramento, $idGrupo, $usuario, $clave, $gestion = null) {
         $estado = 'Activo';
         $imagen = 'Ninguno';
         $fondo = 'Ninguno';
         $poder = 'Coordinador';
         $frase = 'La catequesis es como la lluvia que empapa el suelo y hace crecer las semillas.';
         $fecha = date('Y-m-d');
+        $fechaGestion = ($gestion === null ? (int) date('Y') : (int) $gestion) . '-01-01';
         $fechaFin = null;
         $rol = 'Coordinador';
 
@@ -106,13 +171,13 @@ class ModeloCoordinadorAdmin {
                     INSERT INTO `asignacion` (Gestion, CiCat, IdGrupo, FechaAsigCat, FechaIniCat, FechaFinCat, RolCat)
                     VALUES (?, ?, ?, ?, ?, ?, ?)
                 ");
-                $stmt->bind_param("ssissss", $fecha, $ci, $idGrupo, $fecha, $fecha, $fechaFin, $rol);
+                $stmt->bind_param("ssissss", $fechaGestion, $ci, $idGrupo, $fecha, $fecha, $fechaFin, $rol);
             } else {
                 $stmt = $this->conn->prepare("CALL RegistrarCatequista(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
                 $stmt->bind_param("ssssssssssissss",
                     $ci, $sacramento, $usuario, $clave,
                     $estado, $imagen, $fondo, $poder, $frase,
-                    $fecha, $idGrupo, $fecha, $fecha, $fechaFin, $rol
+                    $fechaGestion, $idGrupo, $fecha, $fecha, $fechaFin, $rol
                 );
             }
 
@@ -142,7 +207,7 @@ class ModeloCoordinadorAdmin {
     }
 
     public function buscarTodosLosGrupos() {
-        $stmt = $this->conn->prepare("SELECT IdGrupo, NombreGrupo FROM `grupo` WHERE IdGrupo IN (2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40) ORDER BY IdGrupo");
+        $stmt = $this->conn->prepare("SELECT IdGrupo, NombreGrupo, SacramentoGrupo FROM `grupo` WHERE SacramentoGrupo IS NOT NULL ORDER BY IdGrupo");
         $stmt->execute();
         return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
     }
@@ -172,7 +237,7 @@ class ModeloCoordinadorAdmin {
     public function buscarPersonasPorNombre($nombre) {
         $busqueda = "%{$nombre}%";
         $stmt = $this->conn->prepare("
-            SELECT p.CiPersona, p.Nombre, p.ApPaterno, p.ApMaterno, p.Sexo, p.Contacto, p.Estado_per,
+            SELECT p.CiPersona, p.NumeroDocumento, p.Nombre, p.ApPaterno, p.ApMaterno, p.Sexo, p.Contacto, p.Estado_per,
                    p.ZonaSector, p.SacramentoSolicita, a.Documento AS DocumentoBautizo
             FROM `persona` p
             LEFT JOIN antecedente_sacramental a ON a.CiPersona = p.CiPersona AND a.Sacramento = 'Bautizo'

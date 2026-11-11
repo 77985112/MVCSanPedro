@@ -5,6 +5,15 @@ if (!isset($_SESSION['CiPersona'])) {
     exit();
 }
 $Catequista = $_SESSION['CiPersona'];
+$rolActual = $Catequista['RolCat'] ?? '';
+
+if ($rolActual !== 'Coordinador') {
+    $destino = isset($Catequista['RolCat'])
+        ? '../VistaCatequista/VistaCatequista.php'
+        : '../VistaCelebrante/VistaCelebrante.php';
+    header('Location: ' . $destino);
+    exit();
+}
 
 require_once '../Controlador/controladorReporteAsistencia.php';
 

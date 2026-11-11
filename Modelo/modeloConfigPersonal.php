@@ -35,7 +35,7 @@ class UsuarioModel {
     }
 
     public function actualizarContrasena($ciPersonal, $nuevaContrasena) {
-        $sql = "UPDATE `personal` SET ClavePer = ? WHERE CiPersonal = ?";
+        $sql = "UPDATE `personal` SET ClavePer = ?, DebeCambiarClave = 0 WHERE CiPersonal = ?";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param("ss", $nuevaContrasena, $ciPersonal);
         return $stmt->execute();

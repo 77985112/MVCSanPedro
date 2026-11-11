@@ -8,7 +8,10 @@ if (!isset($_SESSION['CiPersona'])) {
 }
 
 $Catequista = $_SESSION['CiPersona'];
-if (isset($_SESSION['ACCIns'])) {
+if (isset($_GET['accins']) && ctype_digit((string) $_GET['accins'])) {
+    $idInscripcion = (int) $_GET['accins'];
+    $_SESSION['ACCIns'] = $idInscripcion;
+} elseif (isset($_SESSION['ACCIns'])) {
     $idInscripcion = $_SESSION['ACCIns'];
 } else {
     header("Location: VistaDocCel.php");
@@ -24,7 +27,32 @@ $catsacramento = $contCats->CatequsitasSac($Catequista['Sacramento']);
 require_once '../Controlador/controladorCelAdmin.php';
 $controller = new ControladorCelAdm();
 $familiares = $controller->verFamiliares($idInscripcion);
+$padrinosManuales = $controller->verPadrinosManuales($idInscripcion);
 $documentos = $controller->verDocumentos($idInscripcion);
+$datosInscripcion = $controller->verDatosInscripcion($idInscripcion);
+$ciCelInscripcion = $datosInscripcion['CiCel'] ?? '';
+$sacramentoInscripcion = $datosInscripcion['Sacramento'] ?? '';
+$fechaNacimientoInscripcion = $datosInscripcion['FechaNac'] ?? '';
+$bautizoLocal = $ciCelInscripcion !== '' ? $controller->verBautizoLocal($ciCelInscripcion) : null;
+
+$detalleDocDefault = $bautizoLocal ? 'Bautizo' : 'Certificado de Nacimiento';
+$numeroDocDefault = $bautizoLocal['NroEmision'] ?? '';
+if ($numeroDocDefault === '') {
+    $numeroDocDefault = $bautizoLocal['NroPart'] ?? '';
+}
+$libroDocDefault = $bautizoLocal['NroLibro'] ?? '';
+$paginaDocDefault = $bautizoLocal['NroPag'] ?? '';
+$partidaDocDefault = $bautizoLocal['NroPart'] ?? '';
+$parroquiaDocDefault = $bautizoLocal['NomParroquia'] ?? '';
+$fechaDocDefault = $bautizoLocal['FechaReal'] ?? '';
+if ($fechaDocDefault === '') {
+    foreach ($documentos as $documento) {
+        if ($documento['DetalleDoc'] === 'Bautizo' && !empty($documento['FechaDoc'])) {
+            $fechaDocDefault = $documento['FechaDoc'];
+            break;
+        }
+    }
+}
 
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['Registrar_Doc'])) {
@@ -38,8 +66,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['Registrar_Doc'])) {
     $paginaDoc = $_POST['paginaDoc'];
     $partidaDoc = $_POST['partidaDoc'];
     $parroquiaDoc = $_POST['parroquiaDoc'];
+    $fechaDoc = $_POST['fechaDoc'] ?? '';
 
-    if ($controller->registrarDocumento($gestion, $ciCat, $idGrupo, $idInscripcion, $numeroDoc, $detalleDoc, $libroDoc, $paginaDoc, $partidaDoc, $parroquiaDoc)) {
+    if ($controller->registrarDocumento($gestion, $ciCat, $idGrupo, $idInscripcion, $numeroDoc, $detalleDoc, $libroDoc, $paginaDoc, $partidaDoc, $parroquiaDoc, $fechaDoc)) {
         header("Location: " . $_SERVER['PHP_SELF']);
         exit();
     }
@@ -55,6 +84,26 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['Eliminar_Doc'])) {
         header("Location: " . $_SERVER['PHP_SELF']);
         exit();
     }
+}
+
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['Actualizar_Docs_Presentados'])) {
+    $presentados = $_POST['documento_presentado'] ?? [];
+    if (!is_array($presentados)) {
+        $presentados = [];
+    }
+    $fechaBautizo = $_POST['fechaBautizo'] ?? '';
+
+    $controller->actualizarDocumentosPresentados(
+        $Catequista['Gestion'],
+        $Catequista['CiCat'],
+        $Catequista['IdGrupo'],
+        $idInscripcion,
+        $presentados,
+        $fechaBautizo
+    );
+
+    header("Location: VistaCelApPad.php?accins=" . $idInscripcion);
+    exit();
 }
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['Registrar_Fam'])) {
@@ -79,6 +128,42 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['Eliminar_Fam'])) {
         header("Location: " . $_SERVER['PHP_SELF']);
         exit();
     }
+}
+
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['Registrar_Padrino_Manual'])) {
+
+    $idInscripcion = (int) ($_POST['idInscripcion'] ?? 0);
+    $rolFam = $_POST['rolFamManual'] ?? 'Padrino';
+    $nombre = trim($_POST['nombrePadrino'] ?? '');
+    $apellido = trim($_POST['apellidoPadrino'] ?? '');
+    $estadoCivil = trim($_POST['estadoCivilPadrino'] ?? '');
+
+    if (!in_array($rolFam, ['Padrino', 'Madrina'], true)) {
+        $rolFam = 'Padrino';
+    }
+    if (!in_array($estadoCivil, ['Soltero/a', 'Casado/a por la Iglesia', 'Viudo/a'], true)) {
+        $estadoCivil = 'Soltero/a';
+    }
+
+    if ($idInscripcion > 0 && $nombre !== '' && $apellido !== '') {
+        $controller->registrarPadrinoManual($idInscripcion, $rolFam, $nombre, $apellido, $estadoCivil);
+    }
+
+    header("Location: VistaCelApPad.php?accins=" . $idInscripcion);
+    exit();
+}
+
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['Eliminar_Padrino_Manual'])) {
+
+    $idPadrino = (int) ($_POST['idPadrino'] ?? 0);
+    $idInscripcion = (int) ($_POST['idInscripcion'] ?? 0);
+
+    if ($idPadrino > 0 && $idInscripcion > 0) {
+        $controller->eliminarPadrinoManual($idPadrino, $idInscripcion);
+    }
+
+    header("Location: VistaCelApPad.php?accins=" . $idInscripcion);
+    exit();
 }
 
 
@@ -110,11 +195,12 @@ function getActiveNotifications($conn)
             FROM notificaciones n 
             INNER JOIN catequista c ON n.CiNotificador = c.CiCat 
             INNER JOIN `persona` p ON c.CiCat = p.CiPersona 
-            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ?
+            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ? AND n.Sacramento = ?
             ORDER BY n.FechaNotFin ASC";
 
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("s", $currentDateTime);
+    $sacramentoActual = $_SESSION['CiPersona']['Sacramento'] ?? '';
+    $stmt->bind_param("ss", $currentDateTime, $sacramentoActual);
     $stmt->execute();
     $result = $stmt->get_result();
 
@@ -217,11 +303,6 @@ $activeNotifications = getActiveNotifications($conn);
                             </li>
                             <li>
                                 <a class="dropdown-item" href="ReunionesCat.php"><i class="fa-fw bi bi-calendar2-check me-2"></i>Fecha de Reuniones</a>
-                            </li>
-                            <li>
-                                <a class="dropdown-item" href="Documentos.php">
-                                    <i class="fa-fw bi bi-card-text me-2"></i>Documentación
-                                </a>
                             </li>
                             <li>
                                 <a class="dropdown-item" href="Reglamento.php">
@@ -342,7 +423,7 @@ $activeNotifications = getActiveNotifications($conn);
                                             <li class="nav-item">
                                                 <a class="nav-link" href="VistaCelebranteAsis.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/ListaCelebrante.png" alt=""><span>Asistencia a Catquesis </span></a>
                                             </li>
-                                            <?php if ($Catequista['PoderCat'] == "Habilitado") { ?>
+                                            <?php if ($Catequista['PoderCat'] == "Habilitado" || !empty($Catequista['PuedeRegistrarCatequizandos'])) { ?>
                                                 <li class="nav-item">
                                                     <a class="nav-link" href="VistaDocCel.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/Documentos.png" alt=""><span>Registros</span></a>
                                                 </li>
@@ -376,6 +457,7 @@ $activeNotifications = getActiveNotifications($conn);
                                     <h1 class="h2 card-title">Resgistros realizados</h1>
                                     <div class="mb-3 d-flex align-items-end">
                                         <button type="button" class="btn btn-primary-soft me-2" data-bs-toggle="modal" data-bs-target="#feedActionFamiliar"><i class="bi bi-person-add"></i></button>
+                                        <button type="button" class="btn btn-primary-soft me-2" data-bs-toggle="modal" data-bs-target="#feedActionPadrinoManual" title="Registrar padrino o madrina solo con nombre y apellido"><i class="bi bi-person-vcard"></i></button>
                                         <button type="button" class="btn btn-primary-soft me-2" data-bs-toggle="modal" data-bs-target="#feedActionDocumento"><i class="bi bi-file-earmark-text"></i></button>
                                     </div>
                                 </div>
@@ -389,12 +471,24 @@ $activeNotifications = getActiveNotifications($conn);
                                         <div class="card card-body bg-mode shadow border-0  p-lg-3">
 
                                             <h4>Apoderado / Padrinos</h4>
+                                            <?php
+                                            $tienePadrinos = !empty($padrinosManuales);
+                                            foreach ($familiares as $familiarPadrino) {
+                                                if (in_array($familiarPadrino['RolFam'] ?? '', ['Padrino', 'Madrina'], true)) {
+                                                    $tienePadrinos = true;
+                                                    break;
+                                                }
+                                            }
+                                            ?>
+                                            <?php if ($sacramentoInscripcion === 'Confirmación' && !$tienePadrinos): ?>
+                                                <div class="alert alert-warning py-2 mb-2">En Confirmación debe registrar al menos un padrino o madrina.</div>
+                                            <?php endif; ?>
                                             <table class="table">
                                                 <thead class="table-dark">
                                                     <tr>
                                                         <th class="d-none d-md-table-cell">Nombre Completo</th>
                                                         <th>Rol</th>
-                                                        <th class="d-none d-md-table-cell">Parentesco</th>
+                                                        <th class="d-none d-md-table-cell">Parentesco / Estado civil</th>
                                                         <th>Contacto</th>
                                                         <th>-</th>
                                                     </tr>
@@ -415,6 +509,29 @@ $activeNotifications = getActiveNotifications($conn);
                                                             </td>
                                                         </tr>
                                                     <?php endforeach; ?>
+                                                    <?php foreach ($padrinosManuales as $padrinoManual): ?>
+                                                        <tr>
+                                                            <td class="d-none d-md-table-cell">
+                                                                <?php echo htmlspecialchars($padrinoManual['Nombre'] . ' ' . $padrinoManual['Apellido']); ?>
+                                                                <span class="badge bg-secondary">Manual</span>
+                                                            </td>
+                                                            <td><?php echo htmlspecialchars($padrinoManual['RolFam']); ?></td>
+                                                            <td class="d-none d-md-table-cell"><?php echo htmlspecialchars($padrinoManual['EstadoCivil'] ?: '—'); ?></td>
+                                                            <td>-</td>
+                                                            <td>
+                                                                <form action="VistaCelApPad.php" method="POST">
+                                                                    <input type="hidden" name="idPadrino" value="<?php echo (int) $padrinoManual['IdPadrino']; ?>">
+                                                                    <input type="hidden" name="idInscripcion" value="<?php echo (int) $idInscripcion; ?>">
+                                                                    <button type="submit" name="Eliminar_Padrino_Manual" class="btn btn-danger-soft"><i class="bi bi-trash"></i></button>
+                                                                </form>
+                                                            </td>
+                                                        </tr>
+                                                    <?php endforeach; ?>
+                                                    <?php if (empty($familiares) && empty($padrinosManuales)): ?>
+                                                        <tr>
+                                                            <td colspan="5" class="text-center text-muted">No se han registrado apoderados ni padrinos.</td>
+                                                        </tr>
+                                                    <?php endif; ?>
                                                 </tbody>
                                             </table>
                                         </div>
@@ -423,23 +540,63 @@ $activeNotifications = getActiveNotifications($conn);
                                         <div class="card card-body bg-mode shadow border-0 ">
 
                                             <h4>Documentos Registrados</h4>
+                                            <?php
+                                            $documentosPresentados = array_column($documentos, 'DetalleDoc');
+                                            $documentosRequeridos = ['Certificado de Nacimiento', 'Bautizo'];
+                                            if ($sacramentoInscripcion === 'Confirmación') {
+                                                $documentosRequeridos[] = 'Recuerdo de Primera Comunión';
+                                                $documentosRequeridos[] = 'Certificado de Confirmación (Padrino soltero)';
+                                                $documentosRequeridos[] = 'Certificado de Matrimonio Religioso (Casado)';
+                                                $documentosRequeridos[] = 'Certificado de Defunción o CI de Viudo (Padrino)';
+                                            }
+                                            ?>
+                                            <form method="POST" action="VistaCelApPad.php?accins=<?php echo $idInscripcion; ?>" class="mb-3">
+                                                <p class="text-muted mb-2">Marca los documentos que presentó:</p>
+                                                <?php foreach ($documentosRequeridos as $indice => $requerido): ?>
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" name="documento_presentado[]" value="<?php echo htmlspecialchars($requerido, ENT_QUOTES, 'UTF-8'); ?>" id="doc_presentado_<?php echo $indice; ?>" <?php echo in_array($requerido, $documentosPresentados, true) ? 'checked' : ''; ?>>
+                                                        <label class="form-check-label" for="doc_presentado_<?php echo $indice; ?>"><?php echo htmlspecialchars($requerido, ENT_QUOTES, 'UTF-8'); ?></label>
+                                                    </div>
+                                                <?php endforeach; ?>
+                                                <div class="form-group mt-2">
+                                                    <label for="fechaBautizoChecklist" class="form-label small">Fecha de bautizo (según el certificado)</label>
+                                                    <input type="date" class="form-control form-control-sm" name="fechaBautizo" id="fechaBautizoChecklist" value="<?php echo htmlspecialchars($fechaDocDefault, ENT_QUOTES, 'UTF-8'); ?>">
+                                                    <small class="text-muted d-block">No es la fecha de nacimiento.</small>
+                                                </div>
+                                                <button type="submit" name="Actualizar_Docs_Presentados" class="btn btn-sm btn-primary-soft mt-2">Guardar documentos presentados</button>
+                                            </form>
+                                            <hr>
                                             <table class="table">
                                                 <thead class="table-dark">
                                                     <tr>
                                                         <th>Documento</th>
                                                         <th class="d-none d-md-table-cell">Detalle</th>
                                                         <th class="d-none d-md-table-cell">Parroquia</th>
-                                                        <th>Fecha</th>
+                                                        <th>Fecha de nacimiento</th>
+                                                        <th>Fecha del documento</th>
+                                                        <th>Fecha de entrega</th>
                                                         <th>-</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
-                                                    <?php foreach ($documentos as $documento): ?>
+                                                    <?php foreach ($documentos as $indiceDocumento => $documento): ?>
                                                         <tr>
                                                             <td><?php echo $documento['NumeroDoc']; ?></td>
                                                             <td class="d-none d-md-table-cell"><?php echo $documento['DetalleDoc']; ?></td>
                                                             <td class="d-none d-md-table-cell"><?php echo $documento['ParroquiaDoc']; ?></td>
-                                                            <td><?php echo $documento['FechaPres']; ?></td>
+                                                            <td>
+                                                                <?php echo $indiceDocumento === 0 && !empty($fechaNacimientoInscripcion) ? date('d/m/Y', strtotime($fechaNacimientoInscripcion)) : ''; ?>
+                                                            </td>
+                                                            <td>
+                                                                <?php
+                                                                echo $documento['DetalleDoc'] !== 'Certificado de Nacimiento' && !empty($documento['FechaDoc']) ? date('d/m/Y', strtotime($documento['FechaDoc'])) : '';
+                                                                ?>
+                                                            </td>
+                                                            <td>
+                                                                <?php
+                                                                echo !empty($documento['FechaPres']) ? date('d/m/Y', strtotime($documento['FechaPres'])) : '-';
+                                                                ?>
+                                                            </td>
                                                             <td>
                                                                 <form action="VistaCelApPad.php" method="POST">
                                                                     <input type="hidden" name="gestion" value="<?php echo $documento['Gestion']; ?>">
@@ -453,6 +610,7 @@ $activeNotifications = getActiveNotifications($conn);
                                                     <?php endforeach; ?>
                                                 </tbody>
                                             </table>
+                                            <p class="text-muted small mb-0">La fecha de entrega es cuando se presentó el documento, no la fecha de nacimiento.</p>
 
                                         </div>
                                     </div>
@@ -485,35 +643,51 @@ $activeNotifications = getActiveNotifications($conn);
                     <input type="hidden" name="idGrupo" value="<?php echo $Catequista['IdGrupo']; ?>">
                     <div class="col-sm-6 col-lg-4 form-group">
                         <label for="numeroDoc">Número del Documento</label>
-                        <input type="text" class="form-control" name="numeroDoc" placeholder="Codigo Doc" required>
+                        <input type="text" class="form-control" name="numeroDoc" placeholder="Codigo Doc" value="<?php echo htmlspecialchars($numeroDocDefault, ENT_QUOTES, 'UTF-8'); ?>" required>
                     </div>
 
                     <div class="col-sm-6 col-lg-4 form-group">
                         <label for="detalleDoc">Detalle del Documento</label>
-                        <select name="detalleDoc" class="form-control">
-                            <option value="Confirmación">Confirmación</option>
-                            <option value="Matrimonio">Matrimonio</option>
+                        <select name="detalleDoc" class="form-control" id="detalleDoc">
+                            <option value="Certificado de Nacimiento" <?php if ($detalleDocDefault === 'Certificado de Nacimiento') echo 'selected'; ?>>Certificado de Nacimiento</option>
+                            <option value="Bautizo" <?php if ($detalleDocDefault === 'Bautizo') echo 'selected'; ?>>Bautizo</option>
+                            <?php if ($sacramentoInscripcion === 'Confirmación'): ?>
+                                <option value="Recuerdo de Primera Comunión" <?php if ($detalleDocDefault === 'Recuerdo de Primera Comunión') echo 'selected'; ?>>Recuerdo de Primera Comunión</option>
+                            <?php endif; ?>
                         </select>
+                        <?php if ($bautizoLocal): ?>
+                            <small class="text-success d-block">Bautizado en <?php echo htmlspecialchars($bautizoLocal['NomParroquia'], ENT_QUOTES, 'UTF-8'); ?><?php if (!empty($bautizoLocal['FechaReal'])): ?> el <?php echo date('d/m/Y', strtotime($bautizoLocal['FechaReal'])); ?><?php endif; ?>. Datos cargados del registro parroquial.</small>
+                        <?php elseif ($sacramentoInscripcion === 'Confirmación'): ?>
+                            <small class="text-muted">Fotocopia del Certificado de Nacimiento, Bautizo y Recuerdo de Primera Comunión.</small>
+                        <?php else: ?>
+                            <small class="text-muted">Fotocopia del Certificado de Nacimiento y del Bautizo. Si aún no está bautizado, registre solo el Certificado de Nacimiento.</small>
+                        <?php endif; ?>
                     </div>
 
                     <div class="col-sm-6 col-lg-4 form-group">
                         <label for="libroDoc">Libro del Documento</label>
-                        <input type="text" class="form-control" name="libroDoc" placeholder="Codigo Libro" required>
+                        <input type="text" class="form-control" name="libroDoc" placeholder="Codigo Libro" value="<?php echo htmlspecialchars($libroDocDefault, ENT_QUOTES, 'UTF-8'); ?>">
                     </div>
 
                     <div class="col-sm-6 col-lg-4 form-group">
                         <label for="paginaDoc">Página del Documento</label>
-                        <input type="text" class="form-control" name="paginaDoc" placeholder="Codigo Pag" required>
+                        <input type="text" class="form-control" name="paginaDoc" placeholder="Codigo Pag" value="<?php echo htmlspecialchars($paginaDocDefault, ENT_QUOTES, 'UTF-8'); ?>">
                     </div>
 
                     <div class="col-sm-6 col-lg-4 form-group">
                         <label for="partidaDoc">Partida del Documento</label>
-                        <input type="text" class="form-control" name="partidaDoc" placeholder="Codigo Part" required>
+                        <input type="text" class="form-control" name="partidaDoc" placeholder="Codigo Part" value="<?php echo htmlspecialchars($partidaDocDefault, ENT_QUOTES, 'UTF-8'); ?>">
                     </div>
 
                     <div class="col-sm-6 col-lg-4 form-group">
-                        <label for="parroquiaDoc">Parroquia del Documento</label>
-                        <input type="text" class="form-control" name="parroquiaDoc" placeholder="Nombre de la parroquia" required>
+                        <label for="parroquiaDoc">Lugar de bautizo</label>
+                        <input type="text" class="form-control" name="parroquiaDoc" placeholder="Parroquia o lugar" value="<?php echo htmlspecialchars($parroquiaDocDefault, ENT_QUOTES, 'UTF-8'); ?>">
+                    </div>
+
+                    <div class="col-sm-6 col-lg-4 form-group">
+                        <label for="fechaDoc">Fecha de bautizo (según el certificado)</label>
+                        <input type="date" class="form-control" name="fechaDoc" id="fechaDoc" value="<?php echo htmlspecialchars($fechaDocDefault, ENT_QUOTES, 'UTF-8'); ?>">
+                        <small class="text-muted d-block">No es la fecha de nacimiento.</small>
                     </div>
 
                     <input type="hidden" name="idInscripcion" value="<?php echo $idInscripcion; ?>">
@@ -537,7 +711,8 @@ $activeNotifications = getActiveNotifications($conn);
                     <div class="col-sm-6 col-lg-4 form-group">
                         <label for="ciFamiliar">CI del Familiar</label>
                         <input type="text" class="form-control" id="CFam" name="ciFamiliar" placeholder="Identificación" required>
-                        <a class="familiarnew btn btn-sm btn-dashed rounded mt-0" href="VistaPersona.php"> <i class="bi bi-plus-circle-dotted me-1"></i>Nuevo</a>
+                        <button type="button" class="btn btn-sm btn-dashed rounded mt-0" onclick="abrirModalPersonaFamiliar()"> <i class="bi bi-plus-circle-dotted me-1"></i>Nuevo</button>
+                        <span class="familiarnew text-muted ms-2"></span>
                     </div>
 
                     <div class="col-sm-6 col-lg-4 form-group">
@@ -570,8 +745,187 @@ $activeNotifications = getActiveNotifications($conn);
         </div>
     </div>
 
+    <div class="modal fade" id="feedActionPadrinoManual" tabindex="-1" aria-labelledby="feedActionPadrinoManualLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="feedActionPadrinoManualLabel">Registrar Padrino o Madrina (solo nombre)</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <form action="VistaCelApPad.php" method="POST" class="row g-3 p-3">
+                    <div class="col-sm-6 form-group">
+                        <label for="rolFamManual">Función</label>
+                        <select name="rolFamManual" id="rolFamManual" class="form-control" required>
+                            <option value="Padrino">Padrino</option>
+                            <option value="Madrina">Madrina</option>
+                        </select>
+                    </div>
+
+                    <div class="col-sm-6 form-group">
+                        <label for="estadoCivilPadrino">Estado civil</label>
+                        <select name="estadoCivilPadrino" id="estadoCivilPadrino" class="form-control">
+                            <option value="Soltero/a">Soltero/a</option>
+                            <option value="Casado/a por la Iglesia">Casado/a por la Iglesia</option>
+                            <option value="Viudo/a">Viudo/a</option>
+                        </select>
+                    </div>
+
+                    <div class="col-sm-6 form-group">
+                        <label for="nombrePadrino">Nombre</label>
+                        <input type="text" class="form-control" id="nombrePadrino" name="nombrePadrino" maxlength="60" required>
+                    </div>
+
+                    <div class="col-sm-6 form-group">
+                        <label for="apellidoPadrino">Apellido</label>
+                        <input type="text" class="form-control" id="apellidoPadrino" name="apellidoPadrino" maxlength="60" required>
+                    </div>
+
+                    <div class="col-12">
+                        <p class="text-muted small mb-0">Se guarda el nombre tal como se escriba, sin necesidad de registrar a la persona ni su CI.</p>
+                    </div>
+
+                    <input type="hidden" name="idInscripcion" value="<?php echo $idInscripcion; ?>">
+                    <button type="submit" class="btn btn-success-soft me-2" name="Registrar_Padrino_Manual">Registrar</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalPersonaFamiliar" tabindex="-1" aria-labelledby="modalPersonaFamiliarLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <form id="form-persona-familiar">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="modalPersonaFamiliarLabel">Registrar Persona</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body row g-3">
+                        <div class="form-group col-sm-4 col-lg-2">
+                            <label for="familiaCi">CI Persona</label>
+                            <input type="text" class="form-control" id="familiaCi" placeholder="Identificación" required>
+                        </div>
+                        <div class="form-group col-sm-4 col-lg-3">
+                            <label for="familiaNombre">Nombre</label>
+                            <input type="text" class="form-control" id="familiaNombre" placeholder="Nombres" required>
+                        </div>
+                        <div class="form-group col-sm-4 col-lg-2">
+                            <label for="familiaApPaterno">Apellido Paterno</label>
+                            <input type="text" class="form-control" id="familiaApPaterno" placeholder="Apellido Paterno" required>
+                        </div>
+                        <div class="form-group col-sm-4 col-lg-2">
+                            <label for="familiaApMaterno">Apellido Materno</label>
+                            <input type="text" class="form-control" id="familiaApMaterno" placeholder="Apellido Materno" required>
+                        </div>
+                        <div class="form-group col-sm-4 col-lg-2">
+                            <label class="form-label">Sexo:</label>
+                            <div>
+                                <input type="radio" id="familiaVaron" name="familiaSexo" value="Varon" checked>
+                                <label for="familiaVaron">Varon</label>
+                                &nbsp;&nbsp;&nbsp;
+                                <input type="radio" id="familiaMujer" name="familiaSexo" value="Mujer">
+                                <label for="familiaMujer">Mujer</label>
+                            </div>
+                        </div>
+                        <div class="form-group col-sm-4 col-lg-3">
+                            <label for="familiaFechaNac">Fecha de Nacimiento</label>
+                            <input type="date" class="form-control" id="familiaFechaNac" required>
+                        </div>
+                        <div class="form-group col-sm-4 col-lg-3">
+                            <label for="familiaDireccion">Dirección</label>
+                            <input type="text" class="form-control" id="familiaDireccion" placeholder="Ingrese su Dirección" required>
+                        </div>
+                        <div class="form-group col-sm-4 col-lg-3">
+                            <label for="familiaContacto">Contacto</label>
+                            <input type="text" class="form-control" id="familiaContacto" placeholder="Número de Contacto" required>
+                        </div>
+                        <div class="form-group col-sm-4 col-lg-3">
+                            <label for="familiaEstadoPer">Estado</label>
+                            <select id="familiaEstadoPer" class="form-control" required>
+                                <option value="Soltero">Soltero</option>
+                                <option value="Soltera">Soltera</option>
+                                <option value="Casado">Casado</option>
+                                <option value="Casada">Casada</option>
+                                <option value="Viudo">Viudo</option>
+                                <option value="Viuda">Viuda</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="button" class="btn btn-primary" onclick="registrarPersonaFamiliar()">Registrar Persona</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <script>
+        function mostrarAlertaFamiliar(mensaje, tipo) {
+            const alerta = document.createElement('div');
+            alerta.className = `alert alert-${tipo} alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3`;
+            alerta.style.zIndex = '99999';
+            alerta.style.minWidth = '400px';
+            alerta.innerHTML = `${mensaje}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>`;
+            document.body.appendChild(alerta);
+            setTimeout(() => { alerta.remove(); }, 4000);
+        }
+
+        function abrirModalPersonaFamiliar() {
+            const form = document.getElementById('form-persona-familiar');
+            if (form) form.reset();
+            $('#feedActionFamiliar').one('hidden.bs.modal', function() {
+                $('#modalPersonaFamiliar').modal('show');
+            });
+            $('#feedActionFamiliar').modal('hide');
+        }
+
+        function registrarPersonaFamiliar() {
+            const dataPersona = {
+                ciPersona: $('#familiaCi').val(),
+                nombre: $('#familiaNombre').val(),
+                apPaterno: $('#familiaApPaterno').val(),
+                apMaterno: $('#familiaApMaterno').val(),
+                sexo: $('input[name="familiaSexo"]:checked').val(),
+                fechaNac: $('#familiaFechaNac').val(),
+                direccion: $('#familiaDireccion').val(),
+                contacto: $('#familiaContacto').val(),
+                estadoPer: $('#familiaEstadoPer').val()
+            };
+
+            if (!dataPersona.ciPersona || !dataPersona.nombre || !dataPersona.apPaterno || !dataPersona.fechaNac || !dataPersona.direccion || !dataPersona.contacto) {
+                mostrarAlertaFamiliar('Completa los datos obligatorios de la persona.', 'danger');
+                return;
+            }
+
+            $.post('../src/registrar_persona.php', dataPersona, function(response) {
+                if (response.success) {
+                    const ciPersona = response.ciPersona || dataPersona.ciPersona;
+                    const nombreCompleto = [dataPersona.nombre, dataPersona.apPaterno, dataPersona.apMaterno].filter(Boolean).join(' ');
+                    $('#CFam').val(ciPersona);
+                    $('.familiarnew').text(nombreCompleto);
+                    $('#modalPersonaFamiliar').modal('hide');
+                    mostrarAlertaFamiliar('Persona registrada correctamente.', 'success');
+                } else {
+                    mostrarAlertaFamiliar('Error al registrar: ' + response.message, 'danger');
+                }
+            }, 'json').fail(function(xhr) {
+                const mensaje = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'No se pudo registrar la persona.';
+                mostrarAlertaFamiliar('Error al registrar: ' + mensaje, 'danger');
+            });
+        }
+
         $(document).ready(function() {
+            const modalPersonaFamiliar = document.getElementById('modalPersonaFamiliar');
+            if (modalPersonaFamiliar) {
+                modalPersonaFamiliar.addEventListener('hidden.bs.modal', function() {
+                    const familiar = document.getElementById('feedActionFamiliar');
+                    if (familiar && !familiar.classList.contains('show')) {
+                        $('#feedActionFamiliar').modal('show');
+                    }
+                });
+            }
+
             $('input[id="CFam"]').on('input', function() {
                 var ciPersona = $(this).val();
                 if (ciPersona.length >= 6 || ciPersona.length <= 0) {
@@ -584,12 +938,9 @@ $activeNotifications = getActiveNotifications($conn);
                         success: function(response) {
                             var persona = JSON.parse(response);
                             if (persona.error) {
-                                $('.familiarnew').html(
-                                    `<i class="bi bi-plus-circle-dotted me-1""></i>Nuevo`
-                                );
+                                $('.familiarnew').text('');
                             } else {
-                                var form = `${persona.Nombre} ${persona.ApPaterno}`;
-                                $('.familiarnew').html(form);
+                                $('.familiarnew').text(`${persona.Nombre} ${persona.ApPaterno}`);
                             }
                         }
                     });

@@ -14,9 +14,9 @@ $controller = new ControladorInsSacramento();
 $certificadoData = [];
 $datosCiviles = [];
 $mensaje = '';
+$codIns = (int) ($_GET['CodIns'] ?? 0);
 
-if (isset($_GET['CodIns'])) {
-  $codIns = $_GET['CodIns'];
+if ($codIns > 0) {
   $certificadoData = $controller->VerCertificadoBautizo($codIns);
   if ($certificadoData) {
     $datosCiviles = $controller->VerCertificadoExtra($certificadoData['CiPersona'], $codIns) ?: [];

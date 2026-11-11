@@ -6,6 +6,8 @@ if (!isset($_SESSION['CiPersona'])) {
 }
 
 $celebranteData = $_SESSION['CiPersona'];
+require_once __DIR__ . '/../Controlador/controladorAccesoCelebrante.php';
+ControladorAccesoCelebrante::exigirCambioClave();
 $CelebranteNombre = $celebranteData['Nombre'];
 $CelebranteApPaterno = $celebranteData['ApPaterno'];
 $CelebranteApMaterno = $celebranteData['ApMaterno'];

@@ -6,14 +6,20 @@ if (!isset($_SESSION['CiPersona'])) {
 }
 $Catequista = $_SESSION['CiPersona'];
 
+if (($Catequista['RolCat'] ?? '') !== 'Titular'
+    && ($Catequista['PoderCat'] ?? '') !== 'Habilitado'
+    && empty($Catequista['PuedePuntajeExamenes'])) {
+    header('Location: VistaCatequista.php');
+    exit;
+}
+
 require_once '../Controlador/controladorExamenCel.php';
 $contNota = new ContCelebranteExamen();
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['idCelEx']) && isset($_POST['numNota']) && isset($_POST['nota']) && isset($_POST['CodExamen'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['idCelEx']) && isset($_POST['numNota']) && isset($_POST['nota'])) {
     $idCelEx = $_POST['idCelEx'];
     $numNota = $_POST['numNota'];
     $nota = $_POST['nota'];
-    $codExamen = $_POST['CodExamen'];
 
     if ($contNota->asignarNota($idCelEx, $numNota, $nota)) {
         header("Location: " . $_SERVER['PHP_SELF']);
@@ -26,9 +32,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['idCelEx']) && isset($
 
 $sacramento = $Catequista['Sacramento'];
 $idGrupo = $Catequista['IdGrupo'];
+$maxNota = (stripos((string) $sacramento, 'Confirmación') !== false) ? 3 : 2;
 
 $celebrantes = $contNota->verCelebrantes($sacramento, $idGrupo);
-$examenes = $contNota->listarExamenes();
 
 require_once '../Conexion/Conexion.php';
 $conexion = new Conexion();
@@ -42,11 +48,12 @@ function getActiveNotifications($conn)
             FROM notificaciones n 
             INNER JOIN catequista c ON n.CiNotificador = c.CiCat 
             INNER JOIN `persona` p ON c.CiCat = p.CiPersona 
-            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ?
+            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ? AND n.Sacramento = ?
             ORDER BY n.FechaNotFin ASC";
 
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("s", $currentDateTime);
+    $sacramentoActual = $_SESSION['CiPersona']['Sacramento'] ?? '';
+    $stmt->bind_param("ss", $currentDateTime, $sacramentoActual);
     $stmt->execute();
     $result = $stmt->get_result();
 
@@ -147,11 +154,6 @@ $activeNotifications = getActiveNotifications($conn);
                             </li>
                             <li>
                                 <a class="dropdown-item" href="ReunionesCat.php"><i class="fa-fw bi bi-calendar2-check me-2"></i>Fecha de Reuniones</a>
-                            </li>
-                            <li>
-                                <a class="dropdown-item" href="Documentos.php">
-                                    <i class="fa-fw bi bi-card-text me-2"></i>Documentación
-                                </a>
                             </li>
                             <li>
                                 <a class="dropdown-item" href="Reglamento.php">
@@ -271,7 +273,7 @@ $activeNotifications = getActiveNotifications($conn);
                                             <li class="nav-item">
                                                 <a class="nav-link" href="VistaCelebranteAsis.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/ListaCelebrante.png" alt=""><span>Asistencia a Catquesis </span></a>
                                             </li>
-                                            <?php if ($Catequista['PoderCat'] == "Habilitado") { ?>
+                                            <?php if ($Catequista['PoderCat'] == "Habilitado" || !empty($Catequista['PuedeRegistrarCatequizandos'])) { ?>
                                                 <li class="nav-item">
                                                     <a class="nav-link" href="VistaDocCel.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/Documentos.png" alt=""><span>Registros</span></a>
                                                 </li>
@@ -305,26 +307,14 @@ $activeNotifications = getActiveNotifications($conn);
                             <div class="card card-body mt-1">
                                 <h3>Gestionar Notas</h3>
                                 <form action="" method="POST" class="row g-3">
-                                    <div class="col-sm-6 col-lg-4 form-group">
-                                        <label class="form-label">Seleccionar Examen</label>
-                                        <select name="CodExamen" class="form-control" required>
-                                            <option value="">Seleccionar Examen</option>
-                                            <?php foreach ($examenes as $examen): ?>
-                                                <option value="<?php echo $examen['CodExamen']; ?>">
-                                                    <?php echo $examen['TituloExamen']; ?> - <?php echo $examen['FechaExamen']; ?>
-                                                </option>
-                                            <?php endforeach; ?>
-                                        </select>
-                                    </div>
-
                                     <div class="col-sm-2 col-lg-2 form-group">
                                         <label class="form-label">Catequisando</label>
                                         <input type="number" class="form-control" name="idCelEx" value="0" required>
                                     </div>
 
                                     <div class="col-sm-3 col-lg-3 form-group">
-                                        <label class="form-label">Número de Nota (1-4)</label>
-                                        <input type="number" class="form-control" name="numNota" min="1" max="4" value="0" required>
+                                        <label class="form-label">Número de Nota (1-<?php echo $maxNota; ?>)</label>
+                                        <input type="number" class="form-control" name="numNota" min="1" max="<?php echo $maxNota; ?>" value="0" required>
                                     </div>
 
                                     <div class="col-sm-3 col-lg-3 form-group">
@@ -353,8 +343,9 @@ $activeNotifications = getActiveNotifications($conn);
                                             <th>Nombre Completo</th>
                                             <th>Bimestre 1</th>
                                             <th>Bimestre 2</th>
-                                            <th>Bimestre 3</th>
-                                            <th>Bimestre 4</th>
+                                            <?php if ($maxNota >= 3): ?>
+                                                <th>Bimestre 3</th>
+                                            <?php endif; ?>
                                             <th>Promedio</th>
                                         </tr>
                                     </thead>
@@ -365,8 +356,9 @@ $activeNotifications = getActiveNotifications($conn);
                                                 <td><?php echo $celebrante['Nombre'] . ' ' . $celebrante['ApPaterno'] . ' ' . $celebrante['ApMaterno']; ?></td>
                                                 <td><?php echo $celebrante['NotaExamen1']; ?></td>
                                                 <td><?php echo $celebrante['NotaExamen2']; ?></td>
-                                                <td><?php echo $celebrante['NotaExamen3']; ?></td>
-                                                <td><?php echo $celebrante['NotaExamen4']; ?></td>
+                                                <?php if ($maxNota >= 3): ?>
+                                                    <td><?php echo $celebrante['NotaExamen3']; ?></td>
+                                                <?php endif; ?>
                                                 <td><?php echo round($celebrante['Promedio']); ?></td>
                                             </tr>
                                         <?php endforeach; ?>

@@ -16,13 +16,13 @@ ControladorAcceso::exigir('certificado');
 $controller = new ControladorInsSacramento();
 $certificadoData = [];
 $antecedenteBautizo = [];
+$codIns = (int) ($_GET['CodIns'] ?? 0);
 $edadConfirmacion = '';
 $mensaje = '';
 $mensajeEdicion = isset($_GET['actualizado']) ? 'Datos del certificado actualizados correctamente.' : '';
 $modoEdicion = false;
 
-if (isset($_GET['CodIns'])) {
-  $codIns = $_GET['CodIns'];
+if ($codIns > 0) {
   $certificadoData = $controller->VerCertificadoConfirmacion($codIns);
   if ($certificadoData) {
     $antecedenteBautizo = $controller->VerCertificadoExtraC($certificadoData['CiPersona'], 'Celebrante', $codIns) ?: [];

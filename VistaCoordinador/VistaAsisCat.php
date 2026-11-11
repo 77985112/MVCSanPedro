@@ -5,6 +5,15 @@ if (!isset($_SESSION['CiPersona'])) {
     exit();
 }
 $Catequista = $_SESSION['CiPersona'];
+$rolActual = $Catequista['RolCat'] ?? '';
+
+if ($rolActual !== 'Coordinador') {
+    $destino = isset($Catequista['RolCat'])
+        ? '../VistaCatequista/VistaCatequista.php'
+        : '../VistaCelebrante/VistaCelebrante.php';
+    header('Location: ' . $destino);
+    exit();
+}
 
 require_once '../Controlador/controladorCatAsis.php';
 
@@ -12,11 +21,25 @@ $controladorAsis = new CatequistaAsisControlador();
 $fecha = isset($_GET['fecha']) ? $_GET['fecha'] : date('Y-m-d');
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    $eliminado = false;
+
     if (isset($_POST['modificar'])) {
         $controladorAsis->ActualizarAsistencia($_POST['catequistas'], $_POST['fechaAsis']);
     } elseif (isset($_POST['registrar'])) {
         $controladorAsis->registrarAsistencia($_POST['catequistas'], $_POST['fechaAsis']);
+    } elseif (isset($_POST['eliminar'])) {
+        $controladorAsis->eliminarAsistencia($Catequista['Sacramento'], $_POST['fechaAsis']);
+        $eliminado = true;
     }
+
+    $fechaDestino = $_POST['fechaAsis'] ?? date('Y-m-d');
+    $sacramentoDestino = $Catequista['Sacramento'] ?? '';
+    $urlDestino = 'VistaAsisCat.php?sacramento=' . urlencode($sacramentoDestino) . '&fecha=' . urlencode($fechaDestino);
+    if ($eliminado) {
+        $urlDestino .= '&eliminado=1';
+    }
+    header('Location: ' . $urlDestino);
+    exit();
 }
 
 
@@ -30,6 +53,22 @@ require_once '../Conexion/Conexion.php';
 $conexion = new Conexion();
 $conn = $conexion->getConnection();
 
+$fechasAsistencia = [];
+$stmtFechasAsistencia = $conn->prepare(
+    "SELECT DISTINCT a.FechaAsisCat
+     FROM asistenciacat a
+     INNER JOIN catequista c ON c.CiCat = a.CiCat
+     WHERE c.Sacramento = ?
+     ORDER BY a.FechaAsisCat"
+);
+$stmtFechasAsistencia->bind_param('s', $Catequista['Sacramento']);
+$stmtFechasAsistencia->execute();
+$resFechasAsistencia = $stmtFechasAsistencia->get_result();
+while ($rowFechaAsistencia = $resFechasAsistencia->fetch_assoc()) {
+    $fechasAsistencia[] = $rowFechaAsistencia['FechaAsisCat'];
+}
+$stmtFechasAsistencia->close();
+
 function getActiveNotifications($conn)
 {
     $currentDateTime = date('Y-m-d H:i:s');
@@ -38,11 +77,12 @@ function getActiveNotifications($conn)
             FROM notificaciones n 
             INNER JOIN catequista c ON n.CiNotificador = c.CiCat 
             INNER JOIN `persona` p ON c.CiCat = p.CiPersona 
-            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ?
+            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ? AND n.Sacramento = ?
             ORDER BY n.FechaNotFin ASC";
 
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("s", $currentDateTime);
+    $sacramentoActual = $_SESSION['CiPersona']['Sacramento'] ?? '';
+    $stmt->bind_param("ss", $currentDateTime, $sacramentoActual);
     $stmt->execute();
     $result = $stmt->get_result();
 
@@ -69,6 +109,39 @@ $activeNotifications = getActiveNotifications($conn);
     <link rel="stylesheet" type="text/css" href="../assets/vendor/bootstrap-icons/bootstrap-icons.css">
     <link rel="stylesheet" type="text/css" href="../assets/css/style.css">
     <link rel="stylesheet" type="text/css" href="../assets/css/logo-cabecera.css?v=<?= filemtime(__DIR__ . '/../assets/css/logo-cabecera.css') ?>">
+    <link rel="stylesheet" type="text/css" href="../assets/vendor/flatpickr/dist/flatpickr.min.css">
+    <style>
+        .flatpickr-day.asistencia-registrada {
+            background: #0b3d91;
+            border-color: #0b3d91;
+            color: #fff;
+            font-weight: 700;
+        }
+
+        .flatpickr-day.asistencia-registrada:hover,
+        .flatpickr-day.asistencia-registrada:focus {
+            background: #082b66;
+            border-color: #082b66;
+        }
+
+        .fecha-leyenda {
+            display: block;
+            margin-top: .35rem;
+            font-size: .78rem;
+            color: #6c757d;
+        }
+
+        .fecha-leyenda::before {
+            content: "";
+            display: inline-block;
+            width: .75rem;
+            height: .75rem;
+            margin-right: .35rem;
+            border-radius: 50%;
+            background: #0b3d91;
+            vertical-align: middle;
+        }
+    </style>
     <script src="../assets/js/jquery-3.6.4.min.js"></script>
 </head>
 
@@ -152,11 +225,6 @@ $activeNotifications = getActiveNotifications($conn);
                                 <a class="dropdown-item" href="ReunionesCat.php"><i class="fa-fw bi bi-calendar2-check me-2"></i>Fecha de Reuniones</a>
                             </li>
                             <li>
-                                <a class="dropdown-item" href="Documentos.php">
-                                    <i class="fa-fw bi bi-card-text me-2"></i>Documentación
-                                </a>
-                            </li>
-                            <li>
                                 <a class="dropdown-item" href="Reglamento.php">
                                     <i class="fa-fw bi bi-list-check me-2"></i>Reglamento
                                 </a>
@@ -237,17 +305,7 @@ $activeNotifications = getActiveNotifications($conn);
                                 <a class="nav-link" href="VistaPersona.php"> <i class="<bi bi-person-vcard nav-icon"></i> <span class="nav-text">Persona </span></a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link" href="Configuracion.php"> <i class="bi bi-gear-wide-connected nav-icon"></i> <span class="nav-text">Configuración </span></a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link" href="VistaTodosCat.php"> <i class="bi bi-calendar-check nav-icon"></i> <span class="nav-text">Listado Catequistas</span></a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link" href="VistaTodosCat.php"> <i class="bi bi-file-earmark-text nav-icon"></i> <span class="nav-text">Reporte </span></a>
-                            </li>
-                            <h6 class="nav-text badge bg-primary text-white mt-2 me-2 border border-white border-3 rounded"><i class="bi bi-caret-down-fill"></i>&nbsp;&nbsp; Publico</h6>
-                            <li class="nav-item">
-                                <a class="nav-link" href="VistaMensajeCoor.php"> <i class="bi bi-file-earmark-text nav-icon"></i> <span class="nav-text">Mensaje Público</span></a>
+                                <a class="nav-link" href="VistaTodosCat.php"> <i class="bi bi-calendar-check nav-icon"></i> <span class="nav-text">Reporte Activos Inactivos</span></a>
                             </li>
                         </ul>
                     </div>
@@ -269,13 +327,21 @@ $activeNotifications = getActiveNotifications($conn);
                                                 <input type="hidden" name="sacramento" id="sacramento" value="<?php echo $Catequista['Sacramento']; ?>" required>
                                                 <div class="col-sm-6 col-lg-6">
                                                     <label for="fecha" class="form-label">Fecha Actual:</label>
-                                                    <input type="date" name="fecha" id="fecha" class="form-control" value="<?php echo htmlspecialchars($fecha); ?>" required>
+                                                    <input type="text" name="fecha" id="fecha" class="form-control" value="<?php echo htmlspecialchars($fecha); ?>" autocomplete="off" required>
+                                                    <small class="fecha-leyenda">Fechas en azul oscuro: asistencia registrada.</small>
                                                 </div>
                                                 <div class="col-sm-6 col-lg-3">
                                                     <button type="submit" class="btn btn-primary-soft w-100" data-bs-toggle="tooltip" data-bs-placement="top" title="Buscar"><i class="bi bi-search"></i></button>
                                                 </div>
                                                 <div class="col-sm-6 col-lg-3">
-                                                    <a type="buttom" href="#" class="btn btn-primary-soft w-100" data-bs-toggle="tooltip" data-bs-placement="top" title="Registro"><i class="bi bi-file-earmark-spreadsheet"></i></a>
+                                                    <div class="btn-group w-100">
+                                                        <a href="reporteAsistenciaDia.php?fecha=<?php echo urlencode($fecha); ?>&amp;sacramento=<?php echo urlencode($Catequista['Sacramento']); ?>" target="_blank" class="btn btn-primary-soft flex-grow-1" title="Registro del día"><i class="bi bi-file-earmark-spreadsheet"></i></a>
+                                                        <button type="button" class="btn btn-primary-soft dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false"><span class="visually-hidden">Más opciones</span></button>
+                                                        <ul class="dropdown-menu dropdown-menu-end">
+                                                            <li><a class="dropdown-item" href="reporteAsistenciaDia.php?fecha=<?php echo urlencode($fecha); ?>&amp;sacramento=<?php echo urlencode($Catequista['Sacramento']); ?>" target="_blank"><i class="bi bi-file-earmark-pdf me-1"></i>Registro del día (PDF)</a></li>
+                                                            <li><a class="dropdown-item" href="reporteAsistencia.php?fecha=<?php echo urlencode($fecha); ?>&amp;sacramento=<?php echo urlencode($Catequista['Sacramento']); ?>&amp;generar_pdf=1" target="_blank"><i class="bi bi-calendar3 me-1"></i>Reporte anual</a></li>
+                                                        </ul>
+                                                    </div>
                                                 </div>
                                             </form>
                                         </div>
@@ -284,6 +350,11 @@ $activeNotifications = getActiveNotifications($conn);
                             </div>
 
                             <div class="p-3 col-lg-10 mx-auto">
+                                <?php if (isset($_GET['eliminado'])): ?>
+                                    <div class="alert alert-success" role="alert">
+                                        <i class="bi bi-check-circle me-1"></i>Asistencia eliminada correctamente.
+                                    </div>
+                                <?php endif; ?>
                                 <?php
                                 if (isset($_GET['sacramento']) && isset($_GET['fecha'])) {
                                     $sacramento = $_GET['sacramento'];
@@ -312,17 +383,18 @@ $activeNotifications = getActiveNotifications($conn);
                                                         $detalleAsis = $controladorAsis->obtenerAsistencia($cat['CiCat'], $cat['IdGrupo'], $fecha);
 
                                                         // Si hay algún valor en detalleAsis, activamos la variable de control
-                                                        if ($detalleAsis == 'Presente' || $detalleAsis == 'Falta') {
+                                                        if ($detalleAsis == 'Presente' || $detalleAsis == 'Falta' || $detalleAsis == 'Permiso') {
                                                             $hayAsistencia = true;
                                                         }
                                                     ?>
 
                                                         <tr>
-                                                            <input type='hidden' name='catequistas[<?= $index; ?>][Gestion]' value='<?= $cat['Gestion']; ?>'>
-                                                            <input type='hidden' name='catequistas[<?= $index; ?>][ciCat]' value='<?= $cat['CiCat']; ?>'>
-                                                            <input type='hidden' name='catequistas[<?= $index; ?>][idGrupo]' value='<?= $cat['IdGrupo']; ?>'>
-
-                                                            <td><?= $cat['NombreGrupo']; ?></td>
+                                                            <td>
+                                                                <input type='hidden' name='catequistas[<?= $index; ?>][Gestion]' value='<?= $cat['Gestion']; ?>'>
+                                                                <input type='hidden' name='catequistas[<?= $index; ?>][ciCat]' value='<?= $cat['CiCat']; ?>'>
+                                                                <input type='hidden' name='catequistas[<?= $index; ?>][idGrupo]' value='<?= $cat['IdGrupo']; ?>'>
+                                                                <?= $cat['NombreGrupo']; ?>
+                                                            </td>
                                                             <td><?= $cat['RolCat']; ?></td>
                                                             <td><?= $cat['Nombre'] . " " . $cat['ApPaterno'] . " " . $cat['ApMaterno']; ?></td>
 
@@ -335,6 +407,10 @@ $activeNotifications = getActiveNotifications($conn);
                                                                     <input type="radio" name="catequistas[<?= $index; ?>][detalleAsis]" value="Falta" <?= $detalleAsis == 'Falta' ? 'checked' : '' ?>>
                                                                     Falta
                                                                 </label>
+                                                                <label class="me-2">
+                                                                    <input type="radio" name="catequistas[<?= $index; ?>][detalleAsis]" value="Permiso" <?= $detalleAsis == 'Permiso' ? 'checked' : '' ?>>
+                                                                    Permiso
+                                                                </label>
                                                             </td>
                                                         </tr>
                                                     <?php } ?>
@@ -345,6 +421,11 @@ $activeNotifications = getActiveNotifications($conn);
                                                 <button type='submit' name='modificar' class="btn btn-primary-soft me-2 w-100">Modificar Asistencias de Catequistas</button>
                                             <?php } else { ?>
                                                 <button type='submit' name='registrar' class="btn btn-success-soft me-2 w-100">Registrar Asistencias de Catequistas</button>
+                                            <?php } ?>
+                                            <?php if ($hayAsistencia) { ?>
+                                                <button type='submit' name='eliminar' class="btn btn-danger-soft w-100 mt-2">
+                                                    <i class="bi bi-trash me-1"></i>Eliminar asistencia de esta fecha
+                                                </button>
                                             <?php } ?>
                                         </form>
                                 <?php
@@ -444,6 +525,7 @@ $activeNotifications = getActiveNotifications($conn);
     <script>
         function setCurrentDate() {
             var fechaInput = document.getElementById('fecha');
+            if (!fechaInput || fechaInput.value) return;
 
             var today = new Date();
             var year = today.getFullYear();
@@ -505,6 +587,55 @@ $activeNotifications = getActiveNotifications($conn);
             });
         }
     });
+</script>
+<script src="../assets/vendor/flatpickr/dist/flatpickr.min.js"></script>
+<script>
+    (function () {
+        var fechasAsistencia = <?php echo json_encode($fechasAsistencia, JSON_UNESCAPED_UNICODE); ?>;
+        var disponibles = new Set(fechasAsistencia);
+
+        var localeEs = {
+            weekdays: {
+                shorthand: ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'],
+                longhand: ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
+            },
+            months: {
+                shorthand: ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'],
+                longhand: ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+            },
+            firstDayOfWeek: 1,
+            weekAbbreviation: 'Sem',
+            rangeSeparator: ' a ',
+            scrollTitle: 'Desplázate para aumentar',
+            toggleTitle: 'Haz clic para cambiar',
+            amPM: ['AM', 'PM'],
+            yearAriaLabel: 'Año',
+            monthAriaLabel: 'Mes',
+            hourAriaLabel: 'Hora',
+            minuteAriaLabel: 'Minuto',
+            time_24hr: true
+        };
+
+        if (typeof flatpickr === 'function') {
+            flatpickr('#fecha', {
+                dateFormat: 'Y-m-d',
+                altInput: true,
+                altFormat: 'd/m/Y',
+                defaultDate: <?php echo json_encode($fecha); ?>,
+                allowInput: true,
+                locale: localeEs,
+                onDayCreate: function (dObj, dStr, fp, dayElem) {
+                    var f = dayElem.dateObj;
+                    var iso = f.getFullYear() + '-' +
+                        String(f.getMonth() + 1).padStart(2, '0') + '-' +
+                        String(f.getDate()).padStart(2, '0');
+                    if (disponibles.has(iso)) {
+                        dayElem.classList.add('asistencia-registrada');
+                    }
+                }
+            });
+        }
+    })();
 </script>
 </body>
 

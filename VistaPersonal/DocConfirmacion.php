@@ -178,15 +178,6 @@ if (isset($_GET['CodIns'])) {
             error_log('No se pudo guardar el respaldo local de Confirmación: ' . $e->getMessage());
         }
 
-        try {
-            require_once __DIR__ . '/../Controlador/controladorGoogleDrive.php';
-            $drive = new ControladorGoogleDrive();
-            if ($drive->estaConectado()) {
-                $drive->respaldarPDF($pdfContent, 'Confirmacion', $certificadoData['Celebrante']);
-            }
-        } catch (Throwable $e) {
-            error_log('No se pudo guardar el respaldo de Confirmación en Drive: ' . $e->getMessage());
-        }
     }
 
     @unlink($tmpFile);

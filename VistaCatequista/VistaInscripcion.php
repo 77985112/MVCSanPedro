@@ -8,11 +8,22 @@ if (!isset($_SESSION['CiPersona'])) {
     exit();
 }
 $Catequista = $_SESSION['CiPersona'];
+require_once __DIR__ . '/../Controlador/controladorAccesoCatequista.php';
+ControladorAccesoCatequista::exigirCambioClave();
+
+if (($Catequista['RolCat'] ?? '') !== 'Titular'
+    && ($Catequista['PoderCat'] ?? '') !== 'Habilitado'
+    && empty($Catequista['PuedeRegistrarCatequizandos'])) {
+    header('Location: VistaCatequista.php');
+    exit;
+}
+
 $controller = new ControladorPersona();
 $controllerCel = new CelebranteControllerAdmin();
 $mensaje = '';
 $mensaje1 = '';
 $celebranteAdmin = null;
+$mostrarTicketCel = false;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['registrarCel'])) {
     $ciCel = trim((string) ($_POST['CiCelNuevo'] ?? ''));
@@ -45,7 +56,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['registrarCel'])) {
         ];
         try {
             if ($controllerCel->registrarCelebrante($datosCelebrante)) {
-                $mensaje = 'Catequisando registrado correctamente.';
+                $registroTicket = $controllerCel->buscarCelebrante($ciCel, $sacramentoCel);
+                $_SESSION['registroCatequizando'] = [
+                    'Nombre' => $registroTicket['CiCel'] ?? $ciCel,
+                    'NombreCompleto' => $registroTicket['NombreCompleto'] ?? $ciCel,
+                    'NombreGrupo' => !empty($registroTicket['NombreGrupo']) ? $registroTicket['NombreGrupo'] : 'Sin grupo',
+                    'Sacramento' => $registroTicket['Sacramento'] ?? $sacramentoCel,
+                    'UsuarioCel' => $usuarioCel,
+                    'ClaveCel' => $claveCel
+                ];
+                $mostrarTicketCel = true;
+                $mensaje = 'Catequisando registrado correctamente. Debe cambiar la contraseña en su primer ingreso.';
             } else {
                 $mensaje1 = 'No se pudo registrar al catequisando.';
             }
@@ -130,11 +151,12 @@ function getActiveNotifications($conn)
             FROM notificaciones n 
             INNER JOIN catequista c ON n.CiNotificador = c.CiCat 
             INNER JOIN `persona` p ON c.CiCat = p.CiPersona 
-            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ?
+            WHERE n.EstadoNot = 'Activo' AND n.FechaNotFin > ? AND n.Sacramento = ?
             ORDER BY n.FechaNotFin ASC";
 
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("s", $currentDateTime);
+    $sacramentoActual = $_SESSION['CiPersona']['Sacramento'] ?? '';
+    $stmt->bind_param("ss", $currentDateTime, $sacramentoActual);
     $stmt->execute();
     $result = $stmt->get_result();
 
@@ -238,11 +260,6 @@ $activeNotifications = getActiveNotifications($conn);
                             </li>
                             <li>
                                 <a class="dropdown-item" href="ReunionesCat.php"><i class="fa-fw bi bi-calendar2-check me-2"></i>Fecha de Reuniones</a>
-                            </li>
-                            <li>
-                                <a class="dropdown-item" href="Documentos.php">
-                                    <i class="fa-fw bi bi-card-text me-2"></i>Documentación
-                                </a>
                             </li>
                             <li>
                                 <a class="dropdown-item" href="Reglamento.php">
@@ -373,7 +390,7 @@ $activeNotifications = getActiveNotifications($conn);
                                                     <a class="nav-link" href="VistaReporteGrupo.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/reporte.png" alt=""><span>Reporte General</span></a>
                                                 </li>
                                             <?php } ?>
-                                            <?php if ($Catequista['PoderCat'] == "Habilitado") { ?>
+                                            <?php if ($Catequista['PoderCat'] == "Habilitado" || !empty($Catequista['PuedeRegistrarCatequizandos'])) { ?>
                                                 <li class="nav-item">
                                                     <a class="nav-link active" href="VistaInscripcion.php"> <img class="me-2 h-20px fa-fw" src="../assets/images/icon/Inscripcion.png" alt=""><span>Inscripciones</span></a>
                                                 </li>
@@ -416,9 +433,9 @@ $activeNotifications = getActiveNotifications($conn);
                             <?php if (!empty($mensaje)): ?>
                                 <div class="alert alert-success" role="alert">
                                     <?php echo $mensaje; ?>
-                                    <?php if ($mensaje != "Catequisando modificado con éxito.") { ?>
-                                        <a href="tiketCel.php" target="_blank" class="btn btn-xs btn-success mt-2 mt-lg-0 ms-lg-4">Generar ticket</a>
-                                    <?php }; ?>
+                                    <?php if ($mostrarTicketCel): ?>
+                                        <a href="tiketCel.php?t=<?php echo time(); ?>" target="_blank" class="btn btn-xs btn-success mt-2 mt-lg-0 ms-lg-4">Generar ticket</a>
+                                    <?php endif; ?>
                                 </div>
                             <?php endif; ?>
                             <?php if (!empty($mensaje1)) : ?>
@@ -492,7 +509,7 @@ $activeNotifications = getActiveNotifications($conn);
 
                                         <div class="col-sm-6 col-lg-3 me-2">
                                             <label class="form-label" class="form-control">Grupo Actual</label>
-                                            <?php if ($celebranteAdmin['Sacramento'] == 'Primera Comunión'): ?>
+                                            <?php if (stripos($celebranteAdmin['Sacramento'], 'Primera Comunión') !== false): ?>
 
                                                 <select class="form-control" name="IdGrupo" data-search-enabled="true">
                                                     <option value="1" <?php if ($celebranteAdmin['IdGrupo'] == "1") echo 'selected'; ?>>Sin Grupo</option>
@@ -519,7 +536,7 @@ $activeNotifications = getActiveNotifications($conn);
                                                     <option value="43" <?php if ($celebranteAdmin['IdGrupo'] == "43") echo 'selected'; ?>>Pendiente</option>
                                                 </select>
 
-                                            <?php elseif ($celebranteAdmin['Sacramento'] == 'Confirmación'): ?>
+                                            <?php elseif (stripos($celebranteAdmin['Sacramento'], 'Confirmación') !== false): ?>
                                                 <select class="form-control" name="IdGrupo" data-search-enabled="true">
                                                     <option value="22" <?php if ($celebranteAdmin['IdGrupo'] == "22") echo 'selected'; ?>>Sin Grupo</option>
                                                     <option value="23" <?php if ($celebranteAdmin['IdGrupo'] == "23") echo 'selected'; ?>>Grupo 01</option>

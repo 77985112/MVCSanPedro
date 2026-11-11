@@ -550,25 +550,32 @@ $ultimasActividades = array_slice($controladorActividades->obtenerActividades(nu
 
                                 <div class="row g-4 align-items-center position-relative z-index-1">
                                     <div class="col-md-6">
-                                        <div class="me-4">
+                                        <div class="me-4 position-relative">
                                             <?php
-                                            // El video del templo pesa mas de lo que acepta el hosting gratuito,
-                                            // por eso puede no estar en el servidor. Si falta, no se muestra el boton.
-                                            $hayVideoTemplo = is_file(__DIR__ . '/assets/images/videos/Templo_San Pedro.mp4');
+                                            // El video del templo pesa 51 MB, así que se incrusta desde
+                                            // YouTube. El iframe se carga recién al pulsar el botón.
+                                            $videoTemploYouTube = 'https://youtu.be/GJHT_DHPU78';
+                                            $videoTemploId = '';
+                                            if (preg_match('#(?:youtu\.be/|youtube\.com/(?:watch\?v=|embed/|shorts/|live/))([A-Za-z0-9_-]{6,20})#', $videoTemploYouTube, $coincideVideo)) {
+                                                $videoTemploId = $coincideVideo[1];
+                                            }
                                             ?>
-                                            <?php if ($hayVideoTemplo): ?>
+                                            <?php if ($videoTemploId !== ''): ?>
                                             <button id="showVideoButton"
                                                 class="btn btn-primary icon-md rounded-circle playerbtn"><i
                                                     class="bi bi-play-fill"></i></button>
                                             <div id="videoContainer" class="player-wrapper rounded-3"
-                                                style="display:none;">
+                                                style="display:none;position:absolute;top:0;left:0;width:100%;max-width:520px;z-index:1000;">
                                                 <button id="closeVideoButton"
                                                     class="btn btn-danger icon-md rounded-circle mb-3"> <i
                                                         class="bi bi-x-lg"></i></button>
-                                                <video id="videoPlayer" class="player-html" controls>
-                                                    <source src="assets/images/videos/Templo_San Pedro.mp4"
-                                                        type="video/mp4">
-                                                </video>
+                                                <div class="ratio ratio-16x9 rounded-3 overflow-hidden">
+                                                    <iframe id="videoPlayer" title="Video del templo"
+                                                        data-src="https://www.youtube.com/embed/<?php echo htmlspecialchars($videoTemploId, ENT_QUOTES, 'UTF-8'); ?>?autoplay=1&amp;rel=0"
+                                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                                        allowfullscreen referrerpolicy="strict-origin-when-cross-origin"
+                                                        style="border:0;"></iframe>
+                                                </div>
                                             </div>
                                             <?php endif; ?>
                                         </div>
@@ -644,6 +651,7 @@ $ultimasActividades = array_slice($controladorActividades->obtenerActividades(nu
                         <?php foreach ($ultimasActividades as $indice => $actividad): ?>
                             <?php
                             list($imagenActividad, $videoActividad) = ControladorActividad::archivosActividad($actividad);
+                            $hayVideoActividad = $videoActividad || !empty($actividad['VideoUrl']);
                             $fechaTs = strtotime($actividad['FechaActividad']);
                             $rutaMini = $imagenActividad ?: ($videoActividad ?: 'Generico.png');
                             ?>
@@ -651,7 +659,7 @@ $ultimasActividades = array_slice($controladorActividades->obtenerActividades(nu
                                 <div class="card h-100 shadow-sm border-0 overflow-hidden rounded-4">
                                     <div class="position-relative">
                                         <img src="assets/images/events/<?php echo rawurlencode($rutaMini); ?>" alt="" class="w-100" style="height:170px; object-fit:cover;">
-                                        <?php if ($videoActividad): ?>
+                                        <?php if ($hayVideoActividad): ?>
                                             <span class="badge rounded-pill bg-dark position-absolute top-0 start-0 m-2"><i class="bi bi-play-btn me-1"></i>Video</span>
                                         <?php endif; ?>
                                         <?php if ($indice === 0): ?>
@@ -763,6 +771,8 @@ $ultimasActividades = array_slice($controladorActividades->obtenerActividades(nu
                                                     <h6 class="card-title mb-1 mt-3"> <?php echo $catequista['NombreCompleto']; ?></h6>
 
                                                     <p class="mb-0 small lh-sm"><?php echo $catequista['Sacramento']; ?></p>
+                                                    <span class="badge bg-primary-soft text-primary mt-1"><?php echo htmlspecialchars($catequista['Roles']); ?></span>
+                                                    <p class="mb-0 small text-muted"><?php echo htmlspecialchars($catequista['Grupos']); ?></p>
                                                 </div>
                                                 <div class="card-footer p-2 border-0">
                                                     <form action="src/srcCatequistaPer.php" method="POST">
@@ -1102,14 +1112,26 @@ $ultimasActividades = array_slice($controladorActividades->obtenerActividades(nu
         if (showVideoButton && closeVideoButton && videoPlayer) {
             showVideoButton.addEventListener('click', function() {
                 videoContainer.style.display = 'block';
-                showVideoButton.style.display = 'none';
-                videoPlayer.play();
+                // Se oculta con visibility para que el botón conserve su espacio
+                // y el video aparezca exactamente donde estaba.
+                showVideoButton.style.visibility = 'hidden';
+                if (videoPlayer.tagName === 'IFRAME') {
+                    if (!videoPlayer.getAttribute('src')) {
+                        videoPlayer.setAttribute('src', videoPlayer.dataset.src);
+                    }
+                } else {
+                    videoPlayer.play();
+                }
             });
 
             closeVideoButton.addEventListener('click', function() {
                 videoContainer.style.display = 'none';
-                showVideoButton.style.display = 'block';
-                videoPlayer.pause();
+                showVideoButton.style.visibility = '';
+                if (videoPlayer.tagName === 'IFRAME') {
+                    videoPlayer.removeAttribute('src');
+                } else {
+                    videoPlayer.pause();
+                }
             });
         }
 
