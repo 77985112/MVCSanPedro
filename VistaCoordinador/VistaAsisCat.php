@@ -141,6 +141,27 @@ $activeNotifications = getActiveNotifications($conn);
             background: #0b3d91;
             vertical-align: middle;
         }
+
+        /* Mismo ancho, letra y numeros en Primera Comunion y Confirmacion. */
+        .asistencia-catequistas section.col-md-10 > .container,
+        .asistencia-catequistas section.col-md-10 > .container-fluid {
+            max-width: 1350px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .asistencia-catequistas h1 {
+            font-size: 2.125rem;
+            line-height: 1.2;
+        }
+
+        .asistencia-catequistas .form-label,
+        .asistencia-catequistas .form-control,
+        .asistencia-catequistas .table,
+        .asistencia-catequistas .table th,
+        .asistencia-catequistas .table td {
+            font-size: .9375rem;
+        }
     </style>
     <script src="../assets/js/jquery-3.6.4.min.js"></script>
 </head>
@@ -261,7 +282,7 @@ $activeNotifications = getActiveNotifications($conn);
         </nav>
     </header>
 
-    <main>
+    <main class="asistencia-catequistas">
         <div class="container-fluid">
             <div class="d-flex align-items-center d-lg-none mb-2">
                 <button class="border-0 bg-transparent p-0 d-flex align-items-center sidebar-start-toggle-mobile" type="button" aria-label="Otras opciones">
