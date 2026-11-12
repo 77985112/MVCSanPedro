@@ -108,6 +108,30 @@ $activeNotifications = getActiveNotifications($conn);
             border-radius: 30px;
             animation: moving 5s ease-in-out infinite;
         }
+
+        /* Mantener el mismo tamano de letra y numeros en Primera Comunion y Confirmacion. */
+        .inicio-coordinador section.col-md-10 > .container {
+            max-width: 1200px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .inicio-coordinador h2 {
+            font-size: 1.75rem;
+            line-height: 1.2;
+        }
+
+        .inicio-coordinador .card h5 {
+            font-size: 1.125rem;
+        }
+
+        .inicio-coordinador .card h6 {
+            font-size: 1rem;
+        }
+
+        .inicio-coordinador .card small {
+            font-size: .8125rem;
+        }
     </style>
 </head>
 
@@ -227,7 +251,7 @@ $activeNotifications = getActiveNotifications($conn);
         </nav>
     </header>
 
-    <main>
+    <main class="inicio-coordinador">
         <div class="container-fluid">
             <div class="d-flex align-items-center d-lg-none mb-2">
                 <button class="border-0 bg-transparent p-0 d-flex align-items-center sidebar-start-toggle-mobile" type="button" aria-label="Otras opciones">
