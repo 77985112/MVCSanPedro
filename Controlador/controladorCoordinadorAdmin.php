@@ -52,6 +52,23 @@ class ControladorCoordinadorAdmin {
         return $this->modelo->cambiarEstadoCoordinador($ci, 'Activo');
     }
 
+    public function actualizarCoordinador($ci, $usuario, $clave = '') {
+        $hash = $clave !== '' ? password_hash($clave, PASSWORD_DEFAULT) : '';
+        return $this->modelo->actualizarCoordinador($ci, $usuario, $hash);
+    }
+
+    public function restablecerClaveCoordinador($ci) {
+        $registro = $this->modelo->buscarCoordinador($ci);
+        if (!$registro) {
+            return false;
+        }
+        $nueva = 'Tmp' . strtoupper(bin2hex(random_bytes(4)));
+        if (!$this->modelo->actualizarClaveCoordinador($ci, password_hash($nueva, PASSWORD_DEFAULT), 1)) {
+            return false;
+        }
+        return ['clave' => $nueva, 'registro' => $registro];
+    }
+
     public function buscarPersonasPorNombre($nombre) {
         return $this->modelo->buscarPersonasPorNombre($nombre);
     }

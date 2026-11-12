@@ -74,6 +74,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion'])) {
         }
     }
 
+    if ($accion === 'editar_coordinador') {
+        $ci = trim((string) ($_POST['ci'] ?? ''));
+        $usuarioCat = trim((string) ($_POST['UsuarioCat'] ?? ''));
+        $clave = trim((string) ($_POST['ClaveCat'] ?? ''));
+        $coordinador = $controller->buscarCoordinador($ci);
+        $errores = [];
+
+        if (!$coordinador) {
+            $errores[] = 'Coordinador no encontrado.';
+        }
+        if ($usuarioCat === '') {
+            $errores[] = 'Escribe el usuario de acceso.';
+        } elseif ($controller->verificarUsuarioDisponible($usuarioCat, $ci)) {
+            $errores[] = 'Ese usuario ya lo usa otro catequista.';
+        }
+        if ($clave !== '' && mb_strlen($clave) < 6) {
+            $errores[] = 'La nueva contraseña debe tener al menos 6 caracteres.';
+        }
+
+        if ($errores) {
+            $mensaje1 = implode(' ', $errores);
+        } elseif ($controller->actualizarCoordinador($ci, $usuarioCat, $clave)) {
+            $mensaje = 'Datos del coordinador actualizados correctamente.';
+        } else {
+            $mensaje1 = 'No se pudieron actualizar los datos del coordinador.';
+        }
+    }
+
+    if ($accion === 'restablecer_coordinador') {
+        $ci = trim((string) ($_POST['ci'] ?? ''));
+        $resultado = $controller->restablecerClaveCoordinador($ci);
+        if ($resultado) {
+            $registro = $resultado['registro'];
+            $_SESSION['registroPersonal'] = [
+                'Nombre' => trim($registro['Nombre'] . ' ' . $registro['ApPaterno'] . ' ' . $registro['ApMaterno']),
+                'UsuarioPer' => $registro['UsuarioCat'],
+                'ClavePer' => $resultado['clave'],
+                'DescripCar' => 'Coordinador',
+            ];
+            header('Location: generar_ticket.php?t=' . time());
+            exit;
+        }
+        $mensaje1 = 'No se pudo generar la clave de un solo uso.';
+    }
+
     if ($accion === 'asignar_coordinador') {
         $ci = trim((string) ($_POST['CiPersona'] ?? ''));
         $sacramento = trim((string) ($_POST['Sacramento'] ?? ''));
@@ -436,10 +481,25 @@ $coordinadores = $controller->obtenerCoordinadores($gestionSeleccionada);
                           </span>
                         </td>
                         <td class="text-end">
-                          <button type="button" class="btn btn-sm btn-outline-secondary" onclick="verClave('<?php echo htmlspecialchars($coor['CiCat']); ?>')" title="Ver contraseña">
-                            <i class="bi bi-eye" id="ojo-<?php echo htmlspecialchars($coor['CiCat']); ?>"></i>
+                          <button type="button"
+                            class="btn btn-sm btn-outline-primary me-1 btn-editar-coordinador"
+                            data-bs-toggle="modal" data-bs-target="#modalEditarCoordinador"
+                            data-ci="<?php echo htmlspecialchars($coor['CiCat'], ENT_QUOTES, 'UTF-8'); ?>"
+                            data-nombre="<?php echo htmlspecialchars(trim($coor['Nombre'] . ' ' . $coor['ApPaterno'] . ' ' . $coor['ApMaterno']), ENT_QUOTES, 'UTF-8'); ?>"
+                            data-sacramento="<?php echo htmlspecialchars($coor['Sacramento'], ENT_QUOTES, 'UTF-8'); ?>"
+                            data-usuario="<?php echo htmlspecialchars($coor['UsuarioCat'], ENT_QUOTES, 'UTF-8'); ?>"
+                            title="Editar coordinador">
+                            <i class="bi bi-pencil"></i>
                           </button>
-                          <span id="clave-<?php echo htmlspecialchars($coor['CiCat']); ?>" class="small text-muted d-none ms-1"><?php echo htmlspecialchars($coor['ClaveCat']); ?></span>
+
+                          <form method="POST" target="_blank" class="d-inline me-1">
+                            <input type="hidden" name="accion" value="restablecer_coordinador">
+                            <input type="hidden" name="Gestion" value="<?php echo $gestionSeleccionada; ?>">
+                            <input type="hidden" name="ci" value="<?php echo htmlspecialchars($coor['CiCat']); ?>">
+                            <button type="submit" class="btn btn-sm btn-warning" title="Nueva clave de un solo uso">
+                              <i class="bi bi-key"></i>
+                            </button>
+                          </form>
 
                           <form method="POST" class="d-inline">
                             <input type="hidden" name="accion" value="cambiar_estado">
@@ -475,6 +535,45 @@ $coordinadores = $controller->obtenerCoordinadores($gestionSeleccionada);
         <div class="modal-body">
           <?php renderFormularioPersonaAmpliado('registrarPersona', 'Registrar persona'); ?>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="modalEditarCoordinador" tabindex="-1" aria-labelledby="modalEditarCoordinadorLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <form method="POST">
+          <div class="modal-header">
+            <h5 class="modal-title" id="modalEditarCoordinadorLabel"><i class="bi bi-pencil-square me-1"></i>Editar coordinador</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+          </div>
+          <div class="modal-body row g-3">
+            <input type="hidden" name="accion" value="editar_coordinador">
+            <input type="hidden" name="Gestion" value="<?php echo $gestionSeleccionada; ?>">
+            <input type="hidden" name="ci" id="editCiCoordinador">
+            <div class="col-12">
+              <label class="form-label">Nombre</label>
+              <input type="text" class="form-control" id="editNombreCoordinador" readonly>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Sacramento</label>
+              <input type="text" class="form-control" id="editSacramentoCoordinador" readonly>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Usuario</label>
+              <input type="text" class="form-control" name="UsuarioCat" id="editUsuarioCoordinador" maxlength="100" required autocomplete="off">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Nueva contraseña <span class="text-muted">(opcional)</span></label>
+              <input type="text" class="form-control" name="ClaveCat" id="editClaveCoordinador" minlength="6" placeholder="Dejar en blanco para conservar la actual" autocomplete="new-password">
+              <div class="form-text">Si escribes una contraseña, se guardará cifrada. Para una clave temporal usa el botón de la llave.</div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-light border" data-bs-dismiss="modal">Cancelar</button>
+            <button type="submit" class="btn btn-primary">Guardar cambios</button>
+          </div>
+        </form>
       </div>
     </div>
   </div>
@@ -540,15 +639,6 @@ $coordinadores = $controller->obtenerCoordinadores($gestionSeleccionada);
       });
     }
 
-    function verClave(ci) {
-      const span = document.getElementById('clave-' + ci);
-      const ojo = document.getElementById('ojo-' + ci);
-      if (!span) return;
-      const oculto = span.classList.toggle('d-none');
-      if (ojo) ojo.className = oculto ? 'bi bi-eye' : 'bi bi-eye-slash';
-    }
-
-
     function toggleCred(ci) {
       const hidden = document.getElementById('cred-' + ci);
       const visible = document.getElementById('cred-show-' + ci);
@@ -562,6 +652,19 @@ $coordinadores = $controller->obtenerCoordinadores($gestionSeleccionada);
         hidden.classList.remove('d-none');
         eye.classList.replace('bi-eye-slash', 'bi-eye');
       }
+    }
+
+    var modalEditarCoordinador = document.getElementById('modalEditarCoordinador');
+    if (modalEditarCoordinador) {
+      modalEditarCoordinador.addEventListener('show.bs.modal', function (evento) {
+        var boton = evento.relatedTarget;
+        if (!boton) return;
+        document.getElementById('editCiCoordinador').value = boton.getAttribute('data-ci') || '';
+        document.getElementById('editNombreCoordinador').value = boton.getAttribute('data-nombre') || '';
+        document.getElementById('editSacramentoCoordinador').value = boton.getAttribute('data-sacramento') || '';
+        document.getElementById('editUsuarioCoordinador').value = boton.getAttribute('data-usuario') || '';
+        document.getElementById('editClaveCoordinador').value = '';
+      });
     }
   </script>
   <script src="../assets/js/persona-registro.js?v=<?= filemtime(__DIR__ . '/../assets/js/persona-registro.js') ?>"></script>

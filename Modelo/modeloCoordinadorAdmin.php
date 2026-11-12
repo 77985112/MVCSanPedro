@@ -234,6 +234,23 @@ class ModeloCoordinadorAdmin {
         return $stmt->execute();
     }
 
+    public function actualizarCoordinador($ci, $usuario, $claveHash = '') {
+        if ($claveHash !== '') {
+            $stmt = $this->conn->prepare("UPDATE catequista SET UsuarioCat = ?, ClaveCat = ?, DebeCambiarClave = 0 WHERE CiCat = ?");
+            $stmt->bind_param("sss", $usuario, $claveHash, $ci);
+        } else {
+            $stmt = $this->conn->prepare("UPDATE catequista SET UsuarioCat = ? WHERE CiCat = ?");
+            $stmt->bind_param("ss", $usuario, $ci);
+        }
+        return $stmt->execute();
+    }
+
+    public function actualizarClaveCoordinador($ci, $claveHash, $debeCambiar = 1) {
+        $stmt = $this->conn->prepare("UPDATE catequista SET ClaveCat = ?, DebeCambiarClave = ? WHERE CiCat = ?");
+        $stmt->bind_param("sis", $claveHash, $debeCambiar, $ci);
+        return $stmt->execute();
+    }
+
     public function buscarPersonasPorNombre($nombre) {
         $busqueda = "%{$nombre}%";
         $stmt = $this->conn->prepare("
