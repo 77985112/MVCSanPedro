@@ -184,6 +184,15 @@ if (!isset($_GET['Cper'])) {
     .tabla-personal tbody tr:hover {
       background: #fcfaf3;
     }
+    .tabla-personal tbody tr {
+      cursor: pointer;
+    }
+    .tabla-personal tbody tr.fila-seleccionada > td {
+      background-color: #fff3cd !important;
+    }
+    .tabla-personal tbody tr.fila-seleccionada > td:first-child {
+      box-shadow: inset 4px 0 0 #d4a017;
+    }
     .tabla-personal .ci {
       font-variant-numeric: tabular-nums;
       color: #495057;
@@ -1601,6 +1610,24 @@ if (!isset($_GET['Cper'])) {
         form.addEventListener('submit', habilitarTodos);
       });
     })();
+  </script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      var tabla = document.querySelector('.tabla-personal');
+      if (!tabla) return;
+      var filas = Array.prototype.slice.call(tabla.querySelectorAll('tbody tr'));
+      filas.forEach(function (fila) {
+        fila.addEventListener('click', function () {
+          var yaSeleccionada = fila.classList.contains('fila-seleccionada');
+          filas.forEach(function (otra) {
+            otra.classList.remove('fila-seleccionada');
+          });
+          if (!yaSeleccionada) {
+            fila.classList.add('fila-seleccionada');
+          }
+        });
+      });
+    });
   </script>
 </body>
 
