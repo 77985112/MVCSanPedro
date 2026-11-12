@@ -409,7 +409,7 @@ $activeNotifications = getActiveNotifications($conn);
             </div>
             <div class="row justify-content-between g-0">
 
-                <div class="col-md-2 col-lg-3 col-xxl-4 mt-n4">
+                <div class="col-md-2 col-lg-2 col-xxl-2 mt-n4">
                     <div class="nav-sidenav p-4 bg-mode h-100 custom-scrollbar">
                         <div class="d-flex justify-content-end d-lg-none mb-2">
                             <button class="btn btn-light btn-sm sidebar-start-close" type="button" aria-label="Cerrar menú"><i class="bi bi-x-lg"></i></button>
@@ -450,7 +450,7 @@ $activeNotifications = getActiveNotifications($conn);
                 </div>
 
 
-                <section class="pt-0 ">
+                <section class="pt-0 col-md-10 col-lg-10 col-xxl-10 pe-lg-5">
                     <div class="container">
                         <div class="card">
                             <h2 class="align-items-center text-center py-2">Catequistas (<?php echo $Catequista['Sacramento']; ?>)</h2>

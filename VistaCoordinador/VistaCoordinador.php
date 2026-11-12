@@ -279,7 +279,7 @@ $activeNotifications = getActiveNotifications($conn);
 
 
                 <section class="pt-0 col-md-10 col-lg-10 col-xxl-10 pe-lg-5">
-                    <div class="container-fluid px-3">
+                    <div class="container">
                         <div class="card">
                             <?php if ($avisoGrupo): ?>
                                 <div class="alert alert-<?php echo $avisoGrupo['ok'] ? 'success' : 'danger'; ?> alert-dismissible fade show mx-4 mt-4 mb-0" role="alert">
