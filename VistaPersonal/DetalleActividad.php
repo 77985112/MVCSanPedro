@@ -297,8 +297,8 @@ $mes = $fecha->format('d') . " de " . $meses[$fecha->format('n') - 1];
                                     <?php endforeach; ?>
                                 </div>
                                 <?php endif; ?>
-                                <input type="file" class="form-control" id="editarImagenActividad" name="NuevaImagenActividad[]" multiple accept=".jpg,.jpeg,.png,image/jpeg,image/png" data-actividad-imagen="previewImagenEdicion" data-actividad-grupo="editarActividadParroquia" data-actividad-maximas="<?php echo max(0, ControladorActividad::MAXIMO_IMAGENES - count($imagenesActuales)); ?>" data-actividad-galeria="galeriaActualImagen">
-                                <div class="form-text">JPG/PNG, hasta 2 MB c/u. Las imágenes nuevas se agregan a la actividad.</div>
+                                <input type="file" class="form-control" id="editarImagenActividad" name="NuevaImagenActividad[]" multiple accept="image/*" data-actividad-imagen="previewImagenEdicion" data-actividad-grupo="editarActividadParroquia" data-actividad-maximas="<?php echo max(0, ControladorActividad::MAXIMO_IMAGENES - count($imagenesActuales)); ?>" data-actividad-galeria="galeriaActualImagen">
+                                <div class="form-text">Cualquier imagen se convierte a JPG; hasta 2 MB c/u. Las imágenes nuevas se agregan a la actividad.</div>
                                 <?php if ($hayImagen): ?>
                                 <div class="form-check mt-2">
                                     <input class="form-check-input" type="checkbox" id="quitarImagenEdicion" name="QuitarImagen" value="1" data-quitar-actividad="editarImagenActividad">

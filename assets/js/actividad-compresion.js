@@ -84,6 +84,11 @@
         return String(nombre || 'archivo').replace(/\.[^.]+$/, '');
     }
 
+    function necesitaConversion(archivo) {
+        var extension = String(archivo.name || '').split('.').pop().toLowerCase();
+        return archivo.size > LIMITE_IMAGEN || ['jpg', 'jpeg', 'png'].indexOf(extension) === -1;
+    }
+
     function comprimirImagen(archivo) {
         return new Promise(function (resolver) {
             var url = URL.createObjectURL(archivo);
@@ -322,17 +327,17 @@
         var recien = entrada.dataset.recienComprimidas === '1';
         delete entrada.dataset.recienComprimidas;
 
-        var grandes = archivos.filter(function (a) { return a.size > LIMITE_IMAGEN; });
-        if (!grandes.length) {
+        var convertir = archivos.filter(necesitaConversion);
+        if (!convertir.length) {
             aviso(entrada, textoPesos(archivos, recien), recien ? 'text-success' : 'text-muted');
             return;
         }
 
         ocupar(entrada);
-        aviso(entrada, 'Comprimiendo imágenes…', 'text-primary');
+        aviso(entrada, 'Convirtiendo y comprimiendo imágenes…', 'text-primary');
 
         Promise.all(archivos.map(function (archivo) {
-            if (archivo.size <= LIMITE_IMAGEN) return Promise.resolve(archivo);
+            if (!necesitaConversion(archivo)) return Promise.resolve(archivo);
             return comprimirImagen(archivo).then(function (nuevo) { return nuevo || archivo; });
         })).then(function (resultado) {
             reemplazarArchivos(entrada, resultado);

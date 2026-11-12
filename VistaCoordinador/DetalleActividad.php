@@ -422,7 +422,7 @@ $activeNotifications = getActiveNotifications($conn);
                                                         <?php endforeach; ?>
                                                     </div>
                                                     <?php endif; ?>
-                                                    <input type="file" class="form-control" id="NuevaImagenActividad" name="NuevaImagenActividad[]" multiple accept=".jpg,.jpeg,.png,image/jpeg,image/png" data-actividad-imagen="previewImagen" data-actividad-grupo="edicionActividad" data-actividad-maximas="<?php echo max(0, ControladorActividad::MAXIMO_IMAGENES - count($imagenesActuales)); ?>" data-actividad-galeria="galeriaActualImagen">
+                                                    <input type="file" class="form-control" id="NuevaImagenActividad" name="NuevaImagenActividad[]" multiple accept="image/*" data-actividad-imagen="previewImagen" data-actividad-grupo="edicionActividad" data-actividad-maximas="<?php echo max(0, ControladorActividad::MAXIMO_IMAGENES - count($imagenesActuales)); ?>" data-actividad-galeria="galeriaActualImagen">
                                                     <?php if ($hayImagen): ?>
                                                     <div class="form-check mt-2">
                                                         <input class="form-check-input" type="checkbox" id="QuitarImagen" name="QuitarImagen" value="1" data-quitar-actividad="NuevaImagenActividad">
@@ -443,7 +443,7 @@ $activeNotifications = getActiveNotifications($conn);
                                                 </div>
 
                                                 <div class="col-12">
-                                                    <div class="form-text">Sin seleccionar otro archivo, se conservan los actuales. Puede agregar hasta 5 imágenes en total (JPG/PNG, hasta 2 MB c/u); videos MP4/WebM hasta 10 MB.</div>
+                                                    <div class="form-text">Sin seleccionar otro archivo, se conservan los actuales. Puede agregar hasta 5 imágenes en total (cualquier formato; se convierten a JPG, hasta 2 MB c/u); videos MP4/WebM hasta 10 MB.</div>
                                                     <div id="previewImagen" class="d-flex flex-wrap gap-2 mt-3"></div>
                                                     <video id="previewVideo" <?php if ($esVideoActividad): ?>src="../assets/images/events/<?php echo rawurlencode($archivoVideo); ?>"<?php endif; ?> class="w-100 rounded mt-3 actividad-video <?php echo $esVideoActividad ? '' : 'd-none'; ?>" controls playsinline preload="none" style="max-height:300px;"></video>
                                                 </div>

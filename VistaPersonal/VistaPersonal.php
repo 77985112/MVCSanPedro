@@ -521,8 +521,8 @@ $actividadesTodas = $controller->obtenerActividades();
                 <label class="form-label">Imagen, video o enlace *</label>
                 <div class="row g-3 align-items-end">
                   <div class="col-sm-6">
-                    <label class="form-label small text-muted mb-1" for="parroquiaNuevaImagen">Imágenes (máx. 5)</label>
-                    <input type="file" class="form-control" id="parroquiaNuevaImagen" name="NuevaImagenActividad[]" multiple accept=".jpg,.jpeg,.png,image/jpeg,image/png" data-actividad-imagen="previewActividadParroquia" data-actividad-grupo="actividadParroquia" data-actividad-requerido="true" data-actividad-maximas="<?php echo ControladorActividad::MAXIMO_IMAGENES; ?>">
+                    <label class="form-label small text-muted mb-1" for="parroquiaNuevaImagen">Imágenes (cualquier formato; se convierten a JPG, máx. 5)</label>
+                    <input type="file" class="form-control" id="parroquiaNuevaImagen" name="NuevaImagenActividad[]" multiple accept="image/*" data-actividad-imagen="previewActividadParroquia" data-actividad-grupo="actividadParroquia" data-actividad-requerido="true" data-actividad-maximas="<?php echo ControladorActividad::MAXIMO_IMAGENES; ?>">
                   </div>
                   <div class="col-sm-6">
                     <label class="form-label small text-muted mb-1" for="parroquiaNuevaVideo">Video</label>

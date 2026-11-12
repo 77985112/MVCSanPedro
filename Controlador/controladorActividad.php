@@ -226,7 +226,7 @@ class ControladorActividad
     }
 
     /**
-     * Guarda el archivo del campo indicado. $tipo: 'imagen' (JPG/PNG 2 MB) o 'video' (MP4/WebM 10 MB).
+     * Guarda el archivo del campo indicado. $tipo: 'imagen' (JPG, PNG, WEBP, GIF, etc. 2 MB) o 'video' (MP4/WebM 10 MB).
      * Devuelve el nombre generado o null si no se adjuntó nada (solo cuando es opcional).
      */
     private function guardarArchivoActividad($campo, $tipo, $opcional = false)
@@ -240,7 +240,7 @@ class ControladorActividad
     }
 
     /**
-     * Valida un archivo individual (imagen JPG/PNG 2 MB o video MP4/WebM 10 MB) y lo guarda.
+     * Valida un archivo individual (imagen JPG, PNG, WEBP, GIF, etc. 2 MB o video MP4/WebM 10 MB) y lo guarda.
      * Devuelve el nombre generado.
      */
     private function validarYGuardarArchivo($archivo, $tipo)
@@ -249,17 +249,28 @@ class ControladorActividad
         if (!is_array($archivo) || ($archivo['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK
             || !is_string($archivo['tmp_name'] ?? null) || !is_uploaded_file($archivo['tmp_name'])) {
             throw new InvalidArgumentException($esImagen
-                ? "Seleccione una imagen JPG/PNG (hasta 2 MB)."
+                ? "Seleccione una imagen válida (JPG, PNG, WEBP, GIF, etc.) de hasta 2 MB."
                 : "Seleccione un video MP4/WebM (hasta 10 MB).");
         }
         $extension = is_string($archivo['name'] ?? null)
             ? strtolower(pathinfo($archivo['name'], PATHINFO_EXTENSION)) : '';
         $tipos = $esImagen
-            ? ['jpg' => ['image/jpeg'], 'jpeg' => ['image/jpeg'], 'png' => ['image/png']]
+            ? [
+                'jpg' => ['image/jpeg'],
+                'jpeg' => ['image/jpeg'],
+                'jfif' => ['image/jpeg', 'image/jfif'],
+                'png' => ['image/png'],
+                'webp' => ['image/webp'],
+                'gif' => ['image/gif'],
+                'bmp' => ['image/bmp', 'image/x-ms-bmp'],
+                'avif' => ['image/avif'],
+                'tif' => ['image/tiff'],
+                'tiff' => ['image/tiff'],
+            ]
             : ['mp4' => ['video/mp4', 'application/mp4'], 'webm' => ['video/webm']];
         if (!isset($tipos[$extension])) {
             throw new InvalidArgumentException($esImagen
-                ? "La imagen debe estar en formato JPG o PNG."
+                ? "El formato de la imagen no es compatible. Use JPG, PNG, WEBP, GIF, BMP o AVIF."
                 : "El video debe estar en formato MP4 o WebM.");
         }
         $limite = ($esImagen ? 2 : 10) * 1024 * 1024;
@@ -272,7 +283,7 @@ class ControladorActividad
         $mime = (new finfo(FILEINFO_MIME_TYPE))->file($archivo['tmp_name']);
         if (!in_array($mime, $tipos[$extension], true)) {
             throw new InvalidArgumentException($esImagen
-                ? "El contenido del archivo no corresponde a una imagen JPG/PNG válida."
+                ? "El contenido del archivo no corresponde a una imagen válida."
                 : "El contenido del archivo no corresponde a un video MP4/WebM válido.");
         }
         if ($esImagen && @getimagesize($archivo['tmp_name']) === false) {
@@ -288,7 +299,7 @@ class ControladorActividad
             }
         }
 
-        $nombre = 'ACT_' . bin2hex(random_bytes(8)) . '.' . ($extension === 'jpeg' ? 'jpg' : $extension);
+        $nombre = 'ACT_' . bin2hex(random_bytes(8)) . '.' . (($extension === 'jpeg' || $extension === 'jfif') ? 'jpg' : $extension);
         if (!move_uploaded_file($archivo['tmp_name'], __DIR__ . '/../assets/images/events/' . $nombre)) {
             throw new RuntimeException("No se pudo guardar el archivo de la actividad.");
         }
@@ -310,7 +321,7 @@ class ControladorActividad
             throw $e;
         }
         if ($requerirArchivo && !$imagenes && $video === null) {
-            throw new InvalidArgumentException("Adjunte una imagen JPG/PNG (hasta 2 MB), un video MP4/WebM (hasta 10 MB) o ambos.");
+            throw new InvalidArgumentException("Adjunte una imagen (JPG, PNG, WEBP, GIF, etc.), un video MP4/WebM (hasta 10 MB) o ambos.");
         }
         $principal = $imagenes ? array_shift($imagenes) : 'Ninguno';
         return [$principal, $imagenes, $video];
@@ -375,7 +386,7 @@ class ControladorActividad
     private function retirarArchivoNuevo($nombre)
     {
         // Solo se retira el archivo generado por esta operación si falla el guardado.
-        if (is_string($nombre) && preg_match('/^ACT_[a-f0-9]{16}\.(jpg|png|mp4|webm)$/D', $nombre)) {
+        if (is_string($nombre) && preg_match('/^ACT_[a-f0-9]{16}\.(jpg|jpeg|png|webp|gif|bmp|avif|tif|tiff|mp4|webm)$/D', $nombre)) {
             $ruta = __DIR__ . '/../assets/images/events/' . $nombre;
             if (is_file($ruta)) {
                 unlink($ruta);
@@ -580,7 +591,7 @@ class ControladorActividad
     private function borrarArchivoActividad($nombre)
     {
         if (is_string($nombre) && strpos($nombre, 'ACT') === 0
-            && preg_match('/\.(jpg|jpeg|png|mp4|webm)$/D', $nombre)) {
+            && preg_match('/\.(jpg|jpeg|png|webp|gif|bmp|avif|tif|tiff|mp4|webm)$/D', $nombre)) {
             $ruta = __DIR__ . '/../assets/images/events/' . basename($nombre);
             if (is_file($ruta)) {
                 unlink($ruta);

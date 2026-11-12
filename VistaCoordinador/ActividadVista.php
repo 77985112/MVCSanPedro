@@ -578,8 +578,8 @@ $activeNotifications = getActiveNotifications($conn);
                     <div class="card shadow-none p-3">
                         <div class="row g-3">
                             <div class="col-sm-6">
-                                <label class="form-label small mb-1" for="NuevaImagenActividad">Imágenes (JPG/PNG, hasta 2 MB c/u, máximo 5)</label>
-                                <input type="file" class="form-control py-2" id="NuevaImagenActividad" name="NuevaImagenActividad[]" multiple accept=".jpg,.jpeg,.png,image/jpeg,image/png" data-actividad-imagen="previewImagen" data-actividad-grupo="actividadCoordinador" data-actividad-requerido="true" data-actividad-maximas="<?php echo ControladorActividad::MAXIMO_IMAGENES; ?>">
+                                <label class="form-label small mb-1" for="NuevaImagenActividad">Imágenes (JPG, PNG, WEBP, GIF, etc.; se convierten a JPG, hasta 2 MB c/u, máximo 5)</label>
+                                <input type="file" class="form-control py-2" id="NuevaImagenActividad" name="NuevaImagenActividad[]" multiple accept="image/*" data-actividad-imagen="previewImagen" data-actividad-grupo="actividadCoordinador" data-actividad-requerido="true" data-actividad-maximas="<?php echo ControladorActividad::MAXIMO_IMAGENES; ?>">
                             </div>
                             <div class="col-sm-6">
                                 <label class="form-label small mb-1" for="NuevaVideoActividad">Video (MP4/WebM, hasta 10 MB)</label>
@@ -588,7 +588,7 @@ $activeNotifications = getActiveNotifications($conn);
                             </div>
                         </div>
                         <div id="previewImagen" class="d-flex flex-wrap gap-2 mt-3"></div>
-                        <div class="form-text mt-2">Puede adjuntar hasta 5 imágenes (JPG/PNG, hasta 2 MB c/u), un video MP4/WebM o pegar un enlace de YouTube, TikTok o Facebook. La primera imagen será la principal.</div>
+                        <div class="form-text mt-2">Puede adjuntar hasta 5 imágenes (cualquier formato; se convierten a JPG, hasta 2 MB c/u), un video MP4/WebM o pegar un enlace de YouTube, TikTok o Facebook. La primera imagen será la principal.</div>
                     </div>
                 </div>
                 <div class="modal-footer">

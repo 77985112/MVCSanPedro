@@ -21,13 +21,18 @@
         if (!esVideo && archivos.length > maximasDe(entrada)) {
             return 'Puede agregar hasta ' + maximasDe(entrada) + ' imágenes más. El máximo por actividad es 5; quite alguna para liberar espacio.';
         }
-        const extensiones = esVideo ? ['mp4', 'webm'] : ['jpg', 'jpeg', 'png'];
-        const maximo = (esVideo ? 10 : 2) * 1024 * 1024;
+        const extensionesVideo = ['mp4', 'webm'];
+        const extensionesImagen = ['jpg', 'jpeg', 'png', 'jfif', 'webp', 'gif', 'bmp', 'avif', 'tif', 'tiff'];
+        const maximo = (esVideo ? 10 : 20) * 1024 * 1024;
         return archivos.some(function (archivo) {
-            return !extensiones.includes(archivo.name.split('.').pop().toLowerCase())
+            const extension = archivo.name.split('.').pop().toLowerCase();
+            const esImagenValida = !esVideo
+                && ((archivo.type || '').indexOf('image/') === 0 || extensionesImagen.includes(extension));
+            const esVideoValido = esVideo && extensionesVideo.includes(extension);
+            return (!esImagenValida && !esVideoValido)
                 || archivo.size === 0 || archivo.size > maximo;
         }) ? (esVideo ? 'Seleccione un video MP4/WebM de hasta 10 MB.'
-            : 'Seleccione imágenes JPG/PNG de hasta 2 MB cada una.') : '';
+            : 'Seleccione una imagen válida (JPG, PNG, WEBP, GIF, etc.) de hasta 20 MB. Se convertirá a JPG automáticamente.') : '';
     }
     function hayVideoUrl() {
         const campo = document.querySelector('input[name="VideoUrl"]');
@@ -40,7 +45,7 @@
             grupo.entradas.forEach(function (entrada, indice) {
                 const error = errorArchivo(entrada);
                 entrada.setCustomValidity(error || (grupo.requerido && !adjunto && !urlVideo && indice === 0
-                    ? 'Adjunte hasta 5 imágenes JPG/PNG, un video MP4/WebM, ambos o pegue un enlace de video.' : ''));
+                    ? 'Adjunte hasta 5 imágenes, un video MP4/WebM, ambos o pegue un enlace de video.' : ''));
             });
         });
     }
