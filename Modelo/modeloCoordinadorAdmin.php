@@ -251,6 +251,12 @@ class ModeloCoordinadorAdmin {
         return $stmt->execute();
     }
 
+    public function marcarCambioClave($ci) {
+        $stmt = $this->conn->prepare("UPDATE catequista SET DebeCambiarClave = 1 WHERE CiCat = ?");
+        $stmt->bind_param("s", $ci);
+        return $stmt->execute();
+    }
+
     public function buscarPersonasPorNombre($nombre) {
         $busqueda = "%{$nombre}%";
         $stmt = $this->conn->prepare("

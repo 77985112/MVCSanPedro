@@ -69,6 +69,10 @@ class ControladorCoordinadorAdmin {
         return ['clave' => $nueva, 'registro' => $registro];
     }
 
+    public function marcarCambioClaveCoordinador($ci) {
+        return $this->modelo->marcarCambioClave($ci);
+    }
+
     public function buscarPersonasPorNombre($nombre) {
         return $this->modelo->buscarPersonasPorNombre($nombre);
     }

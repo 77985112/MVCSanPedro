@@ -123,7 +123,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion'])) {
         $ci = trim((string) ($_POST['CiPersona'] ?? ''));
         $sacramento = trim((string) ($_POST['Sacramento'] ?? ''));
         $usuarioCat = trim((string) ($_POST['UsuarioCat'] ?? ''));
-        $clave = trim((string) ($_POST['ClaveCat'] ?? ''));
+        // La contraseña ya no se escribe: se genera una de un solo uso y se
+        // muestra en el ticket de acceso.
+        $clave = 'Tmp' . strtoupper(bin2hex(random_bytes(4)));
+        $claveHash = password_hash($clave, PASSWORD_DEFAULT);
 
         $errores = [];
         if ($ci === '') {
@@ -136,11 +139,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion'])) {
         }
         if ($usuarioCat === '') {
             $errores[] = 'Escribe el usuario de acceso.';
-        } elseif ($controller->verificarUsuarioDisponible($usuarioCat)) {
+        } elseif ($controller->verificarUsuarioDisponible($usuarioCat, $ci)) {
             $errores[] = 'Ese usuario ya lo usa otro catequista.';
-        }
-        if (mb_strlen($clave) < 6) {
-            $errores[] = 'La contraseña debe tener al menos 6 caracteres.';
         }
 
         if ($errores) {
@@ -164,7 +164,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion'])) {
             } else {
                 if ($actual && $actual['CiCat'] === $ci) {
                     // Misma persona: solo se actualizan sus credenciales.
-                    $ok = $controller->actualizarCargo($ci, $sacramento, $idGrupo, $usuarioCat, $clave);
+                    $ok = $controller->actualizarCargo($ci, $sacramento, $idGrupo, $usuarioCat, $claveHash);
                     $mensaje = 'Se actualizaron los datos del coordinador.';
                 } else {
                     if ($actual) {
@@ -172,7 +172,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion'])) {
                         $controller->cerrarAsignacion($actual['CiCat'], $gestionSeleccionada);
                         $controller->bloquearCoordinador($actual['CiCat']);
                     }
-                    $ok = $controller->registrarCoordinador($ci, $sacramento, $idGrupo, $usuarioCat, $clave, $gestionSeleccionada);
+                    $ok = $controller->registrarCoordinador($ci, $sacramento, $idGrupo, $usuarioCat, $claveHash, $gestionSeleccionada);
                     if ($ok) {
                         $persona = $controller->buscarPersona($ci);
                         $mensaje = 'Coordinador asignado: <strong>' . htmlspecialchars(trim($persona['Nombre'] . ' ' . $persona['ApPaterno'])) . '</strong> para ' . htmlspecialchars($sacramento) . ' · Gestión ' . $gestionSeleccionada . '.';
@@ -184,6 +184,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion'])) {
 
                 if (!$ok) {
                     $mensaje1 = 'No se pudo asignar el coordinador.';
+                }
+
+                if ($ok) {
+                    $controller->marcarCambioClaveCoordinador($ci);
+                    $registroTicket = $controller->buscarCoordinador($ci);
+                    if ($registroTicket) {
+                        $_SESSION['registroPersonal'] = [
+                            'Nombre' => trim($registroTicket['Nombre'] . ' ' . $registroTicket['ApPaterno'] . ' ' . $registroTicket['ApMaterno']),
+                            'UsuarioPer' => $registroTicket['UsuarioCat'],
+                            'ClavePer' => $clave,
+                            'DescripCar' => 'Coordinador',
+                        ];
+                        header('Location: generar_ticket.php?t=' . time());
+                        exit;
+                    }
+                    $mensaje1 = 'El coordinador se asignó, pero no se pudo preparar el ticket.';
                 }
             }
         }
@@ -390,7 +406,7 @@ $coordinadores = $controller->obtenerCoordinadores($gestionSeleccionada);
               <hr>
 
               <h6 class="mb-3"><i class="bi bi-person-plus me-1"></i>Asignar nuevo coordinador</h6>
-              <form method="POST" class="row g-3">
+              <form method="POST" class="row g-3" target="_blank">
                 <input type="hidden" name="accion" value="asignar_coordinador">
                 <input type="hidden" name="Gestion" value="<?php echo $gestionSeleccionada; ?>">
                 <div class="col-md-3">
@@ -410,21 +426,17 @@ $coordinadores = $controller->obtenerCoordinadores($gestionSeleccionada);
                   <div class="form-text" id="ayudaPersona">Escribe al menos 2 letras y elige de la lista.</div>
                   <input type="hidden" name="CiPersona" id="ciPersonaCoor">
                 </div>
-                <div class="col-md-2">
+                <div class="col-md-3">
                   <label class="form-label" for="usuarioCoor">Usuario</label>
                   <input type="text" class="form-control" id="usuarioCoor" name="UsuarioCat" maxlength="100" required>
                 </div>
-                <div class="col-md-2">
-                  <label class="form-label" for="claveCoor">Contraseña</label>
-                  <input type="text" class="form-control" id="claveCoor" name="ClaveCat" minlength="6" required>
-                </div>
-                <div class="col-md-2">
+                <div class="col-md-3">
                   <label class="form-label d-none d-md-block">&nbsp;</label>
-                  <button type="submit" class="btn btn-primary w-100">Asignar</button>
+                  <button type="submit" class="btn btn-primary w-100">Asignar y generar ticket</button>
                 </div>
                 <div class="col-12">
                   <div class="alert alert-warning py-2 mb-0 small">
-                    Al asignar, el coordinador activo de ese sacramento pasa automáticamente a <strong>Inactivo</strong>.
+                    Se generará automáticamente una <strong>contraseña de un solo uso</strong> y se abrirá el ticket en una pestaña nueva. El coordinador activo de ese sacramento pasará a <strong>Inactivo</strong>.
                   </div>
                 </div>
               </form>
