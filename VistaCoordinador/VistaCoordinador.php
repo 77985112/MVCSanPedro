@@ -1,5 +1,8 @@
 <?php
 session_start();
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
 if (!isset($_SESSION['CiPersona']) || ($_SESSION['CiPersona']['RolCat'] ?? '') !== 'Coordinador') {
     header("Location: ../logout.php");
     exit();
@@ -110,7 +113,8 @@ $activeNotifications = getActiveNotifications($conn);
         }
 
         /* Mantener el mismo tamano de letra y numeros en Primera Comunion y Confirmacion. */
-        .inicio-coordinador section.col-md-10 > .container {
+        .inicio-coordinador section.col-md-10 > .container,
+        .inicio-coordinador section.col-md-10 > .container-fluid {
             max-width: 1200px;
             margin-left: auto;
             margin-right: auto;
